@@ -7,6 +7,8 @@ import { AvailabilityService } from "./availability.js";
 import { CallupService } from "./callup.js";
 import { PendingService } from "./pending.js";
 import { DevService } from "./dev.js";
+import { TeamsService } from "./teams.js";
+import { InvitationsService } from "./invitations.js";
 import { MASTER_DATASET, API_BASE_URL, resolveApiBaseUrl, setApiBaseUrl } from "./config.js";
 
 export const DEMO_CONFIG = {
@@ -28,6 +30,8 @@ export function createApi(baseUrl = API_BASE_URL) {
     availability: new AvailabilityService(client),
     callup: new CallupService(client),
     pending: new PendingService(client),
+    teams: new TeamsService(client),
+    invitations: new InvitationsService(client),
     dev: new DevService(client),
     idempotency: new IdempotencyManager()
   };
@@ -40,6 +44,8 @@ export const api = {
   availability: new AvailabilityService(defaultClient),
   callup: new CallupService(defaultClient),
   pending: new PendingService(defaultClient),
+  teams: new TeamsService(defaultClient),
+  invitations: new InvitationsService(defaultClient),
   dev: new DevService(defaultClient),
   idempotency: idempotencyManager
 };
@@ -60,6 +66,8 @@ export {
   AvailabilityService,
   CallupService,
   PendingService,
+  TeamsService,
+  InvitationsService,
   DevService
 };
 

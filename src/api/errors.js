@@ -28,6 +28,10 @@ export const ERROR_MESSAGES = {
   SUBSTITUTE_NO_LONGER_ELIGIBLE: "El suplente seleccionado ya no está disponible.",
   ACTION_ITEM_NOT_OPEN: "Esta incidencia ya ha sido atendida o resuelta.",
   IDEMPOTENCY_CONFLICT: "Se ha detectado una solicitud duplicada con parámetros discordantes.",
+  BOOTSTRAP_IDEMPOTENCY_CONFLICT: "La clave de idempotencia ya fue utilizada con datos de equipo diferentes.",
+  ROSTER_IDEMPOTENCY_CONFLICT: "La clave de idempotencia ya fue utilizada con datos de jugador diferentes.",
+  GENERAL_JOIN_INVALID: "El código de equipo introducido no es válido o no está activo.",
+  PLAYER_CLAIM_REQUIRED: "Es obligatorio indicar el nombre del jugador para solicitar vinculación con código de equipo.",
   INTERNAL_SERVER_ERROR: "Error interno del servidor. Inténtalo de nuevo más tarde."
 };
 

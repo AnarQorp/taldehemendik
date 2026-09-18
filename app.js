@@ -154,6 +154,19 @@ export class TeamAppState {
       parent: null
     };
 
+    // Beta Clean State (Vertical Slice 03)
+    this.beta = {
+      teamSeasonId: null,
+      team: null,
+      teamSeason: null,
+      joinCode: null,
+      players: [],
+      pendingRequests: [],
+      lastInvitation: null,
+      verifiedInvitation: null,
+      guardianPlayer: null
+    };
+
     // Live synchronized backend cache
     this.live = {
       events: [],
@@ -174,6 +187,8 @@ export class TeamAppState {
     const screenParam = params.get("screen") || window.location.hash.replace("#", "");
     const roleParam = params.get("role");
     const isDemoRequested = params.get("demo") === "1" || params.get("demo") === "true";
+    const inviteToken = params.get("inviteToken");
+    const joinCode = params.get("join");
 
     const demoToolbar = document.getElementById("demo-toolbar");
     const demoStepCard = document.getElementById("demo-step-card");
@@ -182,7 +197,27 @@ export class TeamAppState {
       if (demoStepCard) demoStepCard.classList.remove("hidden");
     }
 
-    if (roleParam === "parent" || screenParam?.startsWith("v2_07_") || screenParam?.startsWith("v2_08_")) {
+    const savedMode = localStorage.getItem("talde_app_mode");
+    if (savedMode === "BETA_NORMAL") {
+      this.appMode = "BETA_NORMAL";
+      this.applyCleanUI();
+    } else if (savedMode === "DEMO") {
+      this.appMode = "DEMO";
+    }
+
+    if (localStorage.getItem("talde_token_coach")) {
+      this.tokens.coach = localStorage.getItem("talde_token_coach");
+    }
+    if (localStorage.getItem("talde_token_parent")) {
+      this.tokens.parent = localStorage.getItem("talde_token_parent");
+    }
+
+    if (inviteToken || joinCode) {
+      this.appMode = "BETA_NORMAL";
+      this.currentRole = "parent";
+      this.currentScreen = "v2_00_parent_join_team";
+      this.applyCleanUI();
+    } else if (roleParam === "parent" || screenParam?.startsWith("v2_07_") || screenParam?.startsWith("v2_08_")) {
       this.appMode = "DEMO";
       this.currentRole = "parent";
     } else if (roleParam === "coach" || screenParam?.startsWith("v2_01_") || screenParam?.startsWith("v2_02_") || screenParam?.startsWith("v2_05_") || screenParam?.startsWith("v2_06_")) {
@@ -205,9 +240,10 @@ export class TeamAppState {
     }
 
     try {
-      if (this.currentRole !== "onboard") {
+      if (this.currentRole !== "onboard" && this.appMode === "DEMO") {
         await this.ensureAuth(this.currentRole);
       }
+      await this.loadUserContext();
       await this.syncCurrentScreen();
     } catch (err) {
       console.warn("Backend auth/sync deferred:", err);
@@ -217,6 +253,73 @@ export class TeamAppState {
     this.updateBottomNav();
     this.updateRoleUI();
     this.updateStepUI();
+
+    if (inviteToken || joinCode) {
+      setTimeout(() => {
+        const input = document.getElementById("parent-join-code-input");
+        if (input) input.value = inviteToken || joinCode;
+        this.verifyParentJoinInput();
+      }, 150);
+    }
+  }
+
+  async loadUserContext() {
+    if (this.appMode === "DEMO") return;
+    try {
+      const activeToken = this.tokens.coach || this.tokens.parent || api.client.getToken() || localStorage.getItem("talde_token_coach") || localStorage.getItem("talde_token_parent");
+      if (!activeToken) return;
+      api.client.setToken(activeToken);
+      const res = await api.teams.getMyMemberships();
+      const items = res?.items || [];
+      if (!items.length) return;
+
+      const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
+      if (coachMem) {
+        this.currentRole = "coach";
+        this.tokens.coach = activeToken;
+        this.beta.teamSeasonId = coachMem.team_season_id;
+        this.beta.team = { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport };
+        this.beta.teamSeason = {
+          id: coachMem.team_season_id,
+          display_label: coachMem.display_label,
+          season_label: coachMem.season_label,
+          category: coachMem.category
+        };
+        const coachBadge = document.getElementById("coach-club-badge");
+        if (coachBadge) coachBadge.textContent = coachMem.team_name;
+        const teamNameInput = document.getElementById("team-name");
+        if (teamNameInput) teamNameInput.value = coachMem.display_label || "";
+        const clubNameInput = document.getElementById("club-name");
+        if (clubNameInput) clubNameInput.value = coachMem.team_name || "";
+        const coachCodeSection = document.getElementById("coach-code-section");
+        const rosterMgmtSection = document.getElementById("coach-roster-management-section");
+        if (coachCodeSection) coachCodeSection.classList.remove("hidden");
+        if (rosterMgmtSection) rosterMgmtSection.classList.remove("hidden");
+
+        if (localStorage.getItem("talde_join_code")) {
+          this.beta.joinCode = localStorage.getItem("talde_join_code");
+          const codeDisplay = document.getElementById("coach-code-display");
+          if (codeDisplay) codeDisplay.textContent = this.beta.joinCode;
+        }
+        if (localStorage.getItem("talde_players")) {
+          try {
+            this.beta.players = JSON.parse(localStorage.getItem("talde_players") || "[]");
+            this.renderBetaPlayersList();
+          } catch {}
+        }
+        return;
+      }
+
+      const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
+      if (guardianMem) {
+        this.currentRole = "parent";
+        this.tokens.parent = activeToken;
+        this.beta.teamSeasonId = guardianMem.team_season_id;
+        this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name };
+      }
+    } catch (err) {
+      console.warn("loadUserContext deferred or no active session:", err);
+    }
   }
 
   toggleDemoTools() {
@@ -442,32 +545,117 @@ export class TeamAppState {
   }
 
   async syncCoachHome() {
-    await this.ensureAuth("coach");
-    const pendingData = await api.pending.getPending(DEMO_CONFIG.TEAM_SEASON_ID);
-    this.live.pending = pendingData;
+    if (this.appMode === "DEMO") {
+      await this.ensureAuth("coach");
+      const pendingData = await api.pending.getPending(DEMO_CONFIG.TEAM_SEASON_ID);
+      this.live.pending = pendingData;
 
-    const actionItems = pendingData.actionItems || [];
-    const bajaItem = actionItems.find(item => item.type === "CALLED_PLAYER_UNAVAILABLE" && item.status === "OPEN");
-    this.live.activeActionItem = bajaItem;
+      const actionItems = pendingData.actionItems || [];
+      const bajaItem = actionItems.find(item => item.type === "CALLED_PLAYER_UNAVAILABLE" && item.status === "OPEN");
+      this.live.activeActionItem = bajaItem;
 
-    const bajaCard = document.getElementById("coach-item-baja-card");
-    const bajaDesc = document.getElementById("coach-item-baja-desc");
-    const badgeEl = document.getElementById("coach-pending-count-badge");
+      const bajaCard = document.getElementById("coach-item-baja-card");
+      const bajaDesc = document.getElementById("coach-item-baja-desc");
+      const badgeEl = document.getElementById("coach-pending-count-badge");
 
-    if (bajaCard) {
-      if (bajaItem) {
-        bajaCard.classList.remove("hidden");
-        if (bajaDesc) {
-          bajaDesc.textContent = `${bajaItem.first_name || "Ibai"} (#9) ha comunicado que no puede asistir (nota: está enfermo).`;
+      if (bajaCard) {
+        if (bajaItem) {
+          bajaCard.classList.remove("hidden");
+          if (bajaDesc) {
+            bajaDesc.textContent = `${bajaItem.first_name || "Ibai"} (#9) ha comunicado que no puede asistir (nota: está enfermo).`;
+          }
+        } else {
+          bajaCard.classList.add("hidden");
         }
-      } else {
-        bajaCard.classList.add("hidden");
       }
+
+      if (badgeEl) {
+        const totalCount = (bajaItem ? 1 : 0) + 2;
+        badgeEl.textContent = `${totalCount} ${totalCount === 1 ? "tarea" : "tareas"}`;
+      }
+      return;
     }
 
-    if (badgeEl) {
-      const totalCount = (bajaItem ? 1 : 0) + 2;
-      badgeEl.textContent = `${totalCount} ${totalCount === 1 ? "tarea" : "tareas"}`;
+    // Clean BETA mode
+    if (!this.beta.teamSeasonId) return;
+    if (this.tokens.coach) api.client.setToken(this.tokens.coach);
+
+    try {
+      const res = await api.teams.getPendingRequests(this.beta.teamSeasonId);
+      this.beta.pendingRequests = res.items || [];
+
+      const reqCard = document.getElementById("coach-pending-approval-card");
+      const pendingCount = document.getElementById("coach-pending-count");
+      if (pendingCount) pendingCount.textContent = this.beta.pendingRequests.length;
+
+      if (this.beta.team) {
+        const titleEl = document.getElementById("coach-home-team-title");
+        if (titleEl) titleEl.textContent = `${this.beta.team.name} · ${this.beta.teamSeason?.display_label || this.beta.teamSeason?.displayLabel || 'Temporada'}`;
+        const codePill = document.getElementById("coach-home-code-pill");
+        if (codePill && this.beta.joinCode) codePill.textContent = `Código: ${this.beta.joinCode}`;
+        const userEl = document.getElementById("coach-home-user-name");
+        if (userEl && this.beta.coachName) userEl.textContent = this.beta.coachName;
+      }
+
+      if (this.beta.pendingRequests.length > 0 && reqCard) {
+        reqCard.classList.remove("hidden");
+        const req = this.beta.pendingRequests[0];
+        const isIndividual = Boolean(req.player_id);
+
+        let contentHtml = `
+          <div class="flex items-start gap-2.5">
+            <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
+              <span class="material-symbols-outlined text-[18px]">person_add</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-label-sm text-label-sm text-amber-800 font-bold uppercase tracking-wider">
+                  ${isIndividual ? "Solicitud individual" : "Solicitud código general"}
+                </span>
+                <span class="text-[10px] text-slate-400">Reciente</span>
+              </div>
+              <p class="font-label-md text-label-md text-on-surface font-bold mt-0.5 leading-snug">
+                ${req.display_name || req.email} <span class="font-normal text-on-surface-variant text-xs">solicita vincularse ${
+                  isIndividual
+                    ? `a su hijo/a <strong>${req.first_name} ${req.last_name}</strong>`
+                    : `y reclama al menor <strong>${req.claimed_player_name}</strong> (#${req.claimed_shirt_number || '-'})`
+                }</span>
+              </p>
+            </div>
+          </div>
+        `;
+
+        if (!isIndividual) {
+          contentHtml += `
+            <div class="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+              <label class="block font-bold text-slate-700 mb-1">Asignar a jugador de la plantilla:</label>
+              <select id="coach-assign-player-${req.id}" class="w-full h-8 px-2 rounded border border-slate-300 bg-white text-xs">
+                ${this.beta.players.map(p => `
+                  <option value="${p.id}">${p.firstName} ${p.lastName} (#${p.shirtNumber || '-'})</option>
+                `).join("")}
+              </select>
+            </div>
+          `;
+        }
+
+        contentHtml += `
+          <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+            <button onclick="teamApp.rejectBetaGuardianRequest('${req.id}')" class="h-9 rounded-lg border border-outline-variant bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md font-medium flex items-center justify-center cursor-pointer active:scale-[0.98]">
+              Rechazar
+            </button>
+            <button onclick="teamApp.approveBetaGuardianRequest('${req.id}', ${isIndividual ? 'null' : `'coach-assign-player-${req.id}'`})" class="h-9 rounded-lg bg-secondary hover:bg-emerald-700 text-white font-label-md text-label-md font-bold flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-[0.98]">
+              <span class="material-symbols-outlined text-[16px]">check</span>
+              Aceptar y Vincular
+            </button>
+          </div>
+        `;
+
+        reqCard.innerHTML = contentHtml;
+      } else if (reqCard) {
+        reqCard.classList.add("hidden");
+      }
+    } catch (err) {
+      console.warn("Could not sync pending requests in beta mode:", err);
     }
   }
 
@@ -608,29 +796,50 @@ export class TeamAppState {
   }
 
   async syncParentHome() {
-    await this.ensureAuth("parent");
-    try {
-      const statusRes = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
-      this.live.parentCallupStatus = statusRes;
+    if (this.appMode === "DEMO") {
+      await this.ensureAuth("parent");
+      try {
+        const statusRes = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+        this.live.parentCallupStatus = statusRes;
 
-      const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
-      this.live.parentAvailability = availRes.current;
+        const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+        this.live.parentAvailability = availRes.current;
 
-      const badge = document.getElementById("parent-ibai-callup-badge");
-      if (badge) {
-        if (availRes.current?.status === "CANNOT_ATTEND") {
-          badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-100 border border-rose-300 text-rose-900 font-label-sm text-[11px] font-extrabold";
-          badge.innerHTML = `<span class="material-symbols-outlined text-[14px] text-rose-700">cancel</span><span>No asistirá (Baja comunicada)</span>`;
-        } else if (statusRes.called) {
-          badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-extrabold";
-          badge.innerHTML = `<span class="material-symbols-outlined text-[14px] text-emerald-700">check_circle</span><span>✓ Convocado al partido (Rev. ${statusRes.revision || 1})</span>`;
-        } else {
-          badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-700 font-label-sm text-[11px] font-bold";
-          badge.innerHTML = `<span class="material-symbols-outlined text-[14px]">remove_circle_outline</span><span>No convocado</span>`;
+        const badge = document.getElementById("parent-ibai-callup-badge");
+        if (badge) {
+          if (availRes.current?.status === "CANNOT_ATTEND") {
+            badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-100 border border-rose-300 text-rose-900 font-label-sm text-[11px] font-extrabold";
+            badge.innerHTML = `<span class="material-symbols-outlined text-[14px] text-rose-700">cancel</span><span>No asistirá (Baja comunicada)</span>`;
+          } else if (statusRes.called) {
+            badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-extrabold";
+            badge.innerHTML = `<span class="material-symbols-outlined text-[14px] text-emerald-700">check_circle</span><span>✓ Convocado al partido (Rev. ${statusRes.revision || 1})</span>`;
+          } else {
+            badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-700 font-label-sm text-[11px] font-bold";
+            badge.innerHTML = `<span class="material-symbols-outlined text-[14px]">remove_circle_outline</span><span>No convocado</span>`;
+          }
         }
+      } catch (err) {
+        console.warn("Parent home sync error:", err);
+      }
+      return;
+    }
+
+    // Clean BETA mode
+    if (this.tokens.parent) api.client.setToken(this.tokens.parent);
+    try {
+      const playerId = this.beta.linkedPlayerId || localStorage.getItem("talde_linked_player_id");
+      if (this.beta.teamSeasonId && playerId) {
+        const player = await api.teams.getPlayer(this.beta.teamSeasonId, playerId);
+        this.beta.guardianPlayer = player;
+        const nameEl = document.getElementById("parent-home-player-name");
+        if (nameEl) nameEl.textContent = `${player.first_name} ${player.last_name}`;
+        const teamEl = document.getElementById("parent-home-team-name");
+        if (teamEl && this.beta.team) teamEl.textContent = `${this.beta.team.name} · ${this.beta.teamSeason?.display_label || 'Temporada'}`;
+        const jerseyBadge = document.getElementById("parent-home-jersey-badge");
+        if (jerseyBadge) jerseyBadge.textContent = player.shirt_number || "-";
       }
     } catch (err) {
-      console.warn("Parent home sync error:", err);
+      console.warn("Parent clean home sync error:", err);
     }
   }
 
@@ -794,6 +1003,7 @@ export class TeamAppState {
   startBetaClean() {
     this.appMode = "BETA_NORMAL";
     this.currentRole = "onboard";
+    localStorage.setItem("talde_app_mode", "BETA_NORMAL");
     document.getElementById("demo-mode-badge")?.classList.add("hidden");
     this.applyCleanUI();
     this.goToScreen("v2_00_onboarding_welcome", "onboard");
@@ -802,6 +1012,7 @@ export class TeamAppState {
 
   async startDemoMode() {
     this.appMode = "DEMO";
+    localStorage.setItem("talde_app_mode", "DEMO");
     document.getElementById("demo-mode-badge")?.classList.remove("hidden");
     await this.resetBackendDataset(true);
     this.applyDemoUI();
@@ -824,8 +1035,12 @@ export class TeamAppState {
       const modal = document.getElementById("reset-beta-modal");
       if (modal) modal.classList.add("hidden");
 
-      // 1. Reset PostgreSQL database
-      await api.dev.resetDataset();
+      if (this.appMode === "DEMO") {
+        await api.dev.resetDataset();
+        this.showToast("✓ Entorno DEMO reiniciado (PostgreSQL Indautxu restaurado).");
+      } else {
+        this.showToast("✓ Sesión BETA reiniciada. Los datos creados no se alteran y no se reseembra Indautxu.");
+      }
 
       // 2. Clear browser storage
       try {
@@ -851,6 +1066,18 @@ export class TeamAppState {
         unconfirmedWarnings: []
       };
 
+      this.beta = {
+        teamSeasonId: null,
+        team: null,
+        teamSeason: null,
+        joinCode: null,
+        players: [],
+        pendingRequests: [],
+        lastInvitation: null,
+        verifiedInvitation: null,
+        guardianPlayer: null
+      };
+
       this.appMode = null;
       this.currentRole = "onboard";
       this.currentStepIndex = 0;
@@ -865,8 +1092,6 @@ export class TeamAppState {
       this.updateBottomNav();
       this.updateRoleUI();
       this.updateStepUI();
-
-      this.showToast("✓ Entorno beta reiniciado. Base de datos y sesión limpias.");
     } catch (err) {
       this.showToast(`Error al reiniciar entorno beta: ${mapDomainError(err)}`);
     }
@@ -888,16 +1113,34 @@ export class TeamAppState {
     if (clubName) clubName.value = "";
     const pitchLoc = document.getElementById("pitch-location");
     if (pitchLoc) pitchLoc.value = "";
+    const coachEmail = document.getElementById("coach-email");
+    if (coachEmail) coachEmail.value = "mister@beta.test";
+    const coachName = document.getElementById("coach-name");
+    if (coachName) coachName.value = "Mikel Entrenador";
 
-    const bannerIcon = document.getElementById("coach-roster-banner-icon");
-    if (bannerIcon) bannerIcon.innerHTML = `<span class="material-symbols-outlined text-[20px] font-bold text-on-surface-variant">info</span>`;
-    const bannerTitle = document.getElementById("coach-roster-banner-title");
-    if (bannerTitle) bannerTitle.textContent = "Plantilla inicial vacía (0 jugadores)";
-    const bannerDesc = document.getElementById("coach-roster-banner-desc");
-    if (bannerDesc) bannerDesc.textContent = "(Darás de alta a tus deportistas tras registrar el equipo)";
+    const bootstrapContainer = document.getElementById("coach-bootstrap-action-container");
+    if (bootstrapContainer) bootstrapContainer.classList.remove("hidden");
+    const bootstrapBtn = document.getElementById("coach-bootstrap-btn");
+    if (bootstrapBtn) {
+      bootstrapBtn.disabled = false;
+      bootstrapBtn.innerHTML = `<span class="material-symbols-outlined text-[20px]" data-icon="add_circle">add_circle</span><span>Crear equipo y generar código</span>`;
+    }
+
+    const rosterBanner = document.getElementById("coach-roster-banner");
+    if (rosterBanner) rosterBanner.classList.add("hidden");
 
     const coachNotice = document.getElementById("coach-clean-backend-notice");
-    if (coachNotice) coachNotice.classList.remove("hidden");
+    if (coachNotice) coachNotice.classList.add("hidden");
+
+    const coachCodeSection = document.getElementById("coach-code-section");
+    const rosterMgmtSection = document.getElementById("coach-roster-management-section");
+    if (this.beta.teamSeasonId) {
+      if (coachCodeSection) coachCodeSection.classList.remove("hidden");
+      if (rosterMgmtSection) rosterMgmtSection.classList.remove("hidden");
+    } else {
+      if (coachCodeSection) coachCodeSection.classList.add("hidden");
+      if (rosterMgmtSection) rosterMgmtSection.classList.add("hidden");
+    }
 
     const coachReadyBadge = document.getElementById("coach-ready-badge");
     if (coachReadyBadge) coachReadyBadge.textContent = "Paso 1: Configuración inicial";
@@ -906,7 +1149,7 @@ export class TeamAppState {
     const coachReadyDesc = document.getElementById("coach-ready-desc");
     if (coachReadyDesc) coachReadyDesc.textContent = "El código de invitación se generará una vez registrado el equipo en el sistema.";
     const coachCode = document.getElementById("coach-code-display");
-    if (coachCode) coachCode.textContent = "------";
+    if (coachCode) coachCode.textContent = this.beta.joinCode || "------";
     const coachShareBtn = document.getElementById("coach-share-btn");
     if (coachShareBtn) coachShareBtn.classList.add("hidden");
     const coachFooter = document.getElementById("coach-footer-text");
@@ -914,12 +1157,12 @@ export class TeamAppState {
 
     // Parent join screen
     const parentNotice = document.getElementById("parent-clean-backend-notice");
-    if (parentNotice) parentNotice.classList.remove("hidden");
+    if (parentNotice) parentNotice.classList.add("hidden");
     const parentCodeInput = document.getElementById("parent-join-code-input");
     if (parentCodeInput) {
       parentCodeInput.value = "";
       parentCodeInput.readOnly = false;
-      parentCodeInput.placeholder = "Introduce código de equipo...";
+      parentCodeInput.placeholder = "Introduce código o token...";
     }
     const parentCodeBadge = document.getElementById("parent-code-valid-badge");
     if (parentCodeBadge) parentCodeBadge.classList.add("hidden");
@@ -927,9 +1170,13 @@ export class TeamAppState {
     if (parentTeamCard) parentTeamCard.classList.add("hidden");
     const parentPlayerSec = document.getElementById("parent-player-select-section");
     if (parentPlayerSec) parentPlayerSec.classList.add("hidden");
+    const parentClaimSec = document.getElementById("parent-claim-player-section");
+    if (parentClaimSec) parentClaimSec.classList.add("hidden");
 
     const tutorName = document.getElementById("tutor-name");
     if (tutorName) tutorName.value = "";
+    const tutorEmail = document.getElementById("tutor-email");
+    if (tutorEmail) tutorEmail.value = "tutor@beta.test";
     const tutorPhone = document.getElementById("tutor-phone");
     if (tutorPhone) tutorPhone.value = "";
 
@@ -956,6 +1203,11 @@ export class TeamAppState {
     const pitchLoc = document.getElementById("pitch-location");
     if (pitchLoc) pitchLoc.value = "Campo Municipal Indautxu";
 
+    const bootstrapContainer = document.getElementById("coach-bootstrap-action-container");
+    if (bootstrapContainer) bootstrapContainer.classList.add("hidden");
+
+    const rosterBanner = document.getElementById("coach-roster-banner");
+    if (rosterBanner) rosterBanner.classList.remove("hidden");
     const bannerIcon = document.getElementById("coach-roster-banner-icon");
     if (bannerIcon) bannerIcon.innerHTML = `<span class="material-symbols-outlined text-[20px] font-bold" data-icon="check_circle">check_circle</span>`;
     const bannerTitle = document.getElementById("coach-roster-banner-title");
@@ -965,6 +1217,11 @@ export class TeamAppState {
 
     const coachNotice = document.getElementById("coach-clean-backend-notice");
     if (coachNotice) coachNotice.classList.add("hidden");
+
+    const coachCodeSection = document.getElementById("coach-code-section");
+    if (coachCodeSection) coachCodeSection.classList.remove("hidden");
+    const rosterMgmtSection = document.getElementById("coach-roster-management-section");
+    if (rosterMgmtSection) rosterMgmtSection.classList.add("hidden");
 
     const coachReadyBadge = document.getElementById("coach-ready-badge");
     if (coachReadyBadge) coachReadyBadge.textContent = "¡Equipo creado con éxito!";
@@ -993,9 +1250,13 @@ export class TeamAppState {
     if (parentTeamCard) parentTeamCard.classList.remove("hidden");
     const parentPlayerSec = document.getElementById("parent-player-select-section");
     if (parentPlayerSec) parentPlayerSec.classList.remove("hidden");
+    const parentClaimSec = document.getElementById("parent-claim-player-section");
+    if (parentClaimSec) parentClaimSec.classList.add("hidden");
 
     const tutorName = document.getElementById("tutor-name");
     if (tutorName) tutorName.value = "Elena Gómez";
+    const tutorEmail = document.getElementById("tutor-email");
+    if (tutorEmail) tutorEmail.value = "elena@example.test";
     const tutorPhone = document.getElementById("tutor-phone");
     if (tutorPhone) tutorPhone.value = "620 44 55 66";
 
@@ -1086,45 +1347,430 @@ export class TeamAppState {
   }
 
   async finishCoachSetup() {
-    if (this.appMode === "BETA_NORMAL") {
-      this.showToast("ℹ️ Contrato backend pendiente: POST /v1/teams para alta autónoma desde cero. No se reutiliza el seed de Indautxu.");
+    if (this.appMode === "DEMO") {
+      await this.switchMembership("indautxu_inf_a");
+      await this.goToScreen("v2_01_coach_home", "inicio");
+      this.showToast("✓ Equipo C.D. Indautxu · Infantil A creado con éxito. Código INDA16.");
       return;
     }
-    await this.switchMembership("indautxu_inf_a");
+
+    this.currentRole = "coach";
     await this.goToScreen("v2_01_coach_home", "inicio");
-    this.showToast("✓ Equipo C.D. Indautxu · Infantil A creado con éxito. Código INDA16.");
+    this.showToast(`✓ Mesa del entrenador activada para ${this.beta.team?.name || 'tu equipo'}.`);
   }
 
   shareInviteCode() {
-    const inviteLink = "https://baituman420.github.io/taldehemendik/?join=INDA16";
+    const code = this.appMode === "DEMO" ? "INDA16" : (this.beta.joinCode || "INDA16");
+    const inviteLink = `${window.location.origin}/?join=${code}`;
     if (navigator.clipboard) navigator.clipboard.writeText(inviteLink).catch(() => {});
-    this.showToast("📲 Enlace de invitación copiado: Código INDA16.");
+    this.showToast(`📲 Enlace de invitación copiado: Código ${code}.`);
   }
 
   copyInviteCode() {
-    if (navigator.clipboard) navigator.clipboard.writeText("INDA16").catch(() => {});
-    this.showToast("Código INDA16 copiado al portapapeles.");
+    const code = this.appMode === "DEMO" ? "INDA16" : (this.beta.joinCode || "INDA16");
+    if (navigator.clipboard) navigator.clipboard.writeText(code).catch(() => {});
+    this.showToast(`Código ${code} copiado al portapapeles.`);
   }
 
-  submitParentJoinRequest() {
-    if (this.appMode === "BETA_NORMAL") {
-      this.showToast("ℹ️ Contrato backend pendiente: La vinculación requiere un código de equipo activo generado por backend.");
+  copyText(text) {
+    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+    this.showToast("Copiado al portapapeles.");
+  }
+
+  // --- VS03: Clean Beta Methods ---
+
+  async submitCoachBootstrap() {
+    const teamNameInput = document.getElementById("team-name")?.value?.trim();
+    const clubNameInput = document.getElementById("club-name")?.value?.trim();
+    const coachEmail = document.getElementById("coach-email")?.value?.trim() || "coach@beta.test";
+    const coachName = document.getElementById("coach-name")?.value?.trim() || "Entrenador Beta";
+    const categorySelect = document.querySelector("#v2_00_coach_create_team select");
+    const category = categorySelect?.value?.split("(")[0]?.trim() || "Infantil";
+
+    if (!teamNameInput && !clubNameInput) {
+      this.showToast("⚠️ Introduce al menos el nombre del equipo o club.");
       return;
     }
+
+    const teamName = clubNameInput || teamNameInput;
+    const displayLabel = teamNameInput || "Infantil A";
+
+    const btn = document.getElementById("coach-bootstrap-btn");
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">progress_activity</span><span>Creando equipo en PostgreSQL...</span>`;
+    }
+
+    try {
+      // 1. Authenticate coach with OTP dev
+      const authRes = await api.auth.loginDev(coachEmail, coachName);
+      this.tokens.coach = authRes.accessToken;
+      api.client.setToken(this.tokens.coach);
+      localStorage.setItem("talde_token_coach", authRes.accessToken);
+      localStorage.setItem("talde_app_mode", "BETA_NORMAL");
+      this.beta.coachName = coachName;
+
+      // 2. Client Idempotency-Key
+      const idemKey = idempotencyManager.getOrCreateKey(`bootstrap-${coachEmail}-${teamName}-${displayLabel}`);
+
+      // 3. POST /v1/teams/bootstrap
+      const res = await api.teams.bootstrap({
+        team: { name: teamName, sport: "FOOTBALL" },
+        teamSeason: {
+          seasonLabel: "2026/27",
+          category: category,
+          displayLabel: displayLabel
+        },
+        createGeneralJoinCode: true
+      }, idemKey);
+
+      this.beta.teamSeasonId = res.teamSeason.id;
+      this.beta.team = res.team;
+      this.beta.teamSeason = res.teamSeason;
+      this.beta.joinCode = res.joinCode;
+      localStorage.setItem("talde_join_code", res.joinCode);
+
+      // Update UI displays
+      const codeDisplay = document.getElementById("coach-code-display");
+      if (codeDisplay) codeDisplay.textContent = res.joinCode || "------";
+
+      const codeSection = document.getElementById("coach-code-section");
+      if (codeSection) codeSection.classList.remove("hidden");
+
+      const rosterSection = document.getElementById("coach-roster-management-section");
+      if (rosterSection) rosterSection.classList.remove("hidden");
+
+      const readyBadge = document.getElementById("coach-ready-badge");
+      if (readyBadge) readyBadge.textContent = "✓ ¡Equipo creado en PostgreSQL!";
+
+      const readyTitle = document.getElementById("coach-ready-title");
+      if (readyTitle) readyTitle.textContent = `${res.team.name} · ${res.teamSeason.display_label || res.teamSeason.displayLabel}`;
+
+      const readyDesc = document.getElementById("coach-ready-desc");
+      if (readyDesc) readyDesc.textContent = `Código general de unión: ${res.joinCode}. Añade deportistas abajo para generar invitaciones individuales.`;
+
+      this.showToast(`✓ Equipo ${res.team.name} registrado con éxito (Código: ${res.joinCode}).`);
+      this.renderBetaPlayersList();
+    } catch (err) {
+      console.error("Bootstrap error:", err);
+      this.showToast(`Error al crear equipo: ${mapDomainError(err)}`);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span class="material-symbols-outlined text-[20px]" data-icon="check_circle">check_circle</span><span>Equipo creado correctamente</span>`;
+      }
+    }
+  }
+
+  async submitAddPlayer() {
+    if (!this.beta.teamSeasonId) {
+      this.showToast("Primero debes crear el equipo para poder añadir jugadores.");
+      return;
+    }
+    const firstName = document.getElementById("player-firstname")?.value?.trim();
+    const lastName = document.getElementById("player-lastname")?.value?.trim();
+    const shirtNumberVal = document.getElementById("player-number")?.value;
+    const shirtNumber = shirtNumberVal ? parseInt(shirtNumberVal, 10) : undefined;
+    const position = document.getElementById("player-position")?.value?.trim() || undefined;
+
+    if (!firstName || !lastName) {
+      this.showToast("El nombre y los apellidos del jugador son obligatorios.");
+      return;
+    }
+
+    const idemKey = idempotencyManager.getOrCreateKey(`add-player-${this.beta.teamSeasonId}-${firstName}-${lastName}`);
+
+    try {
+      const res = await api.teams.addPlayer(this.beta.teamSeasonId, {
+        firstName,
+        lastName,
+        shortName: firstName,
+        shirtNumber,
+        position
+      }, idemKey);
+
+      this.beta.players.push({
+        id: res.player.id,
+        player: res.player,
+        rosterEntry: res.rosterEntry,
+        firstName: res.player.first_name,
+        lastName: res.player.last_name,
+        shirtNumber: res.rosterEntry.shirt_number,
+        position: res.rosterEntry.position
+      });
+      localStorage.setItem("talde_players", JSON.stringify(this.beta.players));
+
+      this.renderBetaPlayersList();
+      this.showToast(`✓ Jugador ${res.player.first_name} ${res.player.last_name} añadido a la plantilla.`);
+
+      const fnInput = document.getElementById("player-firstname");
+      const lnInput = document.getElementById("player-lastname");
+      if (fnInput) fnInput.value = "";
+      if (lnInput) lnInput.value = "";
+    } catch (err) {
+      console.error("Add player error:", err);
+      this.showToast(`Error al añadir jugador: ${mapDomainError(err)}`);
+    }
+  }
+
+  async generatePlayerInvite(playerId) {
+    if (!this.beta.teamSeasonId) return;
+    try {
+      const res = await api.teams.createPlayerInvitation(this.beta.teamSeasonId, playerId);
+      this.beta.lastInvitation = res;
+      const tokenDisplay = document.getElementById(`invite-token-display-${playerId}`);
+      if (tokenDisplay) {
+        tokenDisplay.innerHTML = `
+          <input id="invite-token-input-${playerId}" type="text" readonly value="${res.token}" class="w-full bg-slate-900 text-emerald-400 font-mono text-[11px] p-2 rounded-lg border-0" />
+          <div class="mt-1 flex items-center justify-between">
+            <span class="text-[10px] text-slate-400">Token de 64 caracteres</span>
+            <button onclick="teamApp.copyText('${res.token}')" class="text-xs text-primary font-bold hover:underline cursor-pointer flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px]">content_copy</span> Copiar token
+            </button>
+          </div>
+        `;
+        tokenDisplay.classList.remove("hidden");
+      }
+      this.showToast(`✓ Invitación individual generada (token de 64 caracteres).`);
+    } catch (err) {
+      console.error("Invite generation error:", err);
+      this.showToast(`Error al generar invitación: ${mapDomainError(err)}`);
+    }
+  }
+
+  renderBetaPlayersList() {
+    const container = document.getElementById("coach-beta-players-list");
+    const countBadge = document.getElementById("coach-beta-roster-count");
+    if (countBadge) countBadge.textContent = `${this.beta.players.length} inscrito${this.beta.players.length === 1 ? '' : 's'}`;
+    if (!container) return;
+
+    if (!this.beta.players.length) {
+      container.innerHTML = `<p class="text-xs text-slate-500 italic p-2 bg-slate-50 rounded-lg text-center">No hay deportistas dados de alta todavía en esta temporada.</p>`;
+      return;
+    }
+
+    container.innerHTML = this.beta.players.map(p => `
+      <div class="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-xs flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-full bg-primary-fixed text-primary font-bold text-xs flex items-center justify-center">#${p.shirtNumber || '-'}</span>
+            <div>
+              <p class="font-bold text-xs text-on-surface">${p.firstName} ${p.lastName}</p>
+              <p class="text-[11px] text-on-surface-variant">${p.position || 'Deportista'} · Activo</p>
+            </div>
+          </div>
+          <button id="btn-invite-${p.id}" onclick="teamApp.generatePlayerInvite('${p.id}')" class="px-2.5 py-1 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-bold text-[11px] shadow-xs cursor-pointer flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px]">share</span>
+            <span>Invitar tutor</span>
+          </button>
+        </div>
+        <div id="invite-token-display-${p.id}" class="hidden"></div>
+      </div>
+    `).join("");
+  }
+
+  async verifyParentJoinInput() {
+    const rawInput = document.getElementById("parent-join-code-input")?.value?.trim();
+    if (!rawInput) {
+      this.showToast("Introduce un código o token de invitación.");
+      return;
+    }
+
+    const teamCard = document.getElementById("parent-located-team-card");
+    const teamTitle = document.getElementById("parent-located-team-title");
+    const teamSub = document.getElementById("parent-located-team-subtitle");
+    const claimSection = document.getElementById("parent-claim-player-section");
+    const validBadge = document.getElementById("parent-code-valid-badge");
+    const noticeClean = document.getElementById("parent-clean-backend-notice");
+
+    try {
+      if (rawInput.length >= 20) {
+        const res = await api.invitations.getInvitation(rawInput);
+        this.beta.verifiedInvitation = { type: "INDIVIDUAL", token: rawInput, data: res };
+
+        if (teamTitle) teamTitle.textContent = `${res.team.name} · ${res.teamSeason.displayLabel}`;
+        if (teamSub) teamSub.textContent = `Temporada ${res.teamSeason.seasonLabel} · Invitación Individual`;
+        if (teamCard) teamCard.classList.remove("hidden");
+        if (validBadge) validBadge.classList.remove("hidden");
+        if (claimSection) claimSection.classList.add("hidden");
+        if (noticeClean) {
+          noticeClean.classList.remove("hidden");
+          noticeClean.innerHTML = `
+            <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-emerald-800">
+              <span class="material-symbols-outlined text-[18px] text-emerald-600">shield</span>
+              <span>Invitación individual verificada (Sin filtración de datos)</span>
+            </div>
+            <p class="text-xs text-emerald-900 mt-1">
+              Equipo localizado: <strong>${res.team.name}</strong> (${res.teamSeason.displayLabel}). Para proteger la privacidad del menor, los datos específicos de la ficha se activarán cuando el entrenador apruebe la vinculación.
+            </p>
+          `;
+        }
+        this.showToast(`✓ Invitación individual válida para ${res.team.name}.`);
+      } else {
+        const code = rawInput.toUpperCase();
+        const res = await api.invitations.getTeamJoinInfo(code);
+        this.beta.verifiedInvitation = { type: "GENERAL", code: code, data: res };
+
+        if (teamTitle) teamTitle.textContent = `${res.team.name} · ${res.teamSeason.displayLabel}`;
+        if (teamSub) teamSub.textContent = `${res.team.sport || 'Deporte'} · Temporada ${res.teamSeason.seasonLabel} · Código General`;
+        if (teamCard) teamCard.classList.remove("hidden");
+        if (validBadge) validBadge.classList.remove("hidden");
+        if (claimSection) claimSection.classList.remove("hidden");
+        if (noticeClean) {
+          noticeClean.classList.remove("hidden");
+          noticeClean.innerHTML = `
+            <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-blue-800">
+              <span class="material-symbols-outlined text-[18px] text-blue-600">info</span>
+              <span>Código general verificado</span>
+            </div>
+            <p class="text-xs text-blue-900 mt-1">
+              Equipo localizado: <strong>${res.team.name}</strong>. Introduce abajo el nombre de tu hijo/a para que el entrenador valide su asignación en la plantilla.
+            </p>
+          `;
+        }
+        this.showToast(`✓ Código de equipo válido: ${res.team.name}.`);
+      }
+    } catch (err) {
+      console.error("Verification error:", err);
+      this.showToast(`⚠️ ${mapDomainError(err)}`);
+      if (validBadge) validBadge.classList.add("hidden");
+      if (teamCard) teamCard.classList.add("hidden");
+    }
+  }
+
+  async submitParentJoinRequest() {
+    if (this.appMode === "DEMO") {
+      const btn = document.getElementById("btn-submit");
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">progress_activity</span><span>Enviando al entrenador...</span>`;
+      }
+      setTimeout(async () => {
+        await this.switchMembership("indautxu_ale_b");
+        await this.goToScreen("v2_07_parent_home", "inicio");
+        this.showToast("✓ Solicitud de vinculación registrada para Ibai #9.");
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>Enviar solicitud de vinculación</span><span class="material-symbols-outlined text-[20px]" data-icon="send">send</span>`;
+        }
+      }, 600);
+      return;
+    }
+
+    const tutorName = document.getElementById("tutor-name")?.value?.trim() || "Elena Gómez";
+    const tutorEmail = document.getElementById("tutor-email")?.value?.trim() || "tutor@beta.test";
+
+    if (!this.beta.verifiedInvitation) {
+      await this.verifyParentJoinInput();
+      if (!this.beta.verifiedInvitation) return;
+    }
+
     const btn = document.getElementById("btn-submit");
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">progress_activity</span><span>Enviando al entrenador...</span>`;
+      btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">progress_activity</span><span>Enviando solicitud al entrenador...</span>`;
     }
-    setTimeout(async () => {
-      await this.switchMembership("indautxu_ale_b");
-      await this.goToScreen("v2_07_parent_home", "inicio");
-      this.showToast("✓ Solicitud de vinculación registrada para Ibai #9.");
+
+    try {
+      // 1. Authenticate tutor with OTP dev
+      const authRes = await api.auth.loginDev(tutorEmail, tutorName);
+      this.tokens.parent = authRes.accessToken;
+      api.client.setToken(this.tokens.parent);
+      localStorage.setItem("talde_token_parent", authRes.accessToken);
+      localStorage.setItem("talde_app_mode", "BETA_NORMAL");
+
+      let res;
+      if (this.beta.verifiedInvitation.type === "INDIVIDUAL") {
+        res = await api.invitations.requestIndividualLink(this.beta.verifiedInvitation.token);
+        if (res?.player_id) {
+          this.beta.linkedPlayerId = res.player_id;
+          localStorage.setItem("talde_linked_player_id", res.player_id);
+        }
+      } else {
+        const claimName = document.getElementById("parent-claim-name")?.value?.trim();
+        const claimNumberVal = document.getElementById("parent-claim-number")?.value;
+        const claimNumber = claimNumberVal ? parseInt(claimNumberVal, 10) : undefined;
+
+        if (!claimName) {
+          this.showToast("⚠️ Para unirte con código general debes indicar el nombre del menor.");
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<span>Enviar solicitud de vinculación</span><span class="material-symbols-outlined text-[20px]">send</span>`;
+          }
+          return;
+        }
+        res = await api.invitations.requestGeneralLink(this.beta.verifiedInvitation.code, {
+          claimedPlayerName: claimName,
+          claimedShirtNumber: claimNumber
+        });
+      }
+
+      this.showToast(`✓ Solicitud enviada (ID: ${res.id.slice(0, 8)}...). Pendiente de validación por el entrenador.`);
+
+      const notice = document.getElementById("parent-clean-backend-notice");
+      if (notice) {
+        notice.classList.remove("hidden");
+        notice.innerHTML = `
+          <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-amber-800">
+            <span class="material-symbols-outlined text-[18px] text-amber-600">hourglass_top</span>
+            <span>Solicitud enviada al cuerpo técnico</span>
+          </div>
+          <p class="text-xs text-amber-900 mt-1">
+            Tu solicitud está <strong>PENDIENTE DE APROBACIÓN</strong>. Una vez que el entrenador confirme la vinculación, podrás acceder a la ficha y actividades del deportista.
+          </p>
+        `;
+      }
+    } catch (err) {
+      console.error("Parent join error:", err);
+      this.showToast(`Error al enviar solicitud: ${mapDomainError(err)}`);
+    } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = `<span>Enviar solicitud de vinculación</span><span class="material-symbols-outlined text-[20px]" data-icon="send">send</span>`;
+        btn.innerHTML = `<span>Solicitud registrada (Pendiente de aprobación)</span>`;
       }
-    }, 600);
+    }
+  }
+
+  async approveBetaGuardianRequest(requestId, selectElementId) {
+    let playerId = null;
+    if (selectElementId) {
+      const sel = document.getElementById(selectElementId);
+      playerId = sel?.value;
+      if (!playerId) {
+        this.showToast("Selecciona un jugador del roster para vincular.");
+        return;
+      }
+    }
+
+    try {
+      const res = await api.teams.approveGuardianRequest(requestId, playerId);
+      this.showToast("✓ Solicitud de vinculación aprobada en PostgreSQL.");
+
+      const successBadge = document.getElementById("coach-approval-success-badge");
+      if (successBadge) successBadge.classList.remove("hidden");
+
+      const linkedCount = document.getElementById("coach-linked-count");
+      if (linkedCount) {
+        const current = parseInt(linkedCount.textContent || "0", 10);
+        linkedCount.textContent = current + 1;
+      }
+
+      await this.syncCoachHome();
+    } catch (err) {
+      console.error("Approve error:", err);
+      this.showToast(`Error al aprobar: ${mapDomainError(err)}`);
+    }
+  }
+
+  async rejectBetaGuardianRequest(requestId) {
+    try {
+      await api.teams.rejectGuardianRequest(requestId);
+      this.showToast("Solicitud rechazada en PostgreSQL.");
+      await this.syncCoachHome();
+    } catch (err) {
+      console.error("Reject error:", err);
+      this.showToast(`Error al rechazar: ${mapDomainError(err)}`);
+    }
   }
 
   approveGuardianRequest() {

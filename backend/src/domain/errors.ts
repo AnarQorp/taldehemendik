@@ -18,7 +18,11 @@ export type ErrorCode =
   | "CALLUP_WARNINGS_UNCONFIRMED"
   | "PLAYER_CANNOT_ATTEND"
   | "ACTION_ITEM_NOT_OPEN"
-  | "SUBSTITUTE_NO_LONGER_ELIGIBLE";
+  | "SUBSTITUTE_NO_LONGER_ELIGIBLE"
+  | "BOOTSTRAP_IDEMPOTENCY_CONFLICT"
+  | "ROSTER_IDEMPOTENCY_CONFLICT"
+  | "GENERAL_JOIN_INVALID"
+  | "PLAYER_CLAIM_REQUIRED";
 
 export class DomainError extends Error {
   constructor(public readonly code: ErrorCode, public readonly statusCode: number, message: string) {

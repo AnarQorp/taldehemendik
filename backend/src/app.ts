@@ -9,23 +9,27 @@ import { pool, inTransaction } from "./db/pool.js";
 import { DevelopmentAuthAdapter } from "./auth/development-adapter.js";
 import type { AuthAdapter } from "./auth/adapter.js";
 import { config } from "./config.js";
-import { resetDemoDataset } from "./db/seed-demo.js";
 import { DomainError } from "./domain/errors.js";
 import { requireGuardianPlayerAccess, requirePlayerInSeason, requireRole } from "./policy/authorization.js";
+import { resetDemoDatabase } from "./db/demo-reset.js";
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 const emailSchema = z.string().email().max(254).transform((v) => v.toLowerCase());
 const uuid = z.string().uuid();
 const availability = z.enum(["CAN_ATTEND", "CANNOT_ATTEND", "UNSURE"]);
 
-type BuildOptions = { authAdapter?: AuthAdapter };
+type BuildOptions = { authAdapter?: AuthAdapter; enableDevReset?: boolean };
 
 export async function buildApp(options: BuildOptions = {}) {
   const auth = options.authAdapter ?? new DevelopmentAuthAdapter();
   const app = Fastify({ logger: false });
   await app.register(rateLimit, { max: 300, timeWindow: "1 minute" });
-  await app.register(swagger, { openapi: { info: { title: "Talde Hemendik VS01", version: "0.1.0" } } });
+  await app.register(swagger, { openapi: { info: { title: "Talde Hemendik Backend", version: "0.3.0" } } });
   await app.register(swaggerUi, { routePrefix: "/documentation" });
+
+  if(options.enableDevReset??config.devResetEnabled){
+    app.post("/v1/dev/reset",async()=>inTransaction((db)=>resetDemoDatabase(db)));
+  }
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof DomainError) return reply.code(error.statusCode).send({ error: { code: error.code, message: error.message } });
@@ -67,15 +71,8 @@ export async function buildApp(options: BuildOptions = {}) {
     return { status: "ok" };
   });
 
-  if (config.enableDevEndpoints) {
-    app.post("/v1/dev/reset", async () => {
-      await resetDemoDataset();
-      return { status: "ok", dataset: "vs02_full" };
-    });
-  }
-
-  const otpRequestLimit = config.enableDevEndpoints ? 1000 : 5;
-  const otpVerifyLimit = config.enableDevEndpoints ? 1000 : 10;
+  const otpRequestLimit = config.devResetEnabled ? 1000 : 50;
+  const otpVerifyLimit = config.devResetEnabled ? 1000 : 100;
 
   app.post("/v1/auth/otp/request", { config: { rateLimit: { max: otpRequestLimit, timeWindow: "5 minutes" } } }, async (request) => {
     const { email } = z.object({ email: emailSchema }).parse(request.body);
@@ -92,6 +89,58 @@ export async function buildApp(options: BuildOptions = {}) {
       [identity.subject, identity.email, body.displayName ?? identity.email.split("@")[0]]
     );
     return { accessToken: auth.issueAccessToken(result.rows[0].id), user: result.rows[0] };
+  });
+
+  app.post("/v1/teams/bootstrap", async(request,reply)=>{
+    const {userId}=await actor(request);
+    const key=typeof request.headers["idempotency-key"]==="string"?request.headers["idempotency-key"]:undefined;
+    if(!key||key.length<8||key.length>100) throw new DomainError("BOOTSTRAP_IDEMPOTENCY_CONFLICT",400,"A valid Idempotency-Key is required");
+    const body=z.object({
+      team:z.object({name:z.string().trim().min(1).max(150),sport:z.string().trim().min(1).max(50)}),
+      teamSeason:z.object({seasonLabel:z.string().trim().min(1).max(30),category:z.string().trim().min(1).max(100),displayLabel:z.string().trim().min(1).max(150)}),
+      createGeneralJoinCode:z.boolean().default(false)
+    }).parse(request.body);
+    const result=await inTransaction(async(db)=>{
+      const existing=await db.query(`SELECT ts.*,t.name team_name,t.sport,m.id membership_id,m.role,m.status FROM team_seasons ts JOIN teams t ON t.id=ts.team_id JOIN memberships m ON m.team_season_id=ts.id AND m.user_id=$1 AND m.role='COACH' WHERE ts.created_by_user_id=$1 AND ts.bootstrap_idempotency_key=$2 FOR UPDATE OF ts`,[userId,key]);
+      if(existing.rowCount){
+        const row=existing.rows[0];
+        if(row.team_name!==body.team.name||row.sport!==body.team.sport||row.season_label!==body.teamSeason.seasonLabel||row.category!==body.teamSeason.category||row.display_label!==body.teamSeason.displayLabel) throw new DomainError("BOOTSTRAP_IDEMPOTENCY_CONFLICT",409,"Idempotency key was used with a different bootstrap payload");
+        return {team:{id:row.team_id,name:row.team_name,sport:row.sport},teamSeason:row,membership:{id:row.membership_id,role:row.role,status:row.status},joinCode:row.join_code,idempotentReplay:true};
+      }
+      const team=(await db.query(`INSERT INTO teams(name,sport) VALUES($1,$2) RETURNING *`,[body.team.name,body.team.sport])).rows[0];
+      const joinCode=body.createGeneralJoinCode?randomBytes(4).toString("hex").toUpperCase():null;
+      const season=(await db.query(`INSERT INTO team_seasons(team_id,season_label,category,display_label,status,created_by_user_id,bootstrap_idempotency_key,join_code) VALUES($1,$2,$3,$4,'ACTIVE',$5,$6,$7) RETURNING *`,[team.id,body.teamSeason.seasonLabel,body.teamSeason.category,body.teamSeason.displayLabel,userId,key,joinCode])).rows[0];
+      const membership=(await db.query(`INSERT INTO memberships(user_id,team_season_id,role,status) VALUES($1,$2,'COACH','ACTIVE') RETURNING *`,[userId,season.id])).rows[0];
+      if(joinCode) await db.query(`INSERT INTO invitations(team_season_id,player_id,purpose,token_hash,expires_at,created_by_user_id) VALUES($1,NULL,'GUARDIAN_LINK',$2,now()+interval '1 year',$3)`,[season.id,tokenHash(joinCode),userId]);
+      await db.query(`INSERT INTO audit_events(actor_user_id,team_season_id,action,entity_type,entity_id,metadata) VALUES($1,$2,'TEAM_BOOTSTRAPPED','TeamSeason',$2,$3)`,[userId,season.id,JSON.stringify({teamId:team.id,generalJoinCodeCreated:Boolean(joinCode)})]);
+      await db.query(`INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload) VALUES('TeamSeason',$1,'TeamSeasonCreated',$2)`,[season.id,JSON.stringify({teamId:team.id,creatorUserId:userId})]);
+      return {team,teamSeason:season,membership,joinCode,idempotentReplay:false};
+    });
+    return reply.code(result.idempotentReplay?200:201).send(result);
+  });
+
+  app.get("/v1/me/memberships",async(request)=>{
+    const {userId}=await actor(request);
+    const result=await pool.query(`SELECT m.id,m.role,m.status,m.created_at,ts.id team_season_id,ts.season_label,ts.category,ts.display_label,ts.status team_season_status,t.id team_id,t.name team_name,t.sport FROM memberships m JOIN team_seasons ts ON ts.id=m.team_season_id JOIN teams t ON t.id=ts.team_id WHERE m.user_id=$1 AND m.status='ACTIVE' ORDER BY t.name,ts.season_label`,[userId]);
+    return {items:result.rows};
+  });
+
+  app.post("/v1/team-seasons/:teamSeasonId/players",async(request,reply)=>{
+    const {userId}=await actor(request);const {teamSeasonId}=z.object({teamSeasonId:uuid}).parse(request.params);
+    const key=typeof request.headers["idempotency-key"]==="string"?request.headers["idempotency-key"]:undefined;
+    if(!key||key.length<8||key.length>100) throw new DomainError("ROSTER_IDEMPOTENCY_CONFLICT",400,"A valid Idempotency-Key is required");
+    const body=z.object({firstName:z.string().trim().min(1).max(100),lastName:z.string().trim().min(1).max(150),shortName:z.string().trim().min(1).max(100).optional(),shirtNumber:z.number().int().min(0).max(999).optional(),position:z.string().trim().max(100).optional()}).parse(request.body);
+    const result=await inTransaction(async(db)=>{
+      await requireRole(db,userId,teamSeasonId,["COACH"]);
+      const existing=await db.query(`SELECT re.*,p.first_name,p.last_name,p.short_name FROM roster_entries re JOIN players p ON p.id=re.player_id WHERE re.team_season_id=$1 AND re.creation_idempotency_key=$2 FOR UPDATE`,[teamSeasonId,key]);
+      if(existing.rowCount){const row=existing.rows[0];if(row.first_name!==body.firstName||row.last_name!==body.lastName||row.short_name!==(body.shortName??null)||row.shirt_number!==(body.shirtNumber??null)||row.position!==(body.position??null))throw new DomainError("ROSTER_IDEMPOTENCY_CONFLICT",409,"Idempotency key was used with different player data");return {player:{id:row.player_id,first_name:row.first_name,last_name:row.last_name,short_name:row.short_name},rosterEntry:row,idempotentReplay:true};}
+      const season=(await db.query(`SELECT team_id FROM team_seasons WHERE id=$1`,[teamSeasonId])).rows[0];
+      const player=(await db.query(`INSERT INTO players(team_id,first_name,last_name,short_name) VALUES($1,$2,$3,$4) RETURNING *`,[season.team_id,body.firstName,body.lastName,body.shortName??null])).rows[0];
+      const roster=(await db.query(`INSERT INTO roster_entries(player_id,team_season_id,shirt_number,position,status,creation_idempotency_key) VALUES($1,$2,$3,$4,'ACTIVE',$5) RETURNING *`,[player.id,teamSeasonId,body.shirtNumber??null,body.position??null,key])).rows[0];
+      await db.query(`INSERT INTO audit_events(actor_user_id,team_season_id,action,entity_type,entity_id) VALUES($1,$2,'PLAYER_ADDED_TO_ROSTER','RosterEntry',$3)`,[userId,teamSeasonId,roster.id]);
+      return {player,rosterEntry:roster,idempotentReplay:false};
+    });
+    return reply.code(result.idempotentReplay?200:201).send(result);
   });
 
   app.post("/v1/team-seasons/:teamSeasonId/players/:playerId/invitations", async (request, reply) => {
@@ -126,22 +175,41 @@ export async function buildApp(options: BuildOptions = {}) {
     return { team: { name: row.name }, teamSeason: { seasonLabel: row.season_label, displayLabel: row.display_label }, purpose: row.purpose };
   });
 
-  app.post("/v1/invitations/:token/guardian-link-requests", async (request, reply) => {
-    const { userId } = await actor(request);
-    const { token } = z.object({ token: z.string().min(16) }).parse(request.params);
-    const invitation = await pool.query(`SELECT * FROM invitations WHERE token_hash=$1 FOR UPDATE`, [tokenHash(token)]);
-    if (!invitation.rowCount || invitation.rows[0].status !== "ACTIVE") throw new DomainError("INVITATION_INVALID", 404, "Invitation is invalid");
-    if (new Date(invitation.rows[0].expires_at) <= new Date()) throw new DomainError("INVITATION_EXPIRED", 410, "Invitation has expired");
-    const row = invitation.rows[0];
-    const result = await inTransaction(async (db) => {
-      const created = await db.query(
-        `INSERT INTO guardian_link_requests(invitation_id,requester_user_id,team_season_id,player_id)
-         VALUES($1,$2,$3,$4) RETURNING id,status,created_at`, [row.id, userId, row.team_season_id, row.player_id]
+  async function createGuardianRequest(token:string,userId:string,input:unknown){
+    const claim=z.object({claimedPlayerName:z.string().trim().min(1).max(200).optional(),claimedShirtNumber:z.number().int().min(0).max(999).optional()}).parse(input??{});
+    return inTransaction(async(db)=>{
+      const invitation=await db.query(`SELECT * FROM invitations WHERE token_hash=$1 FOR UPDATE`,[tokenHash(token)]);
+      if(!invitation.rowCount||invitation.rows[0].status!=="ACTIVE") throw new DomainError("INVITATION_INVALID",404,"Invitation is invalid");
+      if(new Date(invitation.rows[0].expires_at)<=new Date()) throw new DomainError("INVITATION_EXPIRED",410,"Invitation has expired");
+      const row=invitation.rows[0];
+      if(!row.player_id&&!claim.claimedPlayerName) throw new DomainError("PLAYER_CLAIM_REQUIRED",422,"General invitation requires a manually entered player name");
+      const created=await db.query(
+        `INSERT INTO guardian_link_requests(invitation_id,requester_user_id,team_season_id,player_id,claimed_player_name,claimed_shirt_number)
+         VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status,created_at,player_id,claimed_player_name,claimed_shirt_number`,
+        [row.id,userId,row.team_season_id,row.player_id,row.player_id?null:claim.claimedPlayerName??null,row.player_id?null:claim.claimedShirtNumber??null]
       );
-      await db.query(`INSERT INTO audit_events(actor_user_id,team_season_id,action,entity_type,entity_id) VALUES($1,$2,'GUARDIAN_LINK_REQUEST_CREATED','GuardianLinkRequest',$3)`, [userId, row.team_season_id, created.rows[0].id]);
+      await db.query(`INSERT INTO audit_events(actor_user_id,team_season_id,action,entity_type,entity_id,metadata) VALUES($1,$2,'GUARDIAN_LINK_REQUEST_CREATED','GuardianLinkRequest',$3,$4)`,[userId,row.team_season_id,created.rows[0].id,JSON.stringify({invitationScope:row.player_id?"INDIVIDUAL":"GENERAL"})]);
       return created.rows[0];
     });
-    return reply.code(201).send(result);
+  }
+
+  app.post("/v1/invitations/:token/guardian-link-requests", async (request, reply) => {
+    const {userId}=await actor(request);const {token}=z.object({token:z.string().min(6)}).parse(request.params);
+    return reply.code(201).send(await createGuardianRequest(token,userId,request.body));
+  });
+
+  app.get("/v1/team-join/:code",async(request)=>{
+    const {code}=z.object({code:z.string().min(6).max(32).transform(v=>v.toUpperCase())}).parse(request.params);
+    const result=await pool.query(`SELECT t.name,t.sport,ts.season_label,ts.display_label FROM team_seasons ts JOIN teams t ON t.id=ts.team_id WHERE ts.join_code=$1 AND ts.status='ACTIVE'`,[code]);
+    if(!result.rowCount) throw new DomainError("GENERAL_JOIN_INVALID",404,"Team join code is invalid");
+    const row=result.rows[0];return {team:{name:row.name,sport:row.sport},teamSeason:{seasonLabel:row.season_label,displayLabel:row.display_label},purpose:"GUARDIAN_LINK_REQUEST"};
+  });
+
+  app.post("/v1/team-join/:code/guardian-link-requests",async(request,reply)=>{
+    const {userId}=await actor(request);const {code}=z.object({code:z.string().min(6).max(32).transform(v=>v.toUpperCase())}).parse(request.params);
+    const season=await pool.query(`SELECT 1 FROM team_seasons WHERE join_code=$1 AND status='ACTIVE'`,[code]);
+    if(!season.rowCount) throw new DomainError("GENERAL_JOIN_INVALID",404,"Team join code is invalid");
+    return reply.code(201).send(await createGuardianRequest(code,userId,request.body));
   });
 
   app.get("/v1/team-seasons/:teamSeasonId/guardian-link-requests", async (request) => {
@@ -149,9 +217,9 @@ export async function buildApp(options: BuildOptions = {}) {
     const { teamSeasonId } = z.object({ teamSeasonId: uuid }).parse(request.params);
     await requireRole(pool, userId, teamSeasonId, ["COACH"]);
     const result = await pool.query(
-      `SELECT r.id,r.status,r.created_at,u.id guardian_user_id,u.email,u.display_name,
+      `SELECT r.id,r.status,r.created_at,r.claimed_player_name,r.claimed_shirt_number,u.id guardian_user_id,u.email,u.display_name,
               p.id player_id,p.first_name,p.last_name
-       FROM guardian_link_requests r JOIN users u ON u.id=r.requester_user_id JOIN players p ON p.id=r.player_id
+       FROM guardian_link_requests r JOIN users u ON u.id=r.requester_user_id LEFT JOIN players p ON p.id=r.player_id
        WHERE r.team_season_id=$1 AND r.status='PENDING' ORDER BY r.created_at`, [teamSeasonId]
     );
     return { items: result.rows };
@@ -160,8 +228,9 @@ export async function buildApp(options: BuildOptions = {}) {
   app.post("/v1/guardian-link-requests/:requestId/approve", async (request) => {
     const { userId } = await actor(request);
     const { requestId } = z.object({ requestId: uuid }).parse(request.params);
+    const body=z.object({playerId:uuid.optional()}).parse(request.body??{});
     return inTransaction(async (db) => {
-      const found = await db.query(`SELECT * FROM guardian_link_requests WHERE id=$1 FOR UPDATE`, [requestId]);
+      const found = await db.query(`SELECT r.*,i.player_id invitation_player_id FROM guardian_link_requests r JOIN invitations i ON i.id=r.invitation_id WHERE r.id=$1 FOR UPDATE OF r`, [requestId]);
       if (!found.rowCount) throw new DomainError("PLAYER_NOT_ACCESSIBLE", 404, "Link request not found");
       const row = found.rows[0];
       await requireRole(db, userId, row.team_season_id, ["COACH"]);
@@ -170,13 +239,16 @@ export async function buildApp(options: BuildOptions = {}) {
         return { requestId, status: "APPROVED", guardianLinkId: existing.rows[0].id, idempotentReplay: true };
       }
       if (row.status !== "PENDING") throw new DomainError("IDEMPOTENCY_CONFLICT", 409, "Only pending requests can be approved");
+      const approvedPlayerId=row.player_id??body.playerId;
+      if(!approvedPlayerId) throw new DomainError("PLAYER_CLAIM_REQUIRED",422,"Coach must select the claimed player when approving a general request");
+      await requirePlayerInSeason(db,row.team_season_id,approvedPlayerId);
       await db.query(`INSERT INTO memberships(user_id,team_season_id,role,status) VALUES($1,$2,'GUARDIAN','ACTIVE') ON CONFLICT(user_id,team_season_id,role) DO UPDATE SET status='ACTIVE'`, [row.requester_user_id, row.team_season_id]);
-      const link = await db.query(`INSERT INTO guardian_links(guardian_user_id,player_id,status) VALUES($1,$2,'ACTIVE') ON CONFLICT(guardian_user_id,player_id) DO UPDATE SET status='ACTIVE' RETURNING id`, [row.requester_user_id, row.player_id]);
-      await db.query(`UPDATE guardian_link_requests SET status='APPROVED',reviewed_by_user_id=$2,reviewed_at=now() WHERE id=$1`, [requestId, userId]);
-      await db.query(`UPDATE invitations SET status='USED' WHERE id=$1`, [row.invitation_id]);
+      const link = await db.query(`INSERT INTO guardian_links(guardian_user_id,player_id,status) VALUES($1,$2,'ACTIVE') ON CONFLICT(guardian_user_id,player_id) DO UPDATE SET status='ACTIVE' RETURNING id`, [row.requester_user_id,approvedPlayerId]);
+      await db.query(`UPDATE guardian_link_requests SET status='APPROVED',player_id=$3,reviewed_by_user_id=$2,reviewed_at=now() WHERE id=$1`, [requestId,userId,approvedPlayerId]);
+      if(row.invitation_player_id) await db.query(`UPDATE invitations SET status='USED' WHERE id=$1`, [row.invitation_id]);
       await db.query(`INSERT INTO audit_events(actor_user_id,team_season_id,action,entity_type,entity_id) VALUES
         ($1,$2,'GUARDIAN_LINK_REQUEST_APPROVED','GuardianLinkRequest',$3),($1,$2,'GUARDIAN_LINK_ACTIVATED','GuardianLink',$4)`, [userId, row.team_season_id, requestId, link.rows[0].id]);
-      await db.query(`INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload) VALUES('GuardianLink',$1,'GuardianLinkApproved',$2)`, [link.rows[0].id, JSON.stringify({ teamSeasonId: row.team_season_id, playerId: row.player_id, guardianUserId: row.requester_user_id })]);
+      await db.query(`INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload) VALUES('GuardianLink',$1,'GuardianLinkApproved',$2)`, [link.rows[0].id, JSON.stringify({teamSeasonId:row.team_season_id,playerId:approvedPlayerId,guardianUserId:row.requester_user_id})]);
       return { requestId, status: "APPROVED", guardianLinkId: link.rows[0].id, idempotentReplay: false };
     });
   });

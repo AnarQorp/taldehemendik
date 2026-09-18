@@ -20,10 +20,10 @@ try {
     ($1, 'dev-email:mikel@example.test', 'mikel@example.test', 'Mikel Zubeldia'),
     ($2, 'dev-email:staff@example.test', 'staff@example.test', 'Ane Staff'),
     ($3, 'dev-email:coach-b@example.test', 'coach-b@example.test', 'Coach B')`, [ids.coach, ids.staff, ids.otherCoach]);
-  await pool.query(`INSERT INTO teams (id, name) VALUES ($1, 'C.D. Indautxu'), ($2, 'Equipo B')`, [ids.team, ids.otherTeam]);
-  await pool.query(`INSERT INTO team_seasons (id, team_id, season_label, category, display_label, status) VALUES
-    ($1, $2, '2026/27', 'Infantil', 'Infantil A', 'ACTIVE'),
-    ($3, $4, '2026/27', 'Infantil', 'Infantil B', 'ACTIVE')`, [ids.season, ids.team, ids.otherSeason, ids.otherTeam]);
+  await pool.query(`INSERT INTO teams (id, name, sport) VALUES ($1, 'C.D. Indautxu','FOOTBALL'), ($2, 'Equipo B','FOOTBALL')`, [ids.team, ids.otherTeam]);
+  await pool.query(`INSERT INTO team_seasons (id, team_id, season_label, category, display_label, status, created_by_user_id) VALUES
+    ($1, $2, '2026/27', 'Infantil', 'Infantil A', 'ACTIVE',$5),
+    ($3, $4, '2026/27', 'Infantil', 'Infantil B', 'ACTIVE',$6)`, [ids.season, ids.team, ids.otherSeason, ids.otherTeam,ids.coach,ids.otherCoach]);
   await pool.query(`INSERT INTO memberships (user_id, team_season_id, role) VALUES
     ($1, $2, 'COACH'), ($3, $2, 'STAFF'), ($4, $5, 'COACH')`, [ids.coach, ids.season, ids.staff, ids.otherCoach, ids.otherSeason]);
   for (const [id,first,last,number] of roster) {

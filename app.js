@@ -136,10 +136,10 @@ const GUIDED_STEPS = [
 
 export class TeamAppState {
   constructor() {
-    this.currentRole = "coach"; // 'onboard' | 'coach' | 'parent'
-    this.currentScreen = "v2_01_coach_home";
-    this.currentTab = "inicio";
-    this.currentStepIndex = 4;
+    this.currentRole = "onboard"; // 'onboard' | 'coach' | 'parent'
+    this.currentScreen = "v2_00_onboarding_welcome";
+    this.currentTab = "onboard";
+    this.currentStepIndex = 0;
     this.selectedSubstitute = "Ane Mintegi";
     this.selectedCandidateId = DEMO_CONFIG.ANE_PLAYER_ID;
     this.parentRsvpChoice = "NO";
@@ -172,21 +172,33 @@ export class TeamAppState {
     const params = new URLSearchParams(window.location.search);
     const screenParam = params.get("screen") || window.location.hash.replace("#", "");
     const roleParam = params.get("role");
+    const isDemoRequested = params.get("demo") === "1" || params.get("demo") === "true";
+
+    const demoToolbar = document.getElementById("demo-toolbar");
+    const demoStepCard = document.getElementById("demo-step-card");
+    if (isDemoRequested) {
+      if (demoToolbar) demoToolbar.classList.remove("hidden");
+      if (demoStepCard) demoStepCard.classList.remove("hidden");
+    }
 
     if (roleParam === "parent" || screenParam?.startsWith("v2_07_") || screenParam?.startsWith("v2_08_")) {
       this.currentRole = "parent";
-    } else if (roleParam === "onboard" || screenParam?.startsWith("v2_00_")) {
-      this.currentRole = "onboard";
-    } else {
+    } else if (roleParam === "coach" || screenParam?.startsWith("v2_01_") || screenParam?.startsWith("v2_02_") || screenParam?.startsWith("v2_05_") || screenParam?.startsWith("v2_06_")) {
       this.currentRole = "coach";
+    } else {
+      this.currentRole = "onboard";
     }
 
     if (screenParam && document.getElementById(screenParam)) {
       this.currentScreen = screenParam;
+    } else if (this.currentRole === "onboard") {
+      this.currentScreen = "v2_00_onboarding_welcome";
     }
 
     try {
-      await this.ensureAuth(this.currentRole);
+      if (this.currentRole !== "onboard") {
+        await this.ensureAuth(this.currentRole);
+      }
       await this.syncCurrentScreen();
     } catch (err) {
       console.warn("Backend auth/sync deferred:", err);
@@ -196,6 +208,19 @@ export class TeamAppState {
     this.updateBottomNav();
     this.updateRoleUI();
     this.updateStepUI();
+  }
+
+  toggleDemoTools() {
+    const demoToolbar = document.getElementById("demo-toolbar");
+    const demoStepCard = document.getElementById("demo-step-card");
+    const isHidden = demoToolbar?.classList.contains("hidden");
+    if (isHidden) {
+      demoToolbar?.classList.remove("hidden");
+      demoStepCard?.classList.remove("hidden");
+    } else {
+      demoToolbar?.classList.add("hidden");
+      demoStepCard?.classList.add("hidden");
+    }
   }
 
   async ensureAuth(role) {
@@ -774,9 +799,16 @@ export class TeamAppState {
       const banner = document.getElementById("injury-resolved-banner");
       if (banner) banner.classList.add("hidden");
 
-      await this.ensureAuth("coach");
-      await this.syncCurrentScreen();
-      this.showToast("✓ Base de datos PostgreSQL reiniciada al estado limpio VS02 (14/2/0/2).");
+      this.currentRole = "onboard";
+      this.currentScreen = "v2_00_onboarding_welcome";
+      this.currentTab = "onboard";
+      this.currentStepIndex = 0;
+      this.goToScreen("v2_00_onboarding_welcome", "onboard");
+      this.updateBottomNav();
+      this.updateRoleUI();
+      this.updateStepUI();
+
+      this.showToast("✓ Base de datos PostgreSQL y navegación reiniciadas al inicio (14/2/0/2).");
     } catch (err) {
       this.showToast(`Error al reiniciar: ${mapDomainError(err)}`);
     }
@@ -931,6 +963,7 @@ export class TeamAppState {
 // Global instance attached to window
 const teamApp = new TeamAppState();
 window.teamApp = teamApp;
+window.handleVinculacion = () => teamApp.submitParentJoinRequest();
 
 document.addEventListener("DOMContentLoaded", () => {
   teamApp.init();

@@ -31,7 +31,7 @@ npm run demo
 npm run demo:vs02
 ```
 
-The seed is deliberately minimal and isolated: CD Oyón, season 2026/27 Infantil A, Mikel Zubeldia, Ibai Aranguren #9, Torneo Oyón, plus a second team used only for access-isolation tests.
+The seed is deliberately minimal and isolated: C.D. Indautxu, season 2026/27 Infantil A, Mikel Zubeldia, Ibai Aranguren #9, Torneo Indautxu, plus a second team used only for access-isolation tests.
 
 See [HTTP contracts](./docs/HTTP-CONTRACTS-VS01.md) and [RLS decision](./docs/RLS-DECISION-VS01.md).
 

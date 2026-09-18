@@ -20,7 +20,7 @@ try {
     ($1, 'dev-email:mikel@example.test', 'mikel@example.test', 'Mikel Zubeldia'),
     ($2, 'dev-email:staff@example.test', 'staff@example.test', 'Ane Staff'),
     ($3, 'dev-email:coach-b@example.test', 'coach-b@example.test', 'Coach B')`, [ids.coach, ids.staff, ids.otherCoach]);
-  await pool.query(`INSERT INTO teams (id, name) VALUES ($1, 'CD Oyón'), ($2, 'Equipo B')`, [ids.team, ids.otherTeam]);
+  await pool.query(`INSERT INTO teams (id, name) VALUES ($1, 'C.D. Indautxu'), ($2, 'Equipo B')`, [ids.team, ids.otherTeam]);
   await pool.query(`INSERT INTO team_seasons (id, team_id, season_label, category, display_label, status) VALUES
     ($1, $2, '2026/27', 'Infantil', 'Infantil A', 'ACTIVE'),
     ($3, $4, '2026/27', 'Infantil', 'Infantil B', 'ACTIVE')`, [ids.season, ids.team, ids.otherSeason, ids.otherTeam]);
@@ -33,7 +33,7 @@ try {
   await pool.query(`INSERT INTO players (id, team_id, first_name, last_name) VALUES ($1, $2, 'Otro', 'Jugador')`, [ids.otherPlayer, ids.otherTeam]);
   await pool.query(`INSERT INTO roster_entries (player_id, team_season_id, shirt_number) VALUES ($1, $2, 7)`, [ids.otherPlayer, ids.otherSeason]);
   await pool.query(`INSERT INTO events (id, team_season_id, title, type, starts_at, availability_enabled, availability_deadline, callup_enabled, status, created_by_user_id)
-    VALUES ($1, $2, 'Torneo Oyón', 'TOURNAMENT', '2026-10-10T08:00:00Z', true, '2026-10-08T20:00:00Z', true, 'ACTIVE', $3)`, [ids.event, ids.season, ids.coach]);
+    VALUES ($1, $2, 'Torneo Indautxu', 'TOURNAMENT', '2026-10-10T08:00:00Z', true, '2026-10-08T20:00:00Z', true, 'ACTIVE', $3)`, [ids.event, ids.season, ids.coach]);
   await pool.query(`INSERT INTO events (id, team_season_id, title, type, starts_at, availability_enabled, availability_deadline, callup_enabled, status, created_by_user_id)
     VALUES ($1, $2, 'Evento Equipo B', 'TRAINING', '2026-10-10T08:00:00Z', true, '2026-10-08T20:00:00Z', false, 'ACTIVE', $3)`, [ids.otherEvent, ids.otherSeason, ids.otherCoach]);
   await pool.query(`INSERT INTO invitations(team_season_id,player_id,purpose,token_hash,expires_at,created_by_user_id)

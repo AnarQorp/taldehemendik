@@ -167,6 +167,23 @@
         <span id="tour-info-icon" class="material-symbols-outlined text-[18px]">expand_less</span>
       </button>
 
+      <!-- PostgreSQL Backend Reset Button -->
+      <button onclick="teamApp.resetBackendDataset()" class="px-2 py-1 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-800/80 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs" title="Resetear datos en PostgreSQL a estado inicial VS02 (14/2/0/2)">
+        <span class="material-symbols-outlined text-[14px]">database</span>
+        <span class="hidden sm:inline">Reset BD</span>
+      </button>
+
+      <!-- Test Conflict Buttons -->
+      <button onclick="teamApp.triggerTestConflictVersion()" class="px-2 py-1 bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-800/60 rounded-lg text-[10px] sm:text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors" title="Simular CALLUP_VERSION_CONFLICT">
+        <span class="material-symbols-outlined text-[13px]">sync_problem</span>
+        <span class="hidden lg:inline">Conflicto Versión</span>
+      </button>
+
+      <button onclick="teamApp.triggerTestConflictSubstitute()" class="px-2 py-1 bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-800/60 rounded-lg text-[10px] sm:text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors" title="Simular SUBSTITUTE_NO_LONGER_ELIGIBLE">
+        <span class="material-symbols-outlined text-[13px]">person_off</span>
+        <span class="hidden lg:inline">Suplente Ineligible</span>
+      </button>
+
       <button onclick="teamApp.resetDemo()" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg cursor-pointer shrink-0" title="Reiniciar toda la demo">
         <span class="material-symbols-outlined text-[18px]">restart_alt</span>
       </button>
@@ -961,55 +978,55 @@
 <span class="material-symbols-outlined text-tertiary text-[20px]" data-icon="assignment_late" style="font-variation-settings: 'FILL' 1;">assignment_late</span>
 <h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Pendiente de ti</h2>
 </div>
-<span class="font-label-sm text-label-sm font-extrabold px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-fixed-dim">
+<span id="coach-pending-count-badge" class="font-label-sm text-label-sm font-extrabold px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-fixed-dim">
           3 tareas
         </span>
 </div>
-<div class="space-y-3">
+<div id="coach-pending-items-container" class="space-y-3">
 <!-- Item 1: Torneo Indautxu (Urgency: Amber) -->
-<div class="bg-surface-container-lowest rounded-xl border-l-4 border-l-amber-500 border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
+<div id="coach-item-torneo-card" class="bg-surface-container-lowest rounded-xl border-l-4 border-l-amber-500 border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
 <div class="flex items-start justify-between gap-2">
 <div>
 <span class="font-headline-sm text-headline-sm text-on-surface font-extrabold block">Torneo Indautxu</span>
-<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">2 familias todavía no han respondido (Ane Mintegi, Peio Gómez)</p>
+<p id="coach-item-torneo-desc" class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">2 familias todavía no han respondido (Ane Mintegi, Peio Gómez)</p>
 </div>
 <span class="font-label-sm text-label-sm font-bold bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full whitespace-nowrap border border-amber-300">
               Cierra 20:00 h
             </span>
 </div>
-<button class="w-full h-[50px] rounded-xl bg-primary-container hover:bg-primary active:scale-[0.98] transition-all text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-sm">
+<button onclick="teamApp.goToScreen('v2_05_event_hub_normal', 'agenda')" class="w-full h-[50px] rounded-xl bg-primary-container hover:bg-primary active:scale-[0.98] transition-all text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
 <span class="material-symbols-outlined text-[18px]" data-icon="send">send</span>
             Revisar
           </button>
 </div>
 <!-- Item 2: Convocatoria del sábado (Readiness: Green) -->
-<div class="bg-surface-container-lowest rounded-xl border-l-4 border-l-secondary border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
+<div id="coach-item-convocatoria-card" class="bg-surface-container-lowest rounded-xl border-l-4 border-l-secondary border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
 <div class="flex items-start justify-between gap-2">
 <div>
 <span class="font-headline-sm text-headline-sm text-on-surface font-extrabold block">Convocatoria del sábado</span>
-<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Ya tienes suficientes jugadores disponibles (14 disponibles).</p>
+<p id="coach-item-convocatoria-desc" class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Ya tienes suficientes jugadores disponibles (14 disponibles).</p>
 </div>
-<span class="font-label-sm text-label-sm font-bold bg-secondary-fixed text-on-secondary-fixed px-2.5 py-1 rounded-full whitespace-nowrap border border-secondary-fixed-dim">
+<span id="coach-item-convocatoria-badge" class="font-label-sm text-label-sm font-bold bg-secondary-fixed text-on-secondary-fixed px-2.5 py-1 rounded-full whitespace-nowrap border border-secondary-fixed-dim">
               Convocatoria lista
             </span>
 </div>
-<button class="w-full h-[50px] rounded-xl bg-primary-container hover:bg-primary active:scale-[0.98] transition-all text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-sm">
+<button onclick="teamApp.goToScreen('v2_05_event_hub_normal', 'agenda')" class="w-full h-[50px] rounded-xl bg-primary-container hover:bg-primary active:scale-[0.98] transition-all text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
 <span class="material-symbols-outlined text-[18px]" data-icon="playlist_add_check">playlist_add_check</span>
             Preparar convocatoria
           </button>
 </div>
 <!-- Item 3: Baja de última hora (Alert: Red) -->
-<div class="bg-surface-container-lowest rounded-xl border-l-4 border-l-tertiary-container border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
+<div id="coach-item-baja-card" class="bg-surface-container-lowest rounded-xl border-l-4 border-l-tertiary-container border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
 <div class="flex items-start justify-between gap-2">
 <div>
 <span class="font-headline-sm text-headline-sm text-on-surface font-extrabold block">Baja de última hora</span>
-<p class="font-body-sm text-body-sm text-tertiary font-medium mt-0.5">Ibai (#9) ha comunicado que no puede asistir (nota: está enfermo).</p>
+<p id="coach-item-baja-desc" class="font-body-sm text-body-sm text-tertiary font-medium mt-0.5">Ibai (#9) ha comunicado que no puede asistir (nota: está enfermo).</p>
 </div>
 <span class="font-label-sm text-label-sm font-bold bg-tertiary-fixed text-on-tertiary-fixed px-2.5 py-1 rounded-full whitespace-nowrap border border-tertiary-fixed-dim">
               No disponible
             </span>
 </div>
-<button class="w-full h-[50px] rounded-xl bg-surface-container-lowest border-2 border-tertiary text-tertiary hover:bg-tertiary-fixed active:scale-[0.98] transition-all font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5" onclick="teamApp.goToScreen(\'v2_06_event_hub_injury\', \'agenda\')" style="cursor:pointer;">
+<button class="w-full h-[50px] rounded-xl bg-surface-container-lowest border-2 border-tertiary text-tertiary hover:bg-tertiary-fixed active:scale-[0.98] transition-all font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 cursor-pointer" onclick="teamApp.goToScreen('v2_06_event_hub_injury', 'agenda')">
 <span class="material-symbols-outlined text-[18px]" data-icon="event_busy">event_busy</span>
             Resolver baja
           </button>
@@ -2206,19 +2223,19 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <!-- Disponibles -->
 <div class="bg-surface-container-lowest rounded-lg border border-secondary/30 p-2.5 flex flex-col items-center text-center shadow-xs">
 <span class="material-symbols-outlined text-secondary text-[22px] mb-1" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-<span class="font-stat-display text-[26px] leading-[28px] font-extrabold text-secondary">14</span>
+<span id="hub-count-disponibles" class="font-stat-display text-[26px] leading-[28px] font-extrabold text-secondary">14</span>
 <span class="font-label-sm text-label-sm font-bold text-on-secondary-container mt-1">Disponibles</span>
 </div>
 <!-- Bajas -->
 <div class="bg-surface-container-lowest rounded-lg border border-error/30 p-2.5 flex flex-col items-center text-center shadow-xs">
 <span class="material-symbols-outlined text-error text-[22px] mb-1" data-icon="cancel" data-weight="fill" style="font-variation-settings: 'FILL' 1;">cancel</span>
-<span class="font-stat-display text-[26px] leading-[28px] font-extrabold text-error">2</span>
+<span id="hub-count-bajas" class="font-stat-display text-[26px] leading-[28px] font-extrabold text-error">2</span>
 <span class="font-label-sm text-label-sm font-bold text-on-error-container mt-1">Bajas / No</span>
 </div>
 <!-- Pendientes -->
 <div class="bg-surface-container-lowest rounded-lg border border-outline/40 p-2.5 flex flex-col items-center text-center shadow-xs">
 <span class="material-symbols-outlined text-[#b45309] text-[22px] mb-1" data-icon="schedule" data-weight="fill" style="font-variation-settings: 'FILL' 1;">schedule</span>
-<span class="font-stat-display text-[26px] leading-[28px] font-extrabold text-[#b45309]">2</span>
+<span id="hub-count-pendientes" class="font-stat-display text-[26px] leading-[28px] font-extrabold text-[#b45309]">2</span>
 <span class="font-label-sm text-label-sm font-bold text-[#b45309] mt-1">Pendientes</span>
 </div>
 </div>
@@ -2226,20 +2243,20 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <div class="space-y-1.5 mb-space-md">
 <div class="flex justify-between font-label-sm text-label-sm text-on-surface-variant font-medium">
 <span>Progreso de respuestas (18 jugadores)</span>
-<span class="font-bold text-on-surface">88% respondido</span>
+<span id="hub-progress-pct" class="font-bold text-on-surface">88% respondido</span>
 </div>
 <div class="w-full h-3 rounded-full bg-surface-container flex overflow-hidden p-0.5 gap-0.5">
 <!-- 14 / 18 = 78% -->
-<div class="h-full bg-secondary rounded-l-full transition-all duration-300" style="width: 78%;" title="14 Disponibles"></div>
+<div id="hub-bar-disponibles" class="h-full bg-secondary rounded-l-full transition-all duration-300" style="width: 78%;" title="14 Disponibles"></div>
 <!-- 2 / 18 = 11% -->
-<div class="h-full bg-error transition-all duration-300" style="width: 11%;" title="2 Bajas"></div>
+<div id="hub-bar-bajas" class="h-full bg-error transition-all duration-300" style="width: 11%;" title="2 Bajas"></div>
 <!-- 2 / 18 = 11% -->
-<div class="h-full bg-[#f59e0b] rounded-r-full transition-all duration-300" style="width: 11%;" title="2 Pendientes"></div>
+<div id="hub-bar-pendientes" class="h-full bg-[#f59e0b] rounded-r-full transition-all duration-300" style="width: 11%;" title="2 Pendientes"></div>
 </div>
 <div class="flex items-center justify-between text-[11px] font-label-sm text-on-surface-variant px-1 pt-0.5">
-<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-secondary"></span>14 Sí (78%)</span>
-<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-error"></span>2 No (11%)</span>
-<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#f59e0b]"></span>2 Espera (11%)</span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-secondary"></span><span id="hub-stat-si">14 Sí (78%)</span></span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-error"></span><span id="hub-stat-no">2 No (11%)</span></span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#f59e0b]"></span><span id="hub-stat-duda">2 Espera (11%)</span></span>
 </div>
 </div>
 <!-- Pending Callout Alert Banner -->
@@ -2248,17 +2265,17 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <div class="flex-1 min-w-0">
 <p class="font-label-sm text-label-sm font-bold text-on-surface">Respuestas pendientes de confirmar:</p>
 <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-<strong class="text-on-surface">Ane Mintegi (#16)</strong> y <strong class="text-on-surface">Peio Gómez (#18)</strong> aún no han respondido al aviso.
+<span id="hub-pending-names"><strong class="text-on-surface">Ane Mintegi (#16)</strong> y <strong class="text-on-surface">Peio Gómez (#18)</strong> aún no han respondido al aviso.</span>
             </p>
 </div>
 </div>
 <!-- Action Row -->
 <div class="flex flex-col gap-2">
-<button class="w-full h-[50px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform" type="button">
+<button onclick="teamApp.nudgePending()" class="w-full h-[50px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="campaign">campaign</span>
 <span>Recordar a pendientes (2)</span>
 </button>
-<button class="w-full h-[44px] bg-surface-container-lowest hover:bg-surface-container-low text-on-surface font-label-md text-label-md rounded-xl border border-outline-variant flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all" type="button">
+<button class="w-full h-[44px] bg-surface-container-lowest hover:bg-surface-container-low text-on-surface font-label-md text-label-md rounded-xl border border-outline-variant flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[18px] text-primary" data-icon="groups">groups</span>
 <span>Ver desglose de respuestas</span>
 </button>
@@ -2269,7 +2286,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <!-- Top Status -->
 <div class="flex items-center justify-between mb-2">
 <span class="font-label-sm text-label-sm font-extrabold text-outline uppercase tracking-wider">Fase 2 de 2</span>
-<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm font-medium border border-outline-variant/30">
+<span id="hub-callup-phase-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm font-medium border border-outline-variant/30">
 <span class="material-symbols-outlined text-[13px]" data-icon="lock">lock</span>
             Bloqueado
           </span>
@@ -2280,19 +2297,19 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </div>
 <div>
 <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">2. Convocatoria Oficial</h3>
-<p class="font-label-sm text-label-sm text-on-surface-variant font-medium">12 plazas para la convocatoria</p>
+<p id="hub-callup-subtitle" class="font-label-sm text-label-sm text-on-surface-variant font-medium">12 plazas para la convocatoria</p>
 </div>
 </div>
 <!-- Lock Reason / Notice -->
-<div class="p-space-sm rounded-lg bg-surface-container-low/60 border border-outline-variant/40 mt-3 mb-space-md">
+<div id="hub-callup-notice" class="p-space-sm rounded-lg bg-surface-container-low/60 border border-outline-variant/40 mt-3 mb-space-md">
 <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
 <strong class="text-on-surface font-medium">Paso 2 · Pendiente de cerrar disponibilidad.</strong> Podrás seleccionar los 12 convocados una vez cerrado el plazo o cuando respondan todos los jugadores.
           </p>
 </div>
-<!-- Disabled CTA preview -->
-<button class="w-full h-[50px] bg-surface-container text-outline font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 cursor-not-allowed border border-outline-variant/40" disabled="" type="button">
-<span class="material-symbols-outlined text-[18px]" data-icon="lock">lock</span>
-<span>Preparar convocatoria (12 jugadores)</span>
+<!-- Convocatoria CTA -->
+<button id="hub-callup-btn" onclick="teamApp.handlePublishCallup()" class="w-full h-[50px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 cursor-pointer border border-primary/30 shadow-sm active:scale-[0.98] transition-all" type="button">
+<span id="hub-callup-btn-icon" class="material-symbols-outlined text-[18px]">playlist_add_check</span>
+<span id="hub-callup-btn-text">Preparar y publicar convocatoria (12 jugadores)</span>
 </button>
 </section>
 <!-- Section 3: LOGÍSTICA & AVISO DEL EVENTO -->
@@ -2484,9 +2501,9 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
           </p>
 </div>
 <!-- 3 Selectable Player Cards with Pure Ergonomics -->
-<div aria-label="Lista de jugadores sustitutos disponibles" class="space-y-2.5" role="radiogroup">
+<div id="injury-candidates-container" aria-label="Lista de jugadores sustitutos disponibles" class="space-y-2.5" role="radiogroup">
 <!-- Candidate 1: Ane Mintegi (SELECTED) -->
-<div class="player-card relative p-3 rounded-xl border-2 border-primary-container bg-surface-container-high/40 cursor-pointer transition-all active:scale-[0.98]" id="sub-1" onclick="selectPlayer('sub-1')">
+<div class="player-card relative p-3 rounded-xl border-2 border-primary-container bg-surface-container-high/40 cursor-pointer transition-all active:scale-[0.98]" id="sub-1" onclick="teamApp.selectReserve('Ane Mintegi')">
 <div class="flex items-center justify-between">
 <div class="flex items-center gap-3">
 <div class="relative">
@@ -2515,7 +2532,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </div>
 </div>
 <!-- Candidate 2: Nahia Garcia (UNSELECTED) -->
-<div class="player-card relative p-3 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-outline cursor-pointer transition-all active:scale-[0.98]" id="sub-2" onclick="selectPlayer('sub-2')">
+<div class="player-card relative p-3 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-outline cursor-pointer transition-all active:scale-[0.98]" id="sub-2" onclick="teamApp.selectReserve('Nahia Garcia')">
 <div class="flex items-center justify-between">
 <div class="flex items-center gap-3">
 <div class="relative">
@@ -2544,7 +2561,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </div>
 </div>
 <!-- Candidate 3: Irati Fernandez (UNSELECTED) -->
-<div class="player-card relative p-3 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-outline cursor-pointer transition-all active:scale-[0.98]" id="sub-3" onclick="selectPlayer('sub-3')">
+<div class="player-card relative p-3 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-outline cursor-pointer transition-all active:scale-[0.98]" id="sub-3" onclick="teamApp.selectReserve('Irati Fernandez')">
 <div class="flex items-center justify-between">
 <div class="flex items-center gap-3">
 <div class="relative">
@@ -2576,7 +2593,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <!-- Reassurance and CTA Trigger Container -->
 <div class="pt-2 space-y-2">
 <!-- Primary CTA Button (Height 52px / h-[52px]) -->
-<button class="w-full h-[52px] px-4 rounded-xl bg-primary-container text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform" type="button">
+<button id="injury-confirm-btn" onclick="teamApp.confirmSubstitution()" class="w-full h-[52px] px-4 rounded-xl bg-primary-container text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform cursor-pointer" type="button">
 <span>Confirmar sustitución y notificar a la familia</span>
 <span class="material-symbols-outlined text-[20px]" data-icon="send">send</span>
 </button>
@@ -2857,7 +2874,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <span class="font-label-sm text-label-sm text-tertiary font-bold bg-error-container/60 px-2 py-0.5 rounded-full">Urgente</span>
 </div>
 <!-- Urgency Card -->
-<article class="bg-surface-container-lowest rounded-xl border-2 border-amber-300 p-4 shadow-[0_2px_8px_rgba(217,119,6,0.08)] relative overflow-hidden flex flex-col gap-3.5">
+<article id="parent-urgent-card" class="bg-surface-container-lowest rounded-xl border-2 border-amber-300 p-4 shadow-[0_2px_8px_rgba(217,119,6,0.08)] relative overflow-hidden flex flex-col gap-3.5">
 <!-- Ambient Amber Accent Notch -->
 <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400"></div>
 <!-- Countdown Pill -->
@@ -2867,10 +2884,10 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </div>
 <!-- Headline & Context -->
 <div class="flex flex-col gap-1">
-<h3 class="font-headline-sm text-headline-sm text-on-surface font-bold leading-snug">
+<h3 id="parent-urgent-title" class="font-headline-sm text-headline-sm text-on-surface font-bold leading-snug">
               ¿Puede asistir Ibai este sábado?
             </h3>
-<p class="font-body-sm text-body-sm text-on-surface-variant">
+<p id="parent-urgent-desc" class="font-body-sm text-body-sm text-on-surface-variant">
               El cuerpo técnico necesita confirmar la convocatoria oficial para el autobús y equipaciones.
             </p>
 </div>
@@ -2891,7 +2908,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </div>
 </div>
 <!-- Dominant Action Button -->
-<button class="w-full h-[52px] bg-primary-container hover:bg-primary active:scale-[0.98] transition-all rounded-lg text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-sm" type="button">
+<button id="parent-respond-btn" onclick="teamApp.goToScreen('v2_08_parent_rsvp', 'inicio')" class="w-full h-[52px] bg-primary-container hover:bg-primary active:scale-[0.98] transition-all rounded-lg text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-sm cursor-pointer" type="button">
 <span>Responder disponibilidad</span>
 <span class="material-symbols-outlined text-[20px]" data-icon="arrow_forward">arrow_forward</span>
 </button>
@@ -2944,8 +2961,8 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <span class="material-symbols-outlined text-[16px]" data-icon="calendar_month">calendar_month</span>
 <span>Sábado 19 Sep · 09:30 - 14:00</span>
 </div>
-<!-- Status Badge: Pending Response -->
-<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100/80 border border-amber-300 text-amber-900 font-label-sm text-[11px] font-extrabold">
+<!-- Status Badge: Callup or Pending Response -->
+<span id="parent-ibai-callup-badge" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100/80 border border-amber-300 text-amber-900 font-label-sm text-[11px] font-extrabold">
 <span class="material-symbols-outlined text-[14px] text-amber-800" data-icon="hourglass_top">hourglass_top</span>
 <span>Pendiente de tu respuesta</span>
 </span>
@@ -4157,7 +4174,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
   </div>
 
   <!-- Scripts -->
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
   <script>
     function toggleTourInfo() {
       const card = document.getElementById("demo-step-card");
@@ -4195,6 +4212,9 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
     }
 
     function updateRsvpSelection(type) {
+      if (window.teamApp && window.teamApp.selectRsvpOption) {
+        window.teamApp.selectRsvpOption(type.toUpperCase());
+      }
       const yesCard = document.getElementById('rsvp-yes-label');
       const noCard = document.getElementById('rsvp-no-label');
       const maybeCard = document.getElementById('rsvp-maybe-label');
@@ -4247,17 +4267,9 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
     }
 
     function triggerSaveFeedback() {
-      const btn = document.getElementById('save-btn');
-      if (!btn) return;
-      const originalHTML = btn.innerHTML;
-      btn.classList.remove('bg-primary-container');
-      btn.classList.add('bg-secondary');
-      btn.innerHTML = `<span class="material-symbols-outlined text-[22px]" data-icon="done_all">done_all</span><span>¡Disponibilidad Confirmada!</span>`;
-      setTimeout(() => {
-        btn.classList.remove('bg-secondary');
-        btn.classList.add('bg-primary-container');
-        btn.innerHTML = originalHTML;
-      }, 2000);
+      if (window.teamApp && window.teamApp.saveParentRsvp) {
+        window.teamApp.saveParentRsvp();
+      }
     }
   </script>
 </body>

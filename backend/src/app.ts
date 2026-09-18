@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -7,6 +8,8 @@ import { z } from "zod";
 import { pool, inTransaction } from "./db/pool.js";
 import { DevelopmentAuthAdapter } from "./auth/development-adapter.js";
 import type { AuthAdapter } from "./auth/adapter.js";
+import { config } from "./config.js";
+import { resetDemoDataset } from "./db/seed-demo.js";
 import { DomainError } from "./domain/errors.js";
 import { requireGuardianPlayerAccess, requirePlayerInSeason, requireRole } from "./policy/authorization.js";
 
@@ -28,7 +31,8 @@ export async function buildApp(options: BuildOptions = {}) {
     if (error instanceof DomainError) return reply.code(error.statusCode).send({ error: { code: error.code, message: error.message } });
     if (error instanceof z.ZodError) return reply.code(400).send({ error: { code: "VALIDATION_ERROR", issues: error.issues } });
     if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: { code: "LINK_REQUEST_ALREADY_EXISTS", message: "Resource already exists" } });
-    app.log.error(error);
+    if ((error as { statusCode?: number }).statusCode === 429) return reply.code(429).send({ error: { code: "RATE_LIMIT_EXCEEDED", message: (error as Error).message } });
+    console.error("Fastify error:", error);
     return reply.code(500).send({ error: { code: "INTERNAL_ERROR", message: "Internal error" } });
   });
 
@@ -38,17 +42,47 @@ export async function buildApp(options: BuildOptions = {}) {
     return auth.verifyAccessToken(value.slice(7));
   }
 
+  const allowedOrigins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+  ];
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error("CORS origin not allowed"), false);
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+    exposedHeaders: ["Idempotency-Key"],
+    credentials: true
+  });
+
   app.get("/health", async () => {
     await pool.query("SELECT 1");
     return { status: "ok" };
   });
 
-  app.post("/v1/auth/otp/request", { config: { rateLimit: { max: 5, timeWindow: "5 minutes" } } }, async (request) => {
+  if (config.enableDevEndpoints) {
+    app.post("/v1/dev/reset", async () => {
+      await resetDemoDataset();
+      return { status: "ok", dataset: "vs02_full" };
+    });
+  }
+
+  const otpRequestLimit = config.enableDevEndpoints ? 1000 : 5;
+  const otpVerifyLimit = config.enableDevEndpoints ? 1000 : 10;
+
+  app.post("/v1/auth/otp/request", { config: { rateLimit: { max: otpRequestLimit, timeWindow: "5 minutes" } } }, async (request) => {
     const { email } = z.object({ email: emailSchema }).parse(request.body);
     return auth.requestOtp(email);
   });
 
-  app.post("/v1/auth/otp/verify", { config: { rateLimit: { max: 10, timeWindow: "5 minutes" } } }, async (request) => {
+  app.post("/v1/auth/otp/verify", { config: { rateLimit: { max: otpVerifyLimit, timeWindow: "5 minutes" } } }, async (request) => {
     const body = z.object({ email: emailSchema, challengeId: uuid, otp: z.string().regex(/^\d{6}$/), displayName: z.string().min(1).max(100).optional() }).parse(request.body);
     const identity = await auth.verifyOtp(body.email, body.challengeId, body.otp);
     const result = await pool.query(

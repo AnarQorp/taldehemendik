@@ -58,7 +58,7 @@ describe("Vertical Slice 01", () => {
     expect(stored.rows[0].token_hash).toMatch(/^[a-f0-9]{64}$/);
     const resolved = await app.inject({ method: "GET", url: `/v1/invitations/${invitationToken}` });
     expect(resolved.statusCode).toBe(200);
-    expect(resolved.json()).toEqual({ team: { name: "CD Oyón" }, teamSeason: { seasonLabel: "2026/27", displayLabel: "Infantil A" }, purpose: "GUARDIAN_LINK" });
+    expect(resolved.json()).toEqual({ team: { name: "C.D. Indautxu" }, teamSeason: { seasonLabel: "2026/27", displayLabel: "Infantil A" }, purpose: "GUARDIAN_LINK" });
     expect(resolved.body).not.toContain("Ibai");
     expect(resolved.body).not.toContain("Aranguren");
   });

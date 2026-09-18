@@ -7,7 +7,7 @@ describe("individual invitation", () => {
     const response = await app.inject({ method: "GET", url: "/v1/invitations/public-token-seeded-for-local-tests" });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      team: { name: "CD Oyón" },
+      team: { name: "C.D. Indautxu" },
       teamSeason: { seasonLabel: "2026/27", displayLabel: "Infantil A" },
       purpose: "GUARDIAN_LINK"
     });

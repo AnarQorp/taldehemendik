@@ -5,6 +5,13 @@ import type { AuthAdapter, AuthIdentity } from "./adapter.js";
 
 type Challenge = { email: string; otp: string; expiresAt: number; attempts: number };
 
+/**
+ * ADAPTADOR EXCLUSIVO DE DESARROLLO Y DEMO (DevelopmentAuthAdapter)
+ *
+ * Utilizado para emitir y validar OTPs efímeros en memoria sin dependencias externas de SMS/Email.
+ * - En producción, se sustituirá por un adaptador real de mensajería (SendGrid, Twilio, etc.).
+ * - Respeta timingSafeEqual para evitar ataques de temporización en pruebas locales.
+ */
 export class DevelopmentAuthAdapter implements AuthAdapter {
   private challenges = new Map<string, Challenge>();
   constructor(private readonly exposeOtp = config.exposeOtp) {}

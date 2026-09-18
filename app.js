@@ -136,8 +136,9 @@ const GUIDED_STEPS = [
 
 export class TeamAppState {
   constructor() {
+    this.appMode = null; // 'BETA_NORMAL' | 'DEMO'
     this.currentRole = "onboard"; // 'onboard' | 'coach' | 'parent'
-    this.currentScreen = "v2_00_onboarding_welcome";
+    this.currentScreen = "beta_entry_screen";
     this.currentTab = "onboard";
     this.currentStepIndex = 0;
     this.selectedSubstitute = "Ane Mintegi";
@@ -182,8 +183,10 @@ export class TeamAppState {
     }
 
     if (roleParam === "parent" || screenParam?.startsWith("v2_07_") || screenParam?.startsWith("v2_08_")) {
+      this.appMode = "DEMO";
       this.currentRole = "parent";
     } else if (roleParam === "coach" || screenParam?.startsWith("v2_01_") || screenParam?.startsWith("v2_02_") || screenParam?.startsWith("v2_05_") || screenParam?.startsWith("v2_06_")) {
+      this.appMode = "DEMO";
       this.currentRole = "coach";
     } else {
       this.currentRole = "onboard";
@@ -192,7 +195,13 @@ export class TeamAppState {
     if (screenParam && document.getElementById(screenParam)) {
       this.currentScreen = screenParam;
     } else if (this.currentRole === "onboard") {
-      this.currentScreen = "v2_00_onboarding_welcome";
+      this.currentScreen = "beta_entry_screen";
+    }
+
+    if (this.appMode === "DEMO") {
+      document.getElementById("demo-mode-badge")?.classList.remove("hidden");
+    } else {
+      document.getElementById("demo-mode-badge")?.classList.add("hidden");
     }
 
     try {
@@ -312,7 +321,7 @@ export class TeamAppState {
     const bottomNav = document.getElementById("master-bottom-nav");
     if (!bottomNav) return;
 
-    if (this.currentScreen.startsWith("v2_00_")) {
+    if (this.currentScreen.startsWith("v2_00_") || this.currentScreen === "beta_entry_screen") {
       bottomNav.classList.add("hidden");
       return;
     }
@@ -780,9 +789,225 @@ export class TeamAppState {
     }
   }
 
+  // --- Modo Beta y Escenario Demo ---
+
+  startBetaClean() {
+    this.appMode = "BETA_NORMAL";
+    this.currentRole = "onboard";
+    document.getElementById("demo-mode-badge")?.classList.add("hidden");
+    this.applyCleanUI();
+    this.goToScreen("v2_00_onboarding_welcome", "onboard");
+    this.showToast("✓ Modo BETA Limpio: Configuración desde cero.");
+  }
+
+  async startDemoMode() {
+    this.appMode = "DEMO";
+    document.getElementById("demo-mode-badge")?.classList.remove("hidden");
+    await this.resetBackendDataset(true);
+    this.applyDemoUI();
+    this.goToScreen("v2_00_onboarding_welcome", "onboard");
+    this.showToast("✓ Modo DEMO: Escenario C.D. Indautxu cargado (PostgreSQL sincronizado).");
+  }
+
+  confirmResetBeta() {
+    const modal = document.getElementById("reset-beta-modal");
+    if (modal) modal.classList.remove("hidden");
+  }
+
+  cancelResetBeta() {
+    const modal = document.getElementById("reset-beta-modal");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  async executeResetBeta() {
+    try {
+      const modal = document.getElementById("reset-beta-modal");
+      if (modal) modal.classList.add("hidden");
+
+      // 1. Reset PostgreSQL database
+      await api.dev.resetDataset();
+
+      // 2. Clear browser storage
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        console.warn("Storage clear exception:", e);
+      }
+
+      // 3. Clear tokens, idempotency keys, and synchronized state
+      this.tokens = { coach: null, parent: null };
+      idempotencyManager.keys.clear();
+      this.live = {
+        events: [],
+        activeEvent: null,
+        availability: null,
+        callup: null,
+        pending: null,
+        parentCallupStatus: null,
+        parentAvailability: null,
+        candidates: [],
+        activeActionItem: null,
+        unconfirmedWarnings: []
+      };
+
+      this.appMode = null;
+      this.currentRole = "onboard";
+      this.currentStepIndex = 0;
+
+      // 4. Hide demo UI controls
+      document.getElementById("demo-mode-badge")?.classList.add("hidden");
+      document.getElementById("demo-toolbar")?.classList.add("hidden");
+      document.getElementById("demo-step-card")?.classList.add("hidden");
+
+      // 5. Navigate back to clean beta entry screen
+      this.goToScreen("beta_entry_screen", "onboard");
+      this.updateBottomNav();
+      this.updateRoleUI();
+      this.updateStepUI();
+
+      this.showToast("✓ Entorno beta reiniciado. Base de datos y sesión limpias.");
+    } catch (err) {
+      this.showToast(`Error al reiniciar entorno beta: ${mapDomainError(err)}`);
+    }
+  }
+
+  applyCleanUI() {
+    // Header badge & cards
+    const badgeText = document.getElementById("welcome-club-badge-text");
+    if (badgeText) badgeText.textContent = "BETA · Modo Limpio";
+    const demoCard = document.getElementById("welcome-demo-indicator-card");
+    if (demoCard) demoCard.classList.add("hidden");
+
+    // Coach setup screen
+    const coachBadge = document.getElementById("coach-club-badge");
+    if (coachBadge) coachBadge.textContent = "Nuevo equipo";
+    const teamName = document.getElementById("team-name");
+    if (teamName) teamName.value = "";
+    const clubName = document.getElementById("club-name");
+    if (clubName) clubName.value = "";
+    const pitchLoc = document.getElementById("pitch-location");
+    if (pitchLoc) pitchLoc.value = "";
+
+    const bannerIcon = document.getElementById("coach-roster-banner-icon");
+    if (bannerIcon) bannerIcon.innerHTML = `<span class="material-symbols-outlined text-[20px] font-bold text-on-surface-variant">info</span>`;
+    const bannerTitle = document.getElementById("coach-roster-banner-title");
+    if (bannerTitle) bannerTitle.textContent = "Plantilla inicial vacía (0 jugadores)";
+    const bannerDesc = document.getElementById("coach-roster-banner-desc");
+    if (bannerDesc) bannerDesc.textContent = "(Darás de alta a tus deportistas tras registrar el equipo)";
+
+    const coachNotice = document.getElementById("coach-clean-backend-notice");
+    if (coachNotice) coachNotice.classList.remove("hidden");
+
+    const coachReadyBadge = document.getElementById("coach-ready-badge");
+    if (coachReadyBadge) coachReadyBadge.textContent = "Paso 1: Configuración inicial";
+    const coachReadyTitle = document.getElementById("coach-ready-title");
+    if (coachReadyTitle) coachReadyTitle.textContent = "Alta de equipo";
+    const coachReadyDesc = document.getElementById("coach-ready-desc");
+    if (coachReadyDesc) coachReadyDesc.textContent = "El código de invitación se generará una vez registrado el equipo en el sistema.";
+    const coachCode = document.getElementById("coach-code-display");
+    if (coachCode) coachCode.textContent = "------";
+    const coachShareBtn = document.getElementById("coach-share-btn");
+    if (coachShareBtn) coachShareBtn.classList.add("hidden");
+    const coachFooter = document.getElementById("coach-footer-text");
+    if (coachFooter) coachFooter.textContent = "Talde Hemendik! BETA • Entorno limpio";
+
+    // Parent join screen
+    const parentNotice = document.getElementById("parent-clean-backend-notice");
+    if (parentNotice) parentNotice.classList.remove("hidden");
+    const parentCodeInput = document.getElementById("parent-join-code-input");
+    if (parentCodeInput) {
+      parentCodeInput.value = "";
+      parentCodeInput.readOnly = false;
+      parentCodeInput.placeholder = "Introduce código de equipo...";
+    }
+    const parentCodeBadge = document.getElementById("parent-code-valid-badge");
+    if (parentCodeBadge) parentCodeBadge.classList.add("hidden");
+    const parentTeamCard = document.getElementById("parent-located-team-card");
+    if (parentTeamCard) parentTeamCard.classList.add("hidden");
+    const parentPlayerSec = document.getElementById("parent-player-select-section");
+    if (parentPlayerSec) parentPlayerSec.classList.add("hidden");
+
+    const tutorName = document.getElementById("tutor-name");
+    if (tutorName) tutorName.value = "";
+    const tutorPhone = document.getElementById("tutor-phone");
+    if (tutorPhone) tutorPhone.value = "";
+
+    const parentValDesc = document.getElementById("parent-validation-desc");
+    if (parentValDesc) parentValDesc.innerHTML = "Por protección y privacidad del menor, el cuerpo técnico del equipo validará esta solicitud antes de conceder acceso a los avisos y eventos.";
+    const parentProtocol = document.getElementById("parent-footer-protocol");
+    if (parentProtocol) parentProtocol.textContent = "Protocolo oficial de cantera";
+  }
+
+  applyDemoUI() {
+    // Header badge & cards
+    const badgeText = document.getElementById("welcome-club-badge-text");
+    if (badgeText) badgeText.textContent = "C.D. Indautxu · Infantil A";
+    const demoCard = document.getElementById("welcome-demo-indicator-card");
+    if (demoCard) demoCard.classList.remove("hidden");
+
+    // Coach setup screen
+    const coachBadge = document.getElementById("coach-club-badge");
+    if (coachBadge) coachBadge.textContent = "C.D. Indautxu";
+    const teamName = document.getElementById("team-name");
+    if (teamName) teamName.value = "Infantil A";
+    const clubName = document.getElementById("club-name");
+    if (clubName) clubName.value = "C.D. Indautxu";
+    const pitchLoc = document.getElementById("pitch-location");
+    if (pitchLoc) pitchLoc.value = "Campo Municipal Indautxu";
+
+    const bannerIcon = document.getElementById("coach-roster-banner-icon");
+    if (bannerIcon) bannerIcon.innerHTML = `<span class="material-symbols-outlined text-[20px] font-bold" data-icon="check_circle">check_circle</span>`;
+    const bannerTitle = document.getElementById("coach-roster-banner-title");
+    if (bannerTitle) bannerTitle.textContent = "✓ 18 jugadores precargados para esta temporada";
+    const bannerDesc = document.getElementById("coach-roster-banner-desc");
+    if (bannerDesc) bannerDesc.textContent = "(cargados en la plantilla del equipo)";
+
+    const coachNotice = document.getElementById("coach-clean-backend-notice");
+    if (coachNotice) coachNotice.classList.add("hidden");
+
+    const coachReadyBadge = document.getElementById("coach-ready-badge");
+    if (coachReadyBadge) coachReadyBadge.textContent = "¡Equipo creado con éxito!";
+    const coachReadyTitle = document.getElementById("coach-ready-title");
+    if (coachReadyTitle) coachReadyTitle.textContent = "Tu equipo está listo";
+    const coachReadyDesc = document.getElementById("coach-ready-desc");
+    if (coachReadyDesc) coachReadyDesc.textContent = "Las familias necesitan este código para solicitar unirse a tu equipo:";
+    const coachCode = document.getElementById("coach-code-display");
+    if (coachCode) coachCode.textContent = "INDA16";
+    const coachShareBtn = document.getElementById("coach-share-btn");
+    if (coachShareBtn) coachShareBtn.classList.remove("hidden");
+    const coachFooter = document.getElementById("coach-footer-text");
+    if (coachFooter) coachFooter.textContent = "Talde Hemendik! • Gestión de cantera C.D. Indautxu";
+
+    // Parent join screen
+    const parentNotice = document.getElementById("parent-clean-backend-notice");
+    if (parentNotice) parentNotice.classList.add("hidden");
+    const parentCodeInput = document.getElementById("parent-join-code-input");
+    if (parentCodeInput) {
+      parentCodeInput.value = "INDA16";
+      parentCodeInput.readOnly = true;
+    }
+    const parentCodeBadge = document.getElementById("parent-code-valid-badge");
+    if (parentCodeBadge) parentCodeBadge.classList.remove("hidden");
+    const parentTeamCard = document.getElementById("parent-located-team-card");
+    if (parentTeamCard) parentTeamCard.classList.remove("hidden");
+    const parentPlayerSec = document.getElementById("parent-player-select-section");
+    if (parentPlayerSec) parentPlayerSec.classList.remove("hidden");
+
+    const tutorName = document.getElementById("tutor-name");
+    if (tutorName) tutorName.value = "Elena Gómez";
+    const tutorPhone = document.getElementById("tutor-phone");
+    if (tutorPhone) tutorPhone.value = "620 44 55 66";
+
+    const parentValDesc = document.getElementById("parent-validation-desc");
+    if (parentValDesc) parentValDesc.innerHTML = "Por protección y privacidad del menor (Privacidad del Menor), el entrenador <strong>Mikel Zubeldia</strong> validará esta solicitud antes de conceder acceso a los agenda, convocatorias y avisos del equipo.";
+    const parentProtocol = document.getElementById("parent-footer-protocol");
+    if (parentProtocol) parentProtocol.textContent = "Protocolo C.D. Indautxu";
+  }
+
   // --- Reset y Pruebas de Conflicto en Vivo ---
 
-  async resetBackendDataset() {
+  async resetBackendDataset(silent = false) {
     try {
       await api.dev.resetDataset();
       this.tokens = { coach: null, parent: null };
@@ -803,18 +1028,23 @@ export class TeamAppState {
       const banner = document.getElementById("injury-resolved-banner");
       if (banner) banner.classList.add("hidden");
 
-      this.currentRole = "onboard";
-      this.currentScreen = "v2_00_onboarding_welcome";
-      this.currentTab = "onboard";
-      this.currentStepIndex = 0;
-      this.goToScreen("v2_00_onboarding_welcome", "onboard");
-      this.updateBottomNav();
-      this.updateRoleUI();
-      this.updateStepUI();
-
-      this.showToast("✓ Base de datos PostgreSQL y navegación reiniciadas al inicio (14/2/0/2).");
+      if (!silent) {
+        this.currentRole = "onboard";
+        this.currentScreen = "v2_00_onboarding_welcome";
+        this.currentTab = "onboard";
+        this.currentStepIndex = 0;
+        this.goToScreen("v2_00_onboarding_welcome", "onboard");
+        this.updateBottomNav();
+        this.updateRoleUI();
+        this.updateStepUI();
+        this.showToast("✓ Base de datos PostgreSQL y navegación reiniciadas al inicio (14/2/0/2).");
+      }
     } catch (err) {
-      this.showToast(`Error al reiniciar: ${mapDomainError(err)}`);
+      if (!silent) {
+        this.showToast(`Error al reiniciar: ${mapDomainError(err)}`);
+      } else {
+        console.warn("Reset dataset warning:", err);
+      }
     }
   }
 
@@ -856,6 +1086,10 @@ export class TeamAppState {
   }
 
   async finishCoachSetup() {
+    if (this.appMode === "BETA_NORMAL") {
+      this.showToast("ℹ️ Contrato backend pendiente: POST /v1/teams para alta autónoma desde cero. No se reutiliza el seed de Indautxu.");
+      return;
+    }
     await this.switchMembership("indautxu_inf_a");
     await this.goToScreen("v2_01_coach_home", "inicio");
     this.showToast("✓ Equipo C.D. Indautxu · Infantil A creado con éxito. Código INDA16.");
@@ -873,6 +1107,10 @@ export class TeamAppState {
   }
 
   submitParentJoinRequest() {
+    if (this.appMode === "BETA_NORMAL") {
+      this.showToast("ℹ️ Contrato backend pendiente: La vinculación requiere un código de equipo activo generado por backend.");
+      return;
+    }
     const btn = document.getElementById("btn-submit");
     if (btn) {
       btn.disabled = true;

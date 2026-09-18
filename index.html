@@ -116,6 +116,35 @@
     </button>
   </div>
 
+  <!-- Badge discreto de Modo Demo (Visible solo cuando se navega en modo DEMO) -->
+  <div id="demo-mode-badge" class="hidden fixed top-2.5 left-2.5 sm:top-4 sm:left-4 z-40">
+    <div class="px-2.5 py-1 rounded-full bg-blue-950/95 text-blue-300 border border-blue-700/60 text-xs font-bold flex items-center gap-1.5 shadow-xl backdrop-blur-sm">
+      <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+      <span>Modo Demo · C.D. Indautxu</span>
+    </div>
+  </div>
+
+  <!-- Modal de confirmación destructiva para Reiniciar entorno beta -->
+  <div id="reset-beta-modal" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white text-slate-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200">
+      <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
+        <span class="material-symbols-outlined text-[28px]">warning</span>
+      </div>
+      <h3 class="text-base font-bold text-center mb-1 text-slate-900">¿Reiniciar entorno beta?</h3>
+      <p class="text-xs text-slate-600 text-center mb-5 leading-relaxed">
+        Se eliminarán los datos creados en este entorno beta. ¿Continuar?
+      </p>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button type="button" onclick="teamApp.cancelResetBeta()" class="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer">
+          Cancelar
+        </button>
+        <button id="confirm-reset-beta-btn" type="button" onclick="teamApp.executeResetBeta()" class="h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer">
+          Sí, reiniciar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================================================== -->
   <!-- DEMO TOOLBAR & GUIDED TOUR (Ocultos por defecto, visibles con ?demo=1 o botón) -->
   <!-- ======================================================== -->
@@ -241,22 +270,128 @@
       <!-- Main Scrollable App Viewport for Screens -->
       <div id="phone-viewport" class="w-full flex-1 overflow-y-auto overflow-x-hidden relative bg-surface pb-16">
 
+        <!-- SCREEN BETA: ENTRADA PRINCIPAL BETA -->
+        <section id="beta_entry_screen" class="app-screen-view w-full">
+          <main class="w-full max-w-[420px] min-h-screen bg-background flex flex-col justify-between relative shadow-2xl md:my-4 md:rounded-3xl md:min-h-[844px] md:overflow-hidden md:border md:border-outline-variant/30">
+            <!-- Top App Bar -->
+            <header class="bg-surface-container-lowest text-primary shadow-sm border-b border-outline-variant/20 flex justify-between items-center w-full px-margin-mobile h-14 sticky top-0 z-30">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center shadow-xs">
+                  <span class="material-symbols-outlined text-[20px]">sports_soccer</span>
+                </div>
+                <span class="font-headline-sm text-headline-sm font-bold text-on-surface tracking-tight">Talde Hemendik!</span>
+              </div>
+              <span class="px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-primary font-label-sm text-label-sm font-extrabold tracking-wider">
+                BETA
+              </span>
+            </header>
+
+            <!-- Main Content Canvas -->
+            <div class="flex-1 px-margin-mobile pt-6 pb-6 flex flex-col space-y-6">
+              <section class="space-y-2 text-left">
+                <h1 class="font-headline-lg text-headline-lg text-on-surface font-extrabold tracking-tight">
+                  Talde Hemendik!
+                </h1>
+                <p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                  Plataforma de gestión y coordinación de equipos de base. Elige una opción para acceder:
+                </p>
+              </section>
+
+              <!-- Tres Opciones Principales -->
+              <div class="flex flex-col gap-3.5 pt-1">
+                <!-- Opción 1: Empezar -->
+                <button type="button" onclick="teamApp.startBetaClean()" class="group relative bg-surface-container-lowest p-4 rounded-2xl border-2 border-primary/30 hover:border-primary shadow-sm active:scale-[0.98] transition-all duration-150 flex flex-col text-left cursor-pointer gap-2">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-11 h-11 rounded-xl bg-primary-container text-on-primary flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                        <span class="material-symbols-outlined text-[22px]">rocket_launch</span>
+                      </div>
+                      <div>
+                        <h2 class="font-headline-sm text-headline-sm text-on-surface group-hover:text-primary transition-colors font-bold">
+                          Empezar
+                        </h2>
+                        <span class="text-xs font-semibold text-primary">Producto real</span>
+                      </div>
+                    </div>
+                    <span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary text-[20px] transition-colors mt-1">arrow_forward</span>
+                  </div>
+                  <p class="font-body-sm text-body-sm text-on-surface-variant leading-snug pl-[56px]">
+                    Configurar Talde Hemendik! desde cero.
+                  </p>
+                </button>
+
+                <!-- Opción 2: Probar con datos de ejemplo -->
+                <button type="button" onclick="teamApp.startDemoMode()" class="group relative bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/70 hover:border-secondary shadow-sm active:scale-[0.98] transition-all duration-150 flex flex-col text-left cursor-pointer gap-2">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-11 h-11 rounded-xl bg-secondary text-on-secondary flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                        <span class="material-symbols-outlined text-[22px]">sports</span>
+                      </div>
+                      <div>
+                        <h2 class="font-headline-sm text-headline-sm text-on-surface group-hover:text-secondary transition-colors font-bold">
+                          Probar con datos de ejemplo
+                        </h2>
+                        <span class="text-xs font-semibold text-secondary">Escenario C.D. Indautxu</span>
+                      </div>
+                    </div>
+                    <span class="material-symbols-outlined text-on-surface-variant group-hover:text-secondary text-[20px] transition-colors mt-1">arrow_forward</span>
+                  </div>
+                  <p class="font-body-sm text-body-sm text-on-surface-variant leading-snug pl-[56px]">
+                    Cargar un equipo ficticio para explorar la aplicación.
+                  </p>
+                </button>
+
+                <!-- Opción 3: Reiniciar entorno beta -->
+                <button type="button" onclick="teamApp.confirmResetBeta()" class="group relative bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60 hover:border-red-400 shadow-sm active:scale-[0.98] transition-all duration-150 flex flex-col text-left cursor-pointer gap-2">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-11 h-11 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                        <span class="material-symbols-outlined text-[22px]">restart_alt</span>
+                      </div>
+                      <div>
+                        <h2 class="font-headline-sm text-headline-sm text-on-surface group-hover:text-red-600 transition-colors font-bold">
+                          Reiniciar entorno beta
+                        </h2>
+                        <span class="text-xs font-semibold text-red-600">Herramienta de pruebas</span>
+                      </div>
+                    </div>
+                    <span class="material-symbols-outlined text-on-surface-variant group-hover:text-red-500 text-[20px] transition-colors mt-1">refresh</span>
+                  </div>
+                  <p class="font-body-sm text-body-sm text-on-surface-variant leading-snug pl-[56px]">
+                    Borrar los datos creados en este entorno y volver al estado inicial.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <footer class="px-margin-mobile py-4 border-t border-outline-variant/20 bg-surface-container-lowest/80 text-center">
+              <p class="font-body-sm text-[11px] text-on-surface-variant/70">
+                Talde Hemendik! BETA • Entorno de validación local
+              </p>
+            </footer>
+          </main>
+        </section>
+
         <!-- SCREEN 0: V2 ONBOARDING - ACCESO INICIAL Y SELECCIÓN DE ROL -->
-        <section id="v2_00_onboarding_welcome" class="app-screen-view w-full">
+        <section id="v2_00_onboarding_welcome" class="app-screen-view w-full hidden">
           <!-- Mobile Viewport Canvas Container (390px base frame) -->
 <main class="w-full max-w-[420px] min-h-screen bg-background flex flex-col justify-between relative shadow-2xl md:my-4 md:rounded-3xl md:min-h-[844px] md:overflow-hidden md:border md:border-outline-variant/30">
 <!-- Top App Bar / Identity Navigation (JSON Blueprint mapping) -->
 <header class="bg-surface-container-lowest text-primary shadow-sm border-b border-outline-variant/20 flex justify-between items-center w-full px-margin-mobile h-14 sticky top-0 z-30">
 <div class="flex items-center gap-2">
+  <button aria-label="Volver a inicio beta" onclick="teamApp.goToScreen('beta_entry_screen')" class="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface cursor-pointer -ml-1" type="button">
+    <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+  </button>
 <div class="w-8 h-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center shadow-xs">
 <span class="material-symbols-outlined text-[20px]" data-icon="sports_soccer">sports_soccer</span>
 </div>
 <span class="font-headline-sm text-headline-sm font-bold text-on-surface tracking-tight">Talde Hemendik!</span>
 </div>
 <!-- Federated Club Badge -->
-<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-outline-variant/40">
+<div id="welcome-club-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-outline-variant/40">
 <span class="w-2 h-2 rounded-full bg-secondary"></span>
-<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold truncate max-w-[120px]">C.D. Indautxu · Infantil A</span>
+<span id="welcome-club-badge-text" class="font-label-sm text-label-sm text-on-surface-variant font-semibold truncate max-w-[120px]">BETA · Modo Limpio</span>
 </div>
 </header>
 <!-- Main Content Canvas -->
@@ -373,8 +508,8 @@
             </p>
 </div>
 </div>
-<!-- Club Demo Info Card -->
-<div class="flex items-center justify-between px-3 py-2 bg-surface-container-low rounded-xl border border-outline-variant/20">
+<!-- Club Demo Info Card (Visible solo en modo demo) -->
+<div id="welcome-demo-indicator-card" class="hidden flex items-center justify-between px-3 py-2 bg-surface-container-low rounded-xl border border-outline-variant/20">
 <div class="flex items-center gap-2">
 <span class="material-symbols-outlined text-[18px] text-primary" data-icon="shield">shield</span>
 <span class="font-label-sm text-label-sm text-on-surface font-semibold">Demo activa: C.D. Indautxu (2026/27)</span>
@@ -439,7 +574,7 @@
 <span class="material-symbols-outlined text-primary text-[20px]" data-icon="sports_soccer">sports_soccer</span>
 <h2 class="font-headline-sm text-headline-sm text-on-surface font-bold">Datos básicos del equipo</h2>
 </div>
-<span class="font-label-sm text-label-sm text-primary bg-surface-container-high px-2 py-0.5 rounded-full font-bold">C.D. Indautxu</span>
+<span id="coach-club-badge" class="font-label-sm text-label-sm text-primary bg-surface-container-high px-2 py-0.5 rounded-full font-bold">C.D. Indautxu</span>
 </div>
 <!-- Field: Nombre del equipo -->
 <div class="space-y-1.5">
@@ -448,7 +583,7 @@
 <span class="text-error font-label-sm text-label-sm">*</span>
 </label>
 <div class="relative">
-<input class="w-full h-[50px] bg-surface-container-lowest rounded-xl border-[1.5px] border-outline-variant px-3.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:ring-0 focus:outline-none transition-colors" id="team-name" type="text" value="Infantil A"/>
+<input class="w-full h-[50px] bg-surface-container-lowest rounded-xl border-[1.5px] border-outline-variant px-3.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:ring-0 focus:outline-none transition-colors" id="team-name" type="text" placeholder="Ej: Infantil A" value="Infantil A"/>
 <span class="absolute right-3 top-3.5 text-on-surface-variant material-symbols-outlined text-[20px]" data-icon="edit">edit</span>
 </div>
 </div>
@@ -458,7 +593,7 @@
 <span>Club o Entidad</span>
 <span class="font-label-sm text-label-sm text-on-surface-variant font-normal">(opcional)</span>
 </label>
-<input class="w-full h-[50px] bg-surface-container-lowest rounded-xl border-[1.5px] border-outline-variant px-3.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:ring-0 focus:outline-none transition-colors" id="club-name" type="text" value="C.D. Indautxu"/>
+<input class="w-full h-[50px] bg-surface-container-lowest rounded-xl border-[1.5px] border-outline-variant px-3.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:ring-0 focus:outline-none transition-colors" id="club-name" type="text" placeholder="Ej: C.D. Indautxu" value="C.D. Indautxu"/>
 </div>
 <!-- Sport Selector Pills -->
 <div class="space-y-1.5">
@@ -513,27 +648,39 @@
 <span class="font-label-sm text-label-sm text-on-surface-variant font-normal">(opcional)</span>
 </label>
 <div class="relative">
-<input class="w-full h-[50px] bg-surface-container-lowest rounded-xl border-[1.5px] border-outline-variant pl-10 pr-3.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:ring-0 focus:outline-none transition-colors" id="pitch-location" type="text" value="Campo Municipal Indautxu"/>
+<input class="w-full h-[50px] bg-surface-container-lowest rounded-xl border-[1.5px] border-outline-variant pl-10 pr-3.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:ring-0 focus:outline-none transition-colors" id="pitch-location" type="text" placeholder="Ej: Campo Municipal" value="Campo Municipal Indautxu"/>
 <span class="material-symbols-outlined absolute left-3 top-3.5 text-primary text-[20px]" data-icon="location_on">location_on</span>
 </div>
 </div>
 </section>
 <!-- Plantilla precargada banner -->
-<section class="bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl p-space-sm flex items-start gap-3 shadow-sm">
-<div class="w-8 h-8 rounded-full bg-[#D1FAE5] text-secondary flex items-center justify-center shrink-0 mt-0.5">
+<section id="coach-roster-banner" class="bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl p-space-sm flex items-start gap-3 shadow-sm">
+<div id="coach-roster-banner-icon" class="w-8 h-8 rounded-full bg-[#D1FAE5] text-secondary flex items-center justify-center shrink-0 mt-0.5">
 <span class="material-symbols-outlined text-[20px] font-bold" data-icon="check_circle">check_circle</span>
 </div>
 <div class="space-y-0.5">
-<p class="font-label-md text-label-md text-[#065F46] font-extrabold leading-tight">
+<p id="coach-roster-banner-title" class="font-label-md text-label-md text-[#065F46] font-extrabold leading-tight">
             ✓ 18 jugadores precargados para esta temporada
           </p>
-<p class="font-body-sm text-body-sm text-[#047857]">
+<p id="coach-roster-banner-desc" class="font-body-sm text-body-sm text-[#047857]">
             (cargados en la plantilla del equipo)
           </p>
 </div>
 </section>
+
+<!-- Backend contract notice for clean beta -->
+<div id="coach-clean-backend-notice" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-1.5 text-amber-900 shadow-sm">
+  <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-amber-800">
+    <span class="material-symbols-outlined text-[18px] text-amber-600">info</span>
+    <span>Contratos Backend: Modo Beta Limpio</span>
+  </div>
+  <p class="text-xs leading-relaxed text-amber-900">
+    El backend actual (VS01+VS02) implementa el ciclo completo de convocatorias, disponibilidades e incidencias sobre equipos ya creados. Los contratos para crear clubes desde cero (<code>POST /v1/teams</code>) y alta inicial de plantillas forman parte del próximo vertical slice.
+  </p>
+</div>
+
 <!-- Invitación al equipo generada (Card destacada de éxito / activación) -->
-<section class="bg-surface-container-lowest rounded-2xl border-2 border-primary/20 p-space-md shadow-md space-y-space-md relative overflow-hidden">
+<section id="coach-code-section" class="bg-surface-container-lowest rounded-2xl border-2 border-primary/20 p-space-md shadow-md space-y-space-md relative overflow-hidden">
 <!-- Subtle athletic accent background badge -->
 <div class="absolute -right-6 -top-6 w-24 h-24 bg-surface-container-high rounded-full opacity-40 pointer-events-none flex items-center justify-center">
 <span class="material-symbols-outlined text-primary text-[54px] opacity-20" data-icon="celebration">celebration</span>
@@ -541,10 +688,10 @@
 <div class="relative z-10 space-y-1">
 <div class="inline-flex items-center gap-1.5 bg-[#ECFDF5] px-2.5 py-0.5 rounded-full border border-[#A7F3D0] mb-1">
 <span class="material-symbols-outlined text-secondary text-[16px]" data-icon="emoji_events">emoji_events</span>
-<span class="font-label-sm text-label-sm text-secondary font-bold">¡Equipo creado con éxito!</span>
+<span id="coach-ready-badge" class="font-label-sm text-label-sm text-secondary font-bold">¡Equipo creado con éxito!</span>
 </div>
-<h3 class="font-headline-lg text-headline-lg text-on-surface font-extrabold">Tu equipo está listo</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">
+<h3 id="coach-ready-title" class="font-headline-lg text-headline-lg text-on-surface font-extrabold">Tu equipo está listo</h3>
+<p id="coach-ready-desc" class="font-body-md text-body-md text-on-surface-variant">
             Las familias necesitan este código para solicitar unirse a tu equipo:
           </p>
 </div>
@@ -552,7 +699,7 @@
 <div class="bg-surface-container-low rounded-xl p-space-md border border-outline-variant flex flex-col items-center justify-center space-y-2 relative">
 <span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Código de acceso</span>
 <div class="flex items-center justify-center gap-3">
-<span class="font-stat-display text-stat-display font-extrabold text-primary tracking-widest font-mono select-all">
+<span id="coach-code-display" class="font-stat-display text-stat-display font-extrabold text-primary tracking-widest font-mono select-all">
               INDA16
             </span>
 </div>
@@ -572,12 +719,12 @@
 <!-- Actions Container (One-handed zone) -->
 <div class="space-y-space-sm pt-space-xs">
 <!-- Action 1: WhatsApp Button -->
-<button class="w-full h-[50px] bg-[#16a34a] hover:bg-[#15803d] text-white rounded-xl font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all" onclick="teamApp.shareInviteCode()" style="cursor:pointer;" type="button">
+<button id="coach-share-btn" class="w-full h-[50px] bg-[#16a34a] hover:bg-[#15803d] text-white rounded-xl font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all" onclick="teamApp.shareInviteCode()" style="cursor:pointer;" type="button">
 <span class="material-symbols-outlined text-[22px]" data-icon="share">share</span>
 <span>Compartir invitación por WhatsApp</span>
 </button>
 <!-- Action 2: Primary CTA 'Ir a la mesa del entrenador' -->
-<button class="w-full h-[52px] bg-primary-container hover:bg-primary text-on-primary rounded-xl font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-all" onclick="teamApp.finishCoachSetup()" style="cursor:pointer;" type="button">
+<button id="coach-cta-btn" class="w-full h-[52px] bg-primary-container hover:bg-primary text-on-primary rounded-xl font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-all" onclick="teamApp.finishCoachSetup()" style="cursor:pointer;" type="button">
 <span>Ir a la mesa del entrenador</span>
 <span class="material-symbols-outlined text-[20px]" data-icon="arrow_forward">arrow_forward</span>
 </button>
@@ -585,7 +732,7 @@
 </section>
 <!-- Bottom Sideline Coach Notice -->
 <footer class="text-center pt-2 pb-6">
-<p class="font-label-sm text-label-sm text-on-surface-variant">
+<p id="coach-footer-text" class="font-label-sm text-label-sm text-on-surface-variant">
           Talde Hemendik! • Gestión de cantera C.D. Indautxu
         </p>
 </footer>
@@ -621,6 +768,17 @@
 </header>
 <!-- Main Content Container -->
 <main class="flex-1 px-margin-mobile py-space-md space-y-space-lg">
+<!-- Backend contract notice for clean beta -->
+<div id="parent-clean-backend-notice" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-1.5 text-amber-900 shadow-sm">
+  <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-amber-800">
+    <span class="material-symbols-outlined text-[18px] text-amber-600">info</span>
+    <span>Contratos Backend: Modo Beta Limpio</span>
+  </div>
+  <p class="text-xs leading-relaxed text-amber-900">
+    La vinculación libre de tutores requiere la generación previa de códigos de equipo activos por backend. En este modo limpio no se vincula silenciosamente a Ibai ni al seed de Indautxu.
+  </p>
+</div>
+
 <!-- SECCIÓN 1: Código de invitación & Club Localizado -->
 <section aria-labelledby="section-team-title" class="space-y-space-sm">
 <div class="flex items-center justify-between">
@@ -632,46 +790,46 @@
 </div>
 <!-- Input verificado -->
 <div class="relative flex items-center">
-<input class="w-full h-[50px] bg-surface-container-lowest border-2 border-secondary rounded-xl px-4 font-headline-sm text-headline-sm tracking-widest text-on-surface uppercase focus:outline-none focus:ring-0" readonly="" type="text" value="INDA16"/>
-<div class="absolute right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-fixed/40 text-on-secondary-container font-label-sm text-label-sm font-bold border border-secondary/30">
+<input id="parent-join-code-input" class="w-full h-[50px] bg-surface-container-lowest border-2 border-secondary rounded-xl px-4 font-headline-sm text-headline-sm tracking-widest text-on-surface uppercase focus:outline-none focus:ring-0" readonly="" type="text" value="INDA16"/>
+<div id="parent-code-valid-badge" class="absolute right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-fixed/40 text-on-secondary-container font-label-sm text-label-sm font-bold border border-secondary/30">
 <span class="material-symbols-outlined material-symbols-fill text-[16px] text-secondary" data-icon="check_circle">check_circle</span>
 <span>Código válido</span>
 </div>
 </div>
 <!-- Tarjeta de confirmación de equipo localizado -->
-<div class="p-4 bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm space-y-3">
+<div id="parent-located-team-card" class="p-4 bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm space-y-3">
 <div class="flex items-start gap-3.5">
 <!-- Escudo badge placeholder -->
-<div class="w-12 h-12 rounded-xl bg-primary-container text-on-primary flex items-center justify-center font-headline-sm text-headline-sm font-extrabold shadow-sm ring-2 ring-primary-fixed shrink-0">
-              OY
+<div id="parent-located-team-crest" class="w-12 h-12 rounded-xl bg-primary-container text-on-primary flex items-center justify-center font-headline-sm text-headline-sm font-extrabold shadow-sm ring-2 ring-primary-fixed shrink-0">
+              IN
             </div>
 <div class="flex-1 min-w-0">
 <div class="flex items-center gap-2">
-<h2 class="font-headline-sm text-headline-sm text-on-surface truncate">C.D. Indautxu · Infantil A</h2>
+<h2 id="parent-located-team-title" class="font-headline-sm text-headline-sm text-on-surface truncate">C.D. Indautxu · Infantil A</h2>
 </div>
-<p class="font-body-sm text-body-sm text-on-surface-variant font-medium">Fútbol Base · Temporada 2026/27</p>
+<p id="parent-located-team-subtitle" class="font-body-sm text-body-sm text-on-surface-variant font-medium">Fútbol Base · Temporada 2026/27</p>
 </div>
 </div>
 <div class="border-t border-surface-container pt-3 grid grid-cols-2 gap-2 text-on-surface-variant">
 <div class="flex items-center gap-1.5 font-label-md text-label-md">
 <span class="material-symbols-outlined text-[18px] text-secondary" data-icon="groups">groups</span>
-<span class="font-bold text-on-surface">18</span> jugadores listos
+<span id="parent-located-team-roster-count" class="font-bold text-on-surface">18</span> jugadores listos
             </div>
 <div class="flex items-center gap-1.5 font-label-md text-label-md truncate">
 <span class="material-symbols-outlined text-[18px] text-primary" data-icon="sports">sports</span>
-<span class="truncate">Mikel Zubeldia (DT)</span>
+<span id="parent-located-team-coach" class="truncate">Mikel Zubeldia (DT)</span>
 </div>
 </div>
 </div>
 </section>
 <!-- SECCIÓN 2: Vincular Menor (Plantilla Oficial) -->
-<section aria-labelledby="section-player-title" class="space-y-space-sm">
+<section id="parent-player-select-section" aria-labelledby="section-player-title" class="space-y-space-sm">
 <div>
 <h2 class="font-headline-md text-headline-md text-on-surface" id="section-player-title">¿A quién representas?</h2>
-<p class="font-body-sm text-body-sm text-on-surface-variant">Selecciona a tu hijo/a de la plantilla oficial precargada:</p>
+<p id="parent-player-select-hint" class="font-body-sm text-body-sm text-on-surface-variant">Selecciona a tu hijo/a de la plantilla oficial precargada:</p>
 </div>
 <!-- Tarjeta de jugador seleccionada (Activa & Destacada) -->
-<div class="relative bg-surface-container-lowest border-2 border-primary-container rounded-2xl p-4 shadow-[0_4px_16px_rgba(29,78,216,0.1)] transition-all">
+<div id="parent-player-card-selected" class="relative bg-surface-container-lowest border-2 border-primary-container rounded-2xl p-4 shadow-[0_4px_16px_rgba(29,78,216,0.1)] transition-all">
 <div class="flex items-center justify-between gap-3">
 <div class="flex items-center gap-3.5 min-w-0">
 <!-- Dorsal & Badge Deportivo -->
@@ -700,7 +858,7 @@
 </div>
 </div>
 <!-- Buscador / Selector secundario para hermano o cambio -->
-<button class="w-full flex items-center justify-between p-3.5 rounded-xl border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-high/40 transition-colors text-left group" type="button">
+<button id="parent-player-search-btn" class="w-full flex items-center justify-between p-3.5 rounded-xl border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-high/40 transition-colors text-left group" type="button">
 <div class="flex items-center gap-2.5 text-on-surface-variant font-label-md text-label-md truncate">
 <span class="material-symbols-outlined text-outline text-[20px] group-hover:text-primary transition-colors" data-icon="person_search">person_search</span>
 <span class="truncate">¿Tienes otro hijo en el equipo? Buscar otro jugador...</span>
@@ -724,7 +882,7 @@
               Nombre y Apellidos del familiar
             </label>
 <div class="relative">
-<input class="w-full h-[48px] bg-surface-container-lowest border border-outline rounded-xl px-3.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-1 focus:ring-primary-container" id="tutor-name" type="text" value="Elena Gómez"/>
+<input class="w-full h-[48px] bg-surface-container-lowest border border-outline rounded-xl px-3.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-1 focus:ring-primary-container" id="tutor-name" type="text" placeholder="Tu nombre y apellidos" value="Elena Gómez"/>
 <span class="material-symbols-outlined absolute right-3.5 top-3 text-outline text-[20px]" data-icon="person">person</span>
 </div>
 </div>
@@ -758,7 +916,7 @@
 <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-outline font-label-md">
                 +34
               </div>
-<input class="w-full h-[48px] bg-surface-container-lowest border border-outline rounded-xl pl-12 pr-4 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-1 focus:ring-primary-container" id="tutor-phone" type="tel" value="620 44 55 66"/>
+<input class="w-full h-[48px] bg-surface-container-lowest border border-outline rounded-xl pl-12 pr-4 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-1 focus:ring-primary-container" id="tutor-phone" type="tel" placeholder="600 000 000" value="620 44 55 66"/>
 <span class="material-symbols-outlined absolute right-3.5 top-3 text-outline text-[20px]" data-icon="phone_iphone">phone_iphone</span>
 </div>
 <p class="mt-1.5 font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
@@ -776,7 +934,7 @@
 </div>
 <div class="space-y-1">
 <h3 class="font-label-lg text-label-lg text-on-surface">Validación del entrenador</h3>
-<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+<p id="parent-validation-desc" class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
               Por protección y privacidad del menor (Privacidad del Menor), el entrenador <strong>Mikel Zubeldia</strong> validará esta solicitud antes de conceder acceso a los agenda, convocatorias y avisos del equipo.
             </p>
 </div>
@@ -786,7 +944,7 @@
 <span class="material-symbols-outlined text-[16px] text-secondary" data-icon="lock">lock</span>
             Datos encriptados extremo a extremo
           </div>
-<span class="font-label-sm text-label-sm underline text-on-surface-variant cursor-pointer">Protocolo C.D. Indautxu</span>
+<span id="parent-footer-protocol" class="font-label-sm text-label-sm underline text-on-surface-variant cursor-pointer">Protocolo C.D. Indautxu</span>
 </div>
 </section>
 </main>

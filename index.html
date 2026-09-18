@@ -228,7 +228,7 @@
     <div class="mockup-wrapper w-full sm:max-w-[390px] h-[calc(100dvh-125px)] sm:h-[844px] bg-surface rounded-none sm:rounded-[40px] border-0 sm:border-[6px] border-slate-900 flex flex-col relative overflow-hidden text-on-surface shadow-none sm:shadow-2xl">
       
       <!-- Top Smartphone Notch (Only on desktop preview) -->
-      <div class="hidden sm:flex w-full h-8 bg-surface-container-lowest items-center justify-between px-6 shrink-0 z-50 select-none border-b border-outline-variant/30">
+      <div class="hidden sm:flex w-full h-8 bg-surface-container-lowest items-center justify-between px-6 shrink-0 z-50 select-none border-b border-outline-variant/30 pointer-events-none">
         <span class="text-[12px] font-bold text-on-surface tracking-tight">18:00</span>
         <div class="w-20 h-4 bg-slate-950 rounded-full mx-auto"></div>
         <div class="flex items-center gap-1.5 text-on-surface text-[12px]">
@@ -286,7 +286,7 @@
 </div>
 <div class="grid grid-cols-1 gap-3.5 pt-1">
 <!-- Card 1: Entrenador / Staff -->
-<a aria-label="Entrar como entrenador o staff" onclick="teamApp.goToScreen(\'v2_00_coach_create_team\')" class="group relative bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/50 shadow-sm hover:border-primary-container active:scale-[0.98] transition-all duration-150 flex flex-col justify-between gap-3 text-left cursor-pointer" role="button">
+<a aria-label="Entrar como entrenador o staff" onclick="teamApp.goToScreen('v2_00_coach_create_team')" class="group relative bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/50 shadow-sm hover:border-primary-container active:scale-[0.98] transition-all duration-150 flex flex-col justify-between gap-3 text-left cursor-pointer" role="button">
 <div class="flex items-start justify-between gap-3">
 <div class="flex items-center gap-3">
 <div class="w-12 h-12 rounded-xl bg-primary-container text-on-primary flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-150">
@@ -321,7 +321,7 @@
 </div>
 </a>
 <!-- Card 2: Familiares / Tutor -->
-<a aria-label="Entrar como padre, madre o tutor" onclick="teamApp.goToScreen(\'v2_00_parent_join_team\')" class="group relative bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/50 shadow-sm hover:border-secondary active:scale-[0.98] transition-all duration-150 flex flex-col justify-between gap-3 text-left cursor-pointer" role="button">
+<a aria-label="Entrar como padre, madre o tutor" onclick="teamApp.goToScreen('v2_00_parent_join_team')" class="group relative bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/50 shadow-sm hover:border-secondary active:scale-[0.98] transition-all duration-150 flex flex-col justify-between gap-3 text-left cursor-pointer" role="button">
 <div class="flex items-start justify-between gap-3">
 <div class="flex items-center gap-3">
 <div class="w-12 h-12 rounded-xl bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-150">
@@ -417,7 +417,7 @@
 <!-- Top Navigation Bar (Task-focused onboarding screen: Shell bottom nav suppressed per rules) -->
 <header class="bg-surface-container-lowest sticky top-0 z-40 px-margin-mobile h-14 flex items-center justify-between shadow-sm border-b border-outline-variant">
 <div class="flex items-center gap- space-sm">
-<button aria-label="Volver" onclick="teamApp.goToScreen(\'v2_00_onboarding_welcome\')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-container active:scale-[0.98] transition-transform text-on-surface cursor-pointer" type="button">
+<button aria-label="Volver" onclick="teamApp.goToScreen('v2_00_onboarding_welcome')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-container active:scale-[0.98] transition-transform text-on-surface cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[22px]" data-icon="arrow_back">arrow_back</span>
 </button>
 <div class="flex flex-col">
@@ -577,7 +577,7 @@
 <span>Compartir invitación por WhatsApp</span>
 </button>
 <!-- Action 2: Primary CTA 'Ir a la mesa del entrenador' -->
-<button class="w-full h-[52px] bg-primary-container hover:bg-primary text-on-primary rounded-xl font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-all" type="button">
+<button class="w-full h-[52px] bg-primary-container hover:bg-primary text-on-primary rounded-xl font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-all" onclick="teamApp.finishCoachSetup()" style="cursor:pointer;" type="button">
 <span>Ir a la mesa del entrenador</span>
 <span class="material-symbols-outlined text-[20px]" data-icon="arrow_forward">arrow_forward</span>
 </button>
@@ -600,7 +600,7 @@
 <!-- Top Step & Context Status Header -->
 <header class="sticky top-0 z-40 bg-surface-container-lowest/95 backdrop-blur px-margin-mobile pt-4 pb-3 border-b border-outline-variant/60">
 <div class="flex items-center justify-between gap-3 mb-2">
-<button aria-label="Volver" onclick="teamApp.goToScreen(\'v2_00_onboarding_welcome\')" class="inline-flex items-center gap-1 text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors py-1 -ml-1 active:scale-[0.98] cursor-pointer" type="button">
+<button aria-label="Volver" onclick="teamApp.goToScreen('v2_00_onboarding_welcome')" class="inline-flex items-center gap-1 text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors py-1 -ml-1 active:scale-[0.98] cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="arrow_back">arrow_back</span>
 <span>Volver</span>
 </button>
@@ -1174,7 +1174,7 @@
 <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">El tiempo y los compromisos del grupo</p>
 </div>
 <!-- High-priority CTA -->
-<button onclick="teamApp.goToScreen(\'screen_c_create_event\', \'agenda\')" class="h-10 px-3.5 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-xl flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-transform shrink-0 cursor-pointer"><span class="material-symbols-outlined text-[18px]">add</span><span>Crear evento</span></button>
+<button onclick="teamApp.goToScreen('screen_c_create_event', 'agenda')" class="h-10 px-3.5 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-xl flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-transform shrink-0 cursor-pointer"><span class="material-symbols-outlined text-[18px]">add</span><span>Crear evento</span></button>
 </section>
 <!-- Filter Tabs / Pill Segments -->
 <section aria-label="Filtro temporal" class="grid grid-cols-3 p-1 bg-surface-container-high rounded-xl gap-1">
@@ -1257,8 +1257,8 @@
 </div>
 <!-- Primary Action Button for Coaches -->
 <div class="pt-1 grid grid-cols-2 gap-2">
-<button onclick="teamApp.showToast(\'✓ Asistencia registrada: 16 jugadores presentes en el entrenamiento de hoy.\')" class="h-11 rounded-xl bg-surface-container-high hover:bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"><span class="material-symbols-outlined text-[18px]">checklist</span><span>Pasar lista</span></button>
-<button onclick="teamApp.showToast(\'Sesión #14: Rondo de posesión 6x2 + repliegue defensivo.\')" class="h-11 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"><span class="material-symbols-outlined text-[18px]">sports_soccer</span><span>Ver sesión</span></button>
+<button onclick="teamApp.showToast('✓ Asistencia registrada: 16 jugadores presentes en el entrenamiento de hoy.')" class="h-11 rounded-xl bg-surface-container-high hover:bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"><span class="material-symbols-outlined text-[18px]">checklist</span><span>Pasar lista</span></button>
+<button onclick="teamApp.showToast('Sesión #14: Rondo de posesión 6x2 + repliegue defensivo.')" class="h-11 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"><span class="material-symbols-outlined text-[18px]">sports_soccer</span><span>Ver sesión</span></button>
 </div>
 </article>
 </div>
@@ -1319,7 +1319,7 @@
               </p>
 </div>
 <!-- Dominant Coach Action Button -->
-<button onclick="teamApp.goToScreen(\'v2_06_event_hub_injury\', \'agenda\')" class="h-12 w-full bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform mt-1 cursor-pointer"><span class="material-symbols-outlined text-[20px]">manage_accounts</span><span>Gestionar evento</span></button>
+<button onclick="teamApp.goToScreen('v2_06_event_hub_injury', 'agenda')" class="h-12 w-full bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform mt-1 cursor-pointer"><span class="material-symbols-outlined text-[20px]">manage_accounts</span><span>Gestionar evento</span></button>
 </article>
 </div>
 <!-- ================= GROUP 3: LUNES ================= -->
@@ -1366,7 +1366,7 @@
 </div>
 </div>
 <!-- Quick Action -->
-<button onclick="teamApp.showToast(\'🔔 Recordatorio de respuestas enviado a las familias para el lunes.\')" class="h-11 w-full bg-surface-container-high hover:bg-surface-container text-primary font-label-md text-label-md rounded-xl flex items-center justify-center gap-2 border border-outline-variant/50 active:scale-[0.98] transition-transform cursor-pointer"><span class="material-symbols-outlined text-[18px]">campaign</span><span>Recordar a familias</span></button>
+<button onclick="teamApp.showToast('🔔 Recordatorio de respuestas enviado a las familias para el lunes.')" class="h-11 w-full bg-surface-container-high hover:bg-surface-container text-primary font-label-md text-label-md rounded-xl flex items-center justify-center gap-2 border border-outline-variant/50 active:scale-[0.98] transition-transform cursor-pointer"><span class="material-symbols-outlined text-[18px]">campaign</span><span>Recordar a familias</span></button>
 </article>
 </div>
 </div>
@@ -3061,7 +3061,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <!-- Sub-page Focused Header (Navigation Shell Suppressed as per Task-Focused Flow) -->
 <header class="sticky top-0 z-30 bg-surface-container-lowest/95 backdrop-blur-md px-margin-mobile py-space-sm flex items-center justify-between shadow-sm">
 <div class="flex items-center gap-2">
-<button aria-label="Volver atrás" onclick="teamApp.goToScreen(\'v2_07_parent_home\', \'inicio\')" class="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer" type="button">
+<button aria-label="Volver atrás" onclick="teamApp.goToScreen('v2_07_parent_home', 'inicio')" class="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="arrow_back">arrow_back</span>
 </button>
 <div>
@@ -3465,7 +3465,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <footer class="fixed bottom-0 left-0 w-full z-50 bg-surface-container-lowest border-t border-outline-variant px-margin-mobile pt-3 pb-6 shadow-[0_-4px_16px_rgba(15,23,42,0.08)]">
 <div class="w-full max-w-xl mx-auto space-y-2">
 <!-- Primary Action CTA -->
-<button class="w-full h-[52px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" onclick="teamApp.showToast(\'✓ Torneo Apertura creado y disponibilidad solicitada a las 18 familias.\'); teamApp.goToScreen(\'v2_05_event_hub_normal\', \'agenda\');" style="cursor:pointer;" type="button">
+<button class="w-full h-[52px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" onclick="teamApp.showToast('✓ Torneo Apertura creado y disponibilidad solicitada a las 18 familias.'); teamApp.goToScreen('v2_05_event_hub_normal', 'agenda');" style="cursor:pointer;" type="button">
 <span>Crear evento y solicitar disponibilidad</span>
 <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">send</span>
 </button>
@@ -3870,7 +3870,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
           </span>
 </label>
 <!-- Primary CTA Button (Athletic Royal Blue 52px height) -->
-<button class="w-full h-[52px] bg-primary-container hover:bg-primary active:scale-[0.98] text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-md transition-all" onclick="teamApp.showToast(\'✓ Convocatoria oficial de 12 jugadores publicada.\'); teamApp.goToScreen(\'v2_06_event_hub_injury\', \'agenda\');" style="cursor:pointer;" type="button">
+<button class="w-full h-[52px] bg-primary-container hover:bg-primary active:scale-[0.98] text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-md transition-all" onclick="teamApp.showToast('✓ Convocatoria oficial de 12 jugadores publicada.'); teamApp.goToScreen('v2_06_event_hub_injury', 'agenda');" style="cursor:pointer;" type="button">
 <span>Publicar Convocatoria Oficial (12)</span>
 <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
 </button>
@@ -4112,7 +4112,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
       </nav>
 
       <!-- Bottom Smartphone Home Indicator Bar -->
-      <div class="w-full h-4 bg-surface-container-lowest flex items-center justify-center shrink-0 z-50 border-t border-outline-variant/20">
+      <div class="w-full h-4 bg-surface-container-lowest flex items-center justify-center shrink-0 z-50 border-t border-outline-variant/20 pointer-events-none">
         <div class="w-32 h-1 bg-slate-300 rounded-full"></div>
       </div>
 

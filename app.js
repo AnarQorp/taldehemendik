@@ -247,14 +247,18 @@ export class TeamAppState {
     } else if (membershipId === "indautxu_inf_a" || membershipId === "coach") {
       this.currentRole = "coach";
       await this.ensureAuth("coach");
-      await this.syncCurrentScreen();
-      this.goToScreen(this.currentScreen.startsWith("v2_07_") || this.currentScreen.startsWith("v2_08_") ? "v2_01_coach_home" : this.currentScreen, "inicio");
+      const target = (this.currentScreen.startsWith("v2_07_") || this.currentScreen.startsWith("v2_08_") || this.currentScreen.startsWith("v2_00_"))
+        ? "v2_01_coach_home"
+        : this.currentScreen;
+      await this.goToScreen(target, "inicio");
       this.showToast("Modo Entrenador: Mikel Zubeldia (Sesión autenticada)");
     } else if (membershipId === "indautxu_ale_b" || membershipId === "parent") {
       this.currentRole = "parent";
       await this.ensureAuth("parent");
-      await this.syncCurrentScreen();
-      this.goToScreen("v2_07_parent_home", "inicio");
+      const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_02_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
+        ? "v2_07_parent_home"
+        : this.currentScreen;
+      await this.goToScreen(target, "inicio");
       this.showToast("Modo Familia: Elena Gómez / Ibai #9 (Sesión autenticada)");
     }
     this.updateRoleUI();
@@ -851,8 +855,9 @@ export class TeamAppState {
     this.showToast("🔔 Recordatorio enviado a familias sin respuesta vía backend.");
   }
 
-  finishCoachSetup() {
-    this.switchMembership("indautxu_inf_a");
+  async finishCoachSetup() {
+    await this.switchMembership("indautxu_inf_a");
+    await this.goToScreen("v2_01_coach_home", "inicio");
     this.showToast("✓ Equipo C.D. Indautxu · Infantil A creado con éxito. Código INDA16.");
   }
 
@@ -873,11 +878,15 @@ export class TeamAppState {
       btn.disabled = true;
       btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">progress_activity</span><span>Enviando al entrenador...</span>`;
     }
-    setTimeout(() => {
+    setTimeout(async () => {
+      await this.switchMembership("indautxu_ale_b");
+      await this.goToScreen("v2_07_parent_home", "inicio");
       this.showToast("✓ Solicitud de vinculación registrada para Ibai #9.");
-      this.currentStepIndex = 3;
-      this.applyCurrentStep();
-    }, 1000);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>Enviar solicitud de vinculación</span><span class="material-symbols-outlined text-[20px]" data-icon="send">send</span>`;
+      }
+    }, 600);
   }
 
   approveGuardianRequest() {

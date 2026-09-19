@@ -26,7 +26,7 @@ describe("VS02 events and agenda", () => {
   afterAll(async () => { await app.close(); await pool.end(); });
 
   it("allows coach and staff to create events but rejects guardian and cross-team scope", async () => {
-    const payload = { type: "TOURNAMENT", title: "Torneo API", startsAt: "2026-10-10T08:00:00.000Z", arrivalAt: "2026-10-10T07:30:00.000Z", location: "Oyón", availabilityEnabled: true, availabilityDeadline: "2026-10-08T20:00:00.000Z", callupEnabled: true };
+    const payload = { type: "TOURNAMENT", title: "Torneo API", startsAt: "2026-10-10T08:00:00.000Z", arrivalAt: "2026-10-10T07:30:00.000Z", location: "Polideportivo Municipal Indautxu", availabilityEnabled: true, availabilityDeadline: "2026-10-08T20:00:00.000Z", callupEnabled: true };
     const coachCreated = await app.inject({ method: "POST", url: `/v1/team-seasons/${ids.season}/events`, headers: bearer(coach), payload });
     expect(coachCreated.statusCode).toBe(201);
     expect(coachCreated.json()).toMatchObject({ type: "TOURNAMENT", title: "Torneo API", status: "ACTIVE", version: 1 });

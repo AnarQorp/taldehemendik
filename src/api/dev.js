@@ -6,4 +6,8 @@ export class DevService {
   async resetDataset() {
     return this.client.post("/dev/reset", {});
   }
+
+  async emptyDatabase() {
+    return this.client.post("/dev/empty", {});
+  }
 }

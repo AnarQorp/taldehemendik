@@ -82,7 +82,7 @@ export async function resetDemoDataset(db = pool) {
       VALUES ($1, $2, 'Evento Equipo B', 'TRAINING', '2026-10-10T08:00:00Z', true, '2026-10-08T20:00:00Z', false, 'ACTIVE', $3)`,
       [ids.otherEvent, ids.otherSeason, ids.otherCoach]);
 
-    // Initial Availability for Torneo Oyón:
+    // Initial Availability for Torneo Indautxu:
     // 14 CAN_ATTEND: Ibai, Ane, Nahia, Irati, Gorka, Eneko, Julen, Jon, Markel, Ander, Unai, Oier, Mikel, Aimar
     const canPlayerIds = roster.slice(0, 14).map(r => r[0]);
     for (const pid of canPlayerIds) {

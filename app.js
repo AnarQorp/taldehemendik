@@ -667,7 +667,7 @@ export class TeamAppState {
 
   async syncEventHubNormal() {
     await this.ensureAuth("coach");
-    const availRes = await api.availability.getEventAvailability(DEMO_CONFIG.EVENT_OYON_ID);
+    const availRes = await api.availability.getEventAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID);
     this.live.availability = availRes;
 
     const counts = availRes.counts || { CAN_ATTEND: 14, CANNOT_ATTEND: 2, UNSURE: 0, NO_RESPONSE: 2 };
@@ -725,7 +725,7 @@ export class TeamAppState {
   async handlePublishCallup() {
     await this.ensureAuth("coach");
     try {
-      const availRes = await api.availability.getEventAvailability(DEMO_CONFIG.EVENT_OYON_ID);
+      const availRes = await api.availability.getEventAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID);
       const items = availRes.items || [];
 
       // Las 3 reservas no convocadas que quedarán disponibles son Ane Mintegi, Irati Fernandez y Nahia Garcia
@@ -739,7 +739,7 @@ export class TeamAppState {
       // Crear o preparar draft
       let draft;
       try {
-        draft = await api.callup.createDraft(DEMO_CONFIG.EVENT_OYON_ID, selected12);
+        draft = await api.callup.createDraft(DEMO_CONFIG.EVENT_INDAUTXU_ID, selected12);
       } catch (e) {
         console.info("Draft already existing or created:", e.message);
       }
@@ -799,10 +799,10 @@ export class TeamAppState {
     if (this.appMode === "DEMO") {
       await this.ensureAuth("parent");
       try {
-        const statusRes = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+        const statusRes = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
         this.live.parentCallupStatus = statusRes;
 
-        const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+        const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
         this.live.parentAvailability = availRes.current;
 
         const badge = document.getElementById("parent-ibai-callup-badge");
@@ -845,7 +845,7 @@ export class TeamAppState {
 
   async syncParentRsvp() {
     await this.ensureAuth("parent");
-    const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+    const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
     this.live.parentAvailability = availRes.current;
   }
 
@@ -859,16 +859,16 @@ export class TeamAppState {
       const expectedVersion = this.live.parentAvailability ? this.live.parentAvailability.version : 0;
       const status = this.parentRsvpChoice === "NO" ? "CANNOT_ATTEND" : (this.parentRsvpChoice === "SI" ? "CAN_ATTEND" : "UNSURE");
 
-      const idemKey = idempotencyManager.getOrCreateKey(`parent-rsvp-${DEMO_CONFIG.EVENT_OYON_ID}`);
+      const idemKey = idempotencyManager.getOrCreateKey(`parent-rsvp-${DEMO_CONFIG.EVENT_INDAUTXU_ID}`);
 
       await api.availability.setGuardianAvailability(
-        DEMO_CONFIG.EVENT_OYON_ID,
+        DEMO_CONFIG.EVENT_INDAUTXU_ID,
         DEMO_CONFIG.IBAI_PLAYER_ID,
         { status, expectedVersion },
         idemKey
       );
 
-      idempotencyManager.clearKey(`parent-rsvp-${DEMO_CONFIG.EVENT_OYON_ID}`);
+      idempotencyManager.clearKey(`parent-rsvp-${DEMO_CONFIG.EVENT_INDAUTXU_ID}`);
 
       this.showToast(status === "CANNOT_ATTEND"
         ? "✓ Disponibilidad guardada en PostgreSQL: NO asistirá (Baja registrada)."
@@ -1039,7 +1039,8 @@ export class TeamAppState {
         await api.dev.resetDataset();
         this.showToast("✓ Entorno DEMO reiniciado (PostgreSQL Indautxu restaurado).");
       } else {
-        this.showToast("✓ Sesión BETA reiniciada. Los datos creados no se alteran y no se reseembra Indautxu.");
+        await api.dev.emptyDatabase();
+        this.showToast("✓ Entorno BETA vaciado completamente en PostgreSQL y navegador.");
       }
 
       // 2. Clear browser storage

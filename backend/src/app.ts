@@ -12,6 +12,7 @@ import { config } from "./config.js";
 import { DomainError } from "./domain/errors.js";
 import { requireGuardianPlayerAccess, requirePlayerInSeason, requireRole } from "./policy/authorization.js";
 import { resetDemoDatabase } from "./db/demo-reset.js";
+import { emptyDatabase } from "./db/empty.js";
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 const emailSchema = z.string().email().max(254).transform((v) => v.toLowerCase());
@@ -29,6 +30,7 @@ export async function buildApp(options: BuildOptions = {}) {
 
   if(options.enableDevReset??config.devResetEnabled){
     app.post("/v1/dev/reset",async()=>inTransaction((db)=>resetDemoDatabase(db)));
+    app.post("/v1/dev/empty",async()=>inTransaction((db)=>emptyDatabase(db)));
   }
 
   app.setErrorHandler((error, _request, reply) => {

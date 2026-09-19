@@ -57,7 +57,7 @@ screens_html["screen_b_calendar"] = re.sub(
     screens_html["screen_b_calendar"],
     count=1
 )
-# Card Torneo Oyón in Calendar
+# Card Torneo Indautxu in Calendar
 screens_html["screen_b_calendar"] = screens_html["screen_b_calendar"].replace(
     'Ver detalle del evento',
     'Ver detalle del evento'
@@ -440,7 +440,7 @@ master_template = """<!DOCTYPE html>
             <span class="font-extrabold text-xs sm:text-sm tracking-tight text-white">Talde Hemendik!</span>
             <span class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-blue-900/60 text-blue-300 border border-blue-700/50">Demo MVP</span>
           </div>
-          <p class="text-[10px] sm:text-[11px] text-slate-400">CD Oyón · Infantil A (18 jug.)</p>
+          <p class="text-[10px] sm:text-[11px] text-slate-400">C.D. Indautxu · Infantil A (18 jug.)</p>
         </div>
       </div>
 
@@ -505,12 +505,12 @@ master_template = """<!DOCTYPE html>
         <span class="text-[10px] text-slate-400 font-mono">14 pasos verificables</span>
       </div>
       <p id="demo-step-desc" class="text-[11px] sm:text-xs text-slate-300 leading-snug">
-        Mikel (entrenador) consulta el resumen operativo. El bloque 'REQUIERE TU ATENCIÓN' destaca el Torneo Oyón con las respuestas recibidas.
+        Mikel (entrenador) consulta el resumen operativo. El bloque 'REQUIERE TU ATENCIÓN' destaca el Torneo Indautxu con las respuestas recibidas.
       </p>
       <div class="mt-1.5 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] sm:text-[11px]">
         <div class="text-amber-400 font-medium flex items-center gap-1">
           <span class="material-symbols-outlined text-[13px] sm:text-[14px]">touch_app</span>
-          <span id="demo-step-action">Pulsa en 'Gestionar Disponibilidad y Convocatoria' o en la tarjeta del Torneo Oyón.</span>
+          <span id="demo-step-action">Pulsa en 'Gestionar Disponibilidad y Convocatoria' o en la tarjeta del Torneo Indautxu.</span>
         </div>
       </div>
       <!-- Barra de progreso lineal -->
@@ -625,7 +625,7 @@ master_template = """<!DOCTYPE html>
       </div>
       <h3 class="font-bold text-lg text-center text-slate-900 leading-tight">¿Informar de baja justificada?</h3>
       <p class="text-xs text-slate-600 text-center mt-2 leading-relaxed">
-        Estás indicando que <strong>Ibai Aranguren (#9)</strong> causará baja en el <strong>Torneo Oyón</strong>.
+        Estás indicando que <strong>Ibai Aranguren (#9)</strong> causará baja en el <strong>Torneo Indautxu</strong>.
       </p>
       
       <div class="mt-3.5 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
@@ -665,7 +665,7 @@ master_template = """<!DOCTYPE html>
           <span id="sheet-player-num" class="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-extrabold flex items-center justify-center text-sm">#9</span>
           <div>
             <h4 id="sheet-player-name" class="font-bold text-base text-slate-900 leading-tight">Ibai Aranguren</h4>
-            <p id="sheet-player-role" class="text-xs text-slate-500">Delantero · CD Oyón Infantil A</p>
+            <p id="sheet-player-role" class="text-xs text-slate-500">Delantero · C.D. Indautxu Infantil A</p>
           </div>
         </div>
         <button onclick="teamApp.closePlayerModal()" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-full cursor-pointer">
@@ -675,7 +675,7 @@ master_template = """<!DOCTYPE html>
 
       <div class="mt-3 space-y-2.5 text-xs">
         <div class="p-3 bg-blue-50/60 rounded-xl border border-blue-100">
-          <span class="font-bold text-blue-800 block mb-0.5">Estado en Torneo Oyón:</span>
+          <span class="font-bold text-blue-800 block mb-0.5">Estado en Torneo Indautxu:</span>
           <span id="sheet-player-status" class="text-blue-900 font-medium">Baja sobrevenida (Fiebre)</span>
         </div>
 

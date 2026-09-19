@@ -132,7 +132,7 @@
       </div>
       <h3 class="text-base font-bold text-center mb-1 text-slate-900">¿Reiniciar entorno beta?</h3>
       <p class="text-xs text-slate-600 text-center mb-5 leading-relaxed">
-        Esta acción limpiará tu sesión activa, credenciales, tokens locales y caché de navegación. En modo BETA limpia no se resembrará C.D. Indautxu para garantizar un inicio desde cero.
+        Esta acción eliminará todos los datos creados en el entorno local de BETA en PostgreSQL (manteniendo el esquema y migraciones intactos), limpiará tus sesiones y tokens, y volverá al inicio completamente limpio sin sembrar Indautxu.
       </p>
       <div class="grid grid-cols-2 gap-2.5">
         <button type="button" onclick="teamApp.cancelResetBeta()" class="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer">

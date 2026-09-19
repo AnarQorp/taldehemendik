@@ -17,7 +17,7 @@ test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replaceme
 
   // 3. Mikel queries availability for Torneo Indautxu
   api.client.setToken(coachAuth.accessToken);
-  const avail = await api.availability.getEventAvailability(DEMO_CONFIG.EVENT_OYON_ID);
+  const avail = await api.availability.getEventAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID);
   assert.deepEqual(avail.counts, {
     CAN_ATTEND: 14,
     CANNOT_ATTEND: 2,
@@ -34,7 +34,7 @@ test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replaceme
   assert.equal(selected12.length, 12);
   assert.ok(selected12.includes(DEMO_CONFIG.IBAI_PLAYER_ID), "Ibai must be selected");
 
-  const draft = await api.callup.createDraft(DEMO_CONFIG.EVENT_OYON_ID, selected12);
+  const draft = await api.callup.createDraft(DEMO_CONFIG.EVENT_INDAUTXU_ID, selected12);
   assert.ok(draft.id);
   assert.equal(draft.status, "DRAFT");
 
@@ -69,22 +69,22 @@ test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replaceme
 
   // 8. Elena queries Ibai's callup status -> should be called: true, revision: 1
   api.client.setToken(parentAuth.accessToken);
-  const status1 = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+  const status1 = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
   assert.equal(status1.called, true);
   assert.equal(status1.revision, 1);
 
   // 9. Elena changes Ibai's availability to CANNOT_ATTEND
-  const ibaiAvail = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
-  const rsvpIdemKey = api.idempotency.getOrCreateKey("elena-rsvp-oyon");
+  const ibaiAvail = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+  const rsvpIdemKey = api.idempotency.getOrCreateKey("elena-rsvp-indautxu");
 
   const updateRes = await api.availability.setGuardianAvailability(
-    DEMO_CONFIG.EVENT_OYON_ID,
+    DEMO_CONFIG.EVENT_INDAUTXU_ID,
     DEMO_CONFIG.IBAI_PLAYER_ID,
     { status: "CANNOT_ATTEND", expectedVersion: ibaiAvail.current.version },
     rsvpIdemKey
   );
   assert.equal(updateRes.status, "CANNOT_ATTEND");
-  api.idempotency.clearKey("elena-rsvp-oyon");
+  api.idempotency.clearKey("elena-rsvp-indautxu");
 
   // 10. Mikel switches back and checks pending action items
   api.client.setToken(coachAuth.accessToken);
@@ -118,7 +118,7 @@ test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replaceme
 
   // 13. Elena checks Ibai status again -> called must now be false, revision 2
   api.client.setToken(parentAuth.accessToken);
-  const status2 = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_OYON_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+  const status2 = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
   assert.equal(status2.called, false);
   assert.equal(status2.revision, 2);
 

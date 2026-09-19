@@ -145,6 +145,24 @@ export async function buildApp(options: BuildOptions = {}) {
     return reply.code(result.idempotentReplay?200:201).send(result);
   });
 
+  app.get("/v1/team-seasons/:teamSeasonId/players", async (request) => {
+    const { userId } = await actor(request);
+    const { teamSeasonId } = z.object({ teamSeasonId: uuid }).parse(request.params);
+    await requireRole(pool, userId, teamSeasonId, ["COACH", "STAFF"]);
+    const result = await pool.query(
+      `SELECT p.id, p.first_name, p.last_name, p.short_name, re.shirt_number, re.position, re.status as roster_status,
+              COUNT(gl.guardian_user_id)::int as guardians_count
+       FROM roster_entries re
+       JOIN players p ON p.id = re.player_id
+       LEFT JOIN guardian_links gl ON gl.player_id = p.id AND gl.status = 'ACTIVE'
+       WHERE re.team_season_id = $1 AND re.status = 'ACTIVE'
+       GROUP BY p.id, p.first_name, p.last_name, p.short_name, re.shirt_number, re.position, re.status
+       ORDER BY re.shirt_number NULLS LAST, p.first_name, p.last_name`,
+      [teamSeasonId]
+    );
+    return { items: result.rows };
+  });
+
   app.post("/v1/team-seasons/:teamSeasonId/players/:playerId/invitations", async (request, reply) => {
     const { userId } = await actor(request);
     const params = z.object({ teamSeasonId: uuid, playerId: uuid }).parse(request.params);

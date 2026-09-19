@@ -607,64 +607,85 @@ export class TeamAppState {
   }
 
   async syncCoachHome() {
-    if (this.appMode === "DEMO") {
-      await this.ensureAuth("coach");
-      const pendingData = await api.pending.getPending(DEMO_CONFIG.TEAM_SEASON_ID);
-      this.live.pending = pendingData;
+    const isDemo = this.appMode === "DEMO";
+    const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : this.beta.teamSeasonId;
 
-      const actionItems = pendingData.actionItems || [];
-      const bajaItem = actionItems.find(item => item.type === "CALLED_PLAYER_UNAVAILABLE" && item.status === "OPEN");
-      this.live.activeActionItem = bajaItem;
+    if (!activeTeamSeasonId) return;
 
-      const bajaCard = document.getElementById("coach-item-baja-card");
-      const bajaDesc = document.getElementById("coach-item-baja-desc");
-      const badgeEl = document.getElementById("coach-pending-count-badge");
+    await this.ensureAuth("coach");
 
-      if (bajaCard) {
-        if (bajaItem) {
-          bajaCard.classList.remove("hidden");
-          if (bajaDesc) {
-            bajaDesc.textContent = `${bajaItem.first_name || "Ibai"} (#9) ha comunicado que no puede asistir (nota: está enfermo).`;
-          }
+    try {
+      // Concurrently fetch real data from PostgreSQL
+      const [playersRes, eventsRes, pendingRes, pendingReqs] = await Promise.all([
+        api.teams.getPlayers(activeTeamSeasonId).catch(() => ({ items: [] })),
+        api.events.getEvents(activeTeamSeasonId).catch(() => ({ items: [] })),
+        api.pending.getPending(activeTeamSeasonId).catch(() => ({ actionItems: [], indicators: [] })),
+        api.teams.getPendingRequests(activeTeamSeasonId).catch(() => ({ items: [] }))
+      ]);
+
+      const players = playersRes.items || [];
+      const events = eventsRes.items || [];
+      const actionItems = pendingRes.actionItems || [];
+      const pendingRequests = pendingReqs.items || [];
+
+      // Update team info
+      const titleEl = document.getElementById("coach-home-team-title");
+      const seasonEl = document.getElementById("coach-home-season-label");
+      const userEl = document.getElementById("coach-home-user-name");
+      const codePill = document.getElementById("coach-home-code-pill");
+      const shareBtnText = document.getElementById("coach-share-invite-btn-text");
+
+      const joinCode = isDemo ? "INDA16" : (this.beta.joinCode || "---");
+
+      if (titleEl) {
+        titleEl.textContent = isDemo
+          ? "C.D. Indautxu · Infantil A"
+          : `${this.beta.team?.name || 'Mi Club'} · ${this.beta.teamSeason?.display_label || this.beta.teamSeason?.displayLabel || 'Mi Equipo'}`;
+      }
+      if (seasonEl) {
+        seasonEl.textContent = isDemo
+          ? "Temporada 2026/27"
+          : `Temporada ${this.beta.teamSeason?.season_label || '2026/27'}`;
+      }
+      if (userEl) {
+        userEl.textContent = isDemo ? "Mikel" : (this.beta.coachName || "Entrenador");
+      }
+      if (codePill) {
+        codePill.textContent = `Código: ${joinCode}`;
+      }
+      if (shareBtnText) {
+        shareBtnText.textContent = `Compartir invitación (${joinCode})`;
+      }
+
+      // Update Metric Strip
+      const totalPlayers = players.length;
+      const linkedCount = players.filter(p => (p.guardians_count || 0) > 0).length;
+      const pendingCount = totalPlayers - linkedCount;
+
+      const elPlayersCount = document.getElementById("coach-players-count");
+      const elLinkedCount = document.getElementById("coach-linked-count");
+      const elPendingCount = document.getElementById("coach-pending-count");
+      const emptyPlayersCard = document.getElementById("coach-empty-players-card");
+
+      if (elPlayersCount) elPlayersCount.textContent = totalPlayers;
+      if (elLinkedCount) elLinkedCount.textContent = linkedCount;
+      if (elPendingCount) elPendingCount.textContent = pendingCount;
+
+      if (emptyPlayersCard) {
+        if (totalPlayers === 0) {
+          emptyPlayersCard.classList.remove("hidden");
         } else {
-          bajaCard.classList.add("hidden");
+          emptyPlayersCard.classList.add("hidden");
         }
       }
 
-      if (badgeEl) {
-        const totalCount = (bajaItem ? 1 : 0) + 2;
-        badgeEl.textContent = `${totalCount} ${totalCount === 1 ? "tarea" : "tareas"}`;
-      }
-      return;
-    }
-
-    // Clean BETA mode
-    if (!this.beta.teamSeasonId) return;
-    if (this.tokens.coach) api.client.setToken(this.tokens.coach);
-
-    try {
-      const res = await api.teams.getPendingRequests(this.beta.teamSeasonId);
-      this.beta.pendingRequests = res.items || [];
-
+      // Update Pending Requests Card in Onboarding
       const reqCard = document.getElementById("coach-pending-approval-card");
-      const pendingCount = document.getElementById("coach-pending-count");
-      if (pendingCount) pendingCount.textContent = this.beta.pendingRequests.length;
-
-      if (this.beta.team) {
-        const titleEl = document.getElementById("coach-home-team-title");
-        if (titleEl) titleEl.textContent = `${this.beta.team.name} · ${this.beta.teamSeason?.display_label || this.beta.teamSeason?.displayLabel || 'Temporada'}`;
-        const codePill = document.getElementById("coach-home-code-pill");
-        if (codePill && this.beta.joinCode) codePill.textContent = `Código: ${this.beta.joinCode}`;
-        const userEl = document.getElementById("coach-home-user-name");
-        if (userEl && this.beta.coachName) userEl.textContent = this.beta.coachName;
-      }
-
-      if (this.beta.pendingRequests.length > 0 && reqCard) {
+      if (pendingRequests.length > 0 && reqCard) {
         reqCard.classList.remove("hidden");
-        const req = this.beta.pendingRequests[0];
+        const req = pendingRequests[0];
         const isIndividual = Boolean(req.player_id);
-
-        let contentHtml = `
+        reqCard.innerHTML = `
           <div class="flex items-start gap-2.5">
             <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
               <span class="material-symbols-outlined text-[18px]">person_add</span>
@@ -685,22 +706,14 @@ export class TeamAppState {
               </p>
             </div>
           </div>
-        `;
-
-        if (!isIndividual) {
-          contentHtml += `
+          ${!isIndividual ? `
             <div class="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs">
               <label class="block font-bold text-slate-700 mb-1">Asignar a jugador de la plantilla:</label>
               <select id="coach-assign-player-${req.id}" class="w-full h-8 px-2 rounded border border-slate-300 bg-white text-xs">
-                ${this.beta.players.map(p => `
-                  <option value="${p.id}">${p.firstName} ${p.lastName} (#${p.shirtNumber || '-'})</option>
-                `).join("")}
+                ${players.map(p => `<option value="${p.id}">${p.first_name} ${p.last_name} (#${p.shirt_number || '-'})</option>`).join("")}
               </select>
             </div>
-          `;
-        }
-
-        contentHtml += `
+          ` : ''}
           <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
             <button onclick="teamApp.rejectBetaGuardianRequest('${req.id}')" class="h-9 rounded-lg border border-outline-variant bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md font-medium flex items-center justify-center cursor-pointer active:scale-[0.98]">
               Rechazar
@@ -711,13 +724,371 @@ export class TeamAppState {
             </button>
           </div>
         `;
-
-        reqCard.innerHTML = contentHtml;
       } else if (reqCard) {
         reqCard.classList.add("hidden");
       }
+
+      // SECTION 1: 'HOY' (Immediate operational focus)
+      const todayContainer = document.getElementById("coach-home-today-container");
+      const todayBadge = document.getElementById("coach-home-today-badge");
+      
+      const now = new Date();
+      const todayEvent = events.find(e => {
+        const d = new Date(e.starts_at);
+        return d.toDateString() === now.toDateString();
+      }) || (isDemo ? events.find(e => e.type === "TRAINING" || e.title.includes("Entrenamiento")) : null);
+
+      if (todayContainer) {
+        if (todayEvent) {
+          if (todayBadge) {
+            todayBadge.textContent = todayEvent.type === "TRAINING" ? "Sesión en Campo" : "Día de Partido";
+            todayBadge.className = "font-label-sm text-label-sm font-bold px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed";
+          }
+          const timeStr = new Date(todayEvent.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const arrivalStr = todayEvent.arrival_at ? new Date(todayEvent.arrival_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : timeStr;
+
+          todayContainer.innerHTML = `
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/70 shadow-sm p-4 space-y-4">
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-headline-md text-headline-md text-on-surface font-extrabold">${todayEvent.title}</span>
+                    <span class="px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-bold">${timeStr} h</span>
+                  </div>
+                  <p class="font-body-sm text-body-sm text-on-surface-variant mt-1 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px] text-primary">schedule</span>
+                    Llegada ${arrivalStr} h
+                  </p>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary">
+                  <span class="material-symbols-outlined text-[24px]">${todayEvent.type === 'TRAINING' ? 'fitness_center' : 'sports_soccer'}</span>
+                </div>
+              </div>
+              <div class="bg-surface-container-low rounded-lg p-3 border border-outline-variant/30 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-[20px] text-on-surface-variant">stadium</span>
+                  <span class="font-label-md text-label-md text-on-surface font-semibold">${todayEvent.location || 'Campo de entrenamiento'}</span>
+                </div>
+                <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-lowest px-2 py-1 rounded border border-outline-variant/40">Fútbol</span>
+              </div>
+              <div class="flex items-center justify-between py-1 border-t border-surface-container-high">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[16px]">check</span>
+                  </span>
+                  <span class="font-label-md text-label-md text-on-surface font-bold">${totalPlayers} jugadores convocados</span>
+                </div>
+              </div>
+              <button onclick="teamApp.goToScreen('v2_05_event_hub_normal', 'agenda')" class="w-full h-[52px] rounded-xl bg-primary-container hover:bg-primary active:scale-[0.98] transition-all duration-150 text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-sm cursor-pointer">
+                <span class="material-symbols-outlined text-[20px]">fact_check</span>
+                Pasar lista / Asistencia
+              </button>
+            </div>
+          `;
+        } else {
+          if (todayBadge) {
+            todayBadge.textContent = "Sin evento";
+            todayBadge.className = "font-label-sm text-label-sm text-on-surface-variant bg-surface-container px-2 py-0.5 rounded";
+          }
+          todayContainer.innerHTML = `
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/70 shadow-sm p-6 text-center space-y-3">
+              <div class="w-12 h-12 mx-auto rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                <span class="material-symbols-outlined text-[24px]">calendar_today</span>
+              </div>
+              <div>
+                <h3 class="font-label-lg text-label-lg font-bold text-on-surface">No hay eventos programados para hoy</h3>
+                <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">El descanso también es parte del plan o puedes crear una nueva sesión.</p>
+              </div>
+              <button onclick="teamApp.goToScreen('screen_c_create_event', 'agenda')" class="h-10 px-4 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md font-bold rounded-xl inline-flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-all cursor-pointer">
+                <span class="material-symbols-outlined text-[18px]">add</span>
+                <span>Crear primer evento</span>
+              </button>
+            </div>
+          `;
+        }
+      }
+
+      // SECTION 2: 'PENDIENTE DE TI'
+      const pendingContainer = document.getElementById("coach-pending-items-container");
+      const pendingBadge = document.getElementById("coach-pending-count-badge");
+
+      const bajaItem = actionItems.find(item => item.type === "CALLED_PLAYER_UNAVAILABLE" && item.status === "OPEN");
+      this.live.activeActionItem = bajaItem;
+
+      let taskCards = [];
+
+      if (bajaItem) {
+        taskCards.push(`
+          <div id="coach-item-baja-card" class="bg-surface-container-lowest rounded-xl border-l-4 border-l-tertiary-container border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <span class="font-headline-sm text-headline-sm text-on-surface font-extrabold block">Baja de última hora</span>
+                <p id="coach-item-baja-desc" class="font-body-sm text-body-sm text-tertiary font-medium mt-0.5">
+                  ${bajaItem.first_name || "Ibai"} (#9) ha comunicado que no puede asistir (nota: está enfermo).
+                </p>
+              </div>
+              <span class="font-label-sm text-label-sm font-bold bg-tertiary-fixed text-on-tertiary-fixed px-2.5 py-1 rounded-full whitespace-nowrap border border-tertiary-fixed-dim">
+                No disponible
+              </span>
+            </div>
+            <button class="w-full h-[50px] rounded-xl bg-surface-container-lowest border-2 border-tertiary text-tertiary hover:bg-tertiary-fixed active:scale-[0.98] transition-all font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 cursor-pointer" onclick="teamApp.goToScreen('v2_06_event_hub_injury', 'agenda')">
+              <span class="material-symbols-outlined text-[18px]">event_busy</span>
+              Resolver baja
+            </button>
+          </div>
+        `);
+      }
+
+      if (pendingRequests.length > 0) {
+        taskCards.push(`
+          <div class="bg-surface-container-lowest rounded-xl border-l-4 border-l-amber-500 border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <span class="font-headline-sm text-headline-sm text-on-surface font-extrabold block">Solicitud de vinculación familiar</span>
+                <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+                  ${pendingRequests.length} ${pendingRequests.length === 1 ? 'familia espera' : 'familias esperan'} confirmación para acceder al equipo.
+                </p>
+              </div>
+              <span class="font-label-sm text-label-sm font-bold bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full whitespace-nowrap border border-amber-300">
+                Pendiente
+              </span>
+            </div>
+            <button onclick="teamApp.goToScreen('v2_01_coach_home', 'inicio'); document.getElementById('coach-onboarding-banner')?.scrollIntoView({ behavior: 'smooth' });" class="w-full h-[50px] rounded-xl bg-primary-container hover:bg-primary active:scale-[0.98] transition-all text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-[18px]">person_check</span>
+              Revisar solicitudes
+            </button>
+          </div>
+        `);
+      }
+
+      if (isDemo && events.some(e => e.title.includes("Torneo Indautxu"))) {
+        taskCards.push(`
+          <div id="coach-item-torneo-card" class="bg-surface-container-lowest rounded-xl border-l-4 border-l-amber-500 border-y border-r border-outline-variant/70 p-4 space-y-3 shadow-sm">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <span class="font-headline-sm text-headline-sm text-on-surface font-extrabold block">Torneo Indautxu</span>
+                <p id="coach-item-torneo-desc" class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">2 familias todavía no han respondido (Ane Mintegi, Peio Gómez)</p>
+              </div>
+              <span class="font-label-sm text-label-sm font-bold bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full whitespace-nowrap border border-amber-300">
+                Cierra 20:00 h
+              </span>
+            </div>
+            <button onclick="teamApp.goToScreen('v2_05_event_hub_normal', 'agenda')" class="w-full h-[50px] rounded-xl bg-primary-container hover:bg-primary active:scale-[0.98] transition-all text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-[18px]">send</span>
+              Revisar
+            </button>
+          </div>
+        `);
+      }
+
+      const totalTasks = taskCards.length;
+      if (pendingBadge) {
+        pendingBadge.textContent = `${totalTasks} ${totalTasks === 1 ? 'tarea' : 'tareas'}`;
+      }
+
+      const dateAttentionEl = document.getElementById("coach-home-date-attention");
+      if (dateAttentionEl) {
+        const dateStr = isDemo
+          ? "Viernes 18 de Septiembre 2026"
+          : new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const capDateStr = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+        if (totalTasks === 0) {
+          dateAttentionEl.textContent = `${capDateStr} · Todo al día en el equipo`;
+        } else {
+          dateAttentionEl.textContent = `${capDateStr} · ${totalTasks} ${totalTasks === 1 ? 'cosa necesita' : 'cosas necesitan'} tu atención`;
+        }
+      }
+
+      if (pendingContainer) {
+        if (totalTasks === 0) {
+          pendingContainer.innerHTML = `
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/70 shadow-sm p-5 text-center space-y-2">
+              <div class="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <span class="material-symbols-outlined text-[22px]">check_circle</span>
+              </div>
+              <h3 class="font-label-lg text-label-lg font-bold text-on-surface">Todo al día</h3>
+              <p class="font-body-sm text-body-sm text-on-surface-variant">No tienes avisos, bajas ni tareas operativas pendientes.</p>
+            </div>
+          `;
+        } else {
+          pendingContainer.innerHTML = taskCards.join("");
+        }
+      }
+
+      // SECTION 3: 'ESTA SEMANA'
+      const weekContainer = document.getElementById("coach-week-events-container");
+      if (weekContainer) {
+        if (events.length === 0) {
+          weekContainer.innerHTML = `
+            <div class="p-6 text-center space-y-3">
+              <p class="font-body-sm text-body-sm text-on-surface-variant">Aún no hay eventos programados en esta temporada.</p>
+              <button onclick="teamApp.goToScreen('screen_c_create_event', 'agenda')" class="text-xs text-primary font-bold hover:underline cursor-pointer inline-flex items-center gap-1">
+                <span class="material-symbols-outlined text-[16px]">add</span>
+                <span>Programar evento</span>
+              </button>
+            </div>
+          `;
+        } else {
+          weekContainer.innerHTML = events.slice(0, 5).map(e => {
+            const d = new Date(e.starts_at);
+            const dayName = d.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase().slice(0, 3);
+            const dayNum = d.getDate();
+            const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `
+              <div class="p-3.5 flex items-center justify-between border-b border-outline-variant/40 last:border-0 hover:bg-surface-container-low/30 transition-colors cursor-pointer" onclick="teamApp.goToScreen('v2_02_coach_agenda', 'agenda')">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 text-center">
+                    <span class="font-label-sm text-label-sm text-primary font-extrabold block">${dayName}</span>
+                    <span class="font-headline-sm text-headline-sm font-extrabold text-on-surface leading-none">${dayNum}</span>
+                  </div>
+                  <div class="border-l border-outline-variant/50 pl-3">
+                    <span class="font-label-md text-label-md text-on-surface font-bold block">${e.title} · ${timeStr} h</span>
+                    <span class="font-body-sm text-body-sm text-on-surface-variant">${e.location || 'Campo de fútbol'}</span>
+                  </div>
+                </div>
+                <span class="font-label-sm text-label-sm font-bold px-2 py-0.5 rounded bg-surface-container-high text-primary border border-outline-variant/40 whitespace-nowrap">
+                  ${e.type}
+                </span>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+
+      // SECTION 4: 'CAMBIOS RECIENTES'
+      const changesContainer = document.getElementById("coach-recent-changes-container");
+      if (changesContainer) {
+        if (isDemo) {
+          changesContainer.innerHTML = `
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center shrink-0 mt-0.5">
+                <span class="material-symbols-outlined text-[18px]">update</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-body-sm text-body-sm text-on-surface font-medium leading-snug">
+                  El entrenamiento de hoy viernes pasa a las <strong class="text-primary font-bold">18:30 h (+30 min)</strong>.
+                </p>
+                <span class="font-label-sm text-label-sm text-on-surface-variant mt-0.5 block">Hace 1h · Notificado a familias</span>
+              </div>
+            </div>
+            <div class="border-t border-outline-variant/30"></div>
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-full bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center shrink-0 mt-0.5">
+                <span class="material-symbols-outlined text-[18px]">person_cancel</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-body-sm text-body-sm text-on-surface font-medium leading-snug">
+                  <strong class="font-bold text-tertiary">Ibai Aranguren</strong> no puede asistir este fin de semana (nota: está enfermo).
+                </p>
+                <span class="font-label-sm text-label-sm text-on-surface-variant mt-0.5 block">Hace 15 min · Por APP Tutor</span>
+              </div>
+            </div>
+          `;
+        } else if (events.length > 0 || totalPlayers > 0) {
+          changesContainer.innerHTML = `
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 mt-0.5">
+                <span class="material-symbols-outlined text-[18px]">group_add</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-body-sm text-body-sm text-on-surface font-medium leading-snug">
+                  Plantilla actualizada con <strong class="text-primary font-bold">${totalPlayers} deportista${totalPlayers === 1 ? '' : 's'}</strong> en la temporada.
+                </p>
+                <span class="font-label-sm text-label-sm text-on-surface-variant mt-0.5 block">Reciente</span>
+              </div>
+            </div>
+          `;
+        } else {
+          changesContainer.innerHTML = `
+            <div class="py-2 text-center">
+              <span class="font-body-sm text-body-sm text-on-surface-variant">No hay cambios recientes registrados en el equipo.</span>
+            </div>
+          `;
+        }
+      }
+
     } catch (err) {
-      console.warn("Could not sync pending requests in beta mode:", err);
+      console.warn("Could not sync coach home:", err);
+    }
+  }
+
+  selectEventType(type) {
+    this.selectedEventType = type;
+    const types = ["TRAINING", "MATCH", "TOURNAMENT", "OTHER"];
+    types.forEach(t => {
+      const btn = document.getElementById(`event-type-btn-${t.toLowerCase()}`);
+      if (!btn) return;
+      if (t === type) {
+        btn.className = "flex flex-col items-center justify-center py-2 px-1 rounded-lg bg-primary-container text-on-primary shadow-sm transition-all active:scale-[0.98] cursor-pointer";
+        const icon = btn.querySelector(".material-symbols-outlined");
+        if (icon) icon.className = "material-symbols-outlined text-[20px] mb-0.5 text-on-primary";
+        const label = btn.querySelector("span:last-child");
+        if (label) label.className = "font-label-sm text-label-sm font-bold";
+      } else {
+        btn.className = "flex flex-col items-center justify-center py-2 px-1 rounded-lg bg-surface-container-lowest text-on-surface hover:bg-surface-container transition-all active:scale-[0.98] cursor-pointer";
+        const icon = btn.querySelector(".material-symbols-outlined");
+        if (icon) icon.className = "material-symbols-outlined text-[20px] mb-0.5 text-on-surface-variant";
+        const label = btn.querySelector("span:last-child");
+        if (label) label.className = "font-label-sm text-label-sm font-semibold";
+      }
+    });
+  }
+
+  autofillEventTitle() {
+    const titleInput = document.getElementById("event-title");
+    if (!titleInput) return;
+    const type = this.selectedEventType || "TRAINING";
+    if (type === "TRAINING") titleInput.value = "Entrenamiento semanal";
+    else if (type === "MATCH") titleInput.value = "Partido de Liga";
+    else if (type === "TOURNAMENT") titleInput.value = "Torneo Amistoso";
+    else titleInput.value = "Actividad de equipo";
+  }
+
+  async submitCreateEvent() {
+    const isDemo = this.appMode === "DEMO";
+    const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : this.beta.teamSeasonId;
+    if (!activeTeamSeasonId) {
+      this.showToast("No hay temporada activa para registrar el evento.");
+      return;
+    }
+
+    const titleInput = document.getElementById("event-title");
+    const locationInput = document.getElementById("location-input");
+    const notesInput = document.getElementById("event-notes");
+
+    const title = titleInput?.value?.trim() || "Entrenamiento semanal";
+    const location = locationInput?.value?.trim() || "Campo Municipal";
+    const notes = notesInput?.value?.trim() || null;
+    const type = this.selectedEventType || "TRAINING";
+
+    const now = new Date();
+    const startsAt = new Date(now.getTime() + 2 * 3600 * 1000).toISOString();
+    const arrivalAt = new Date(now.getTime() + 1.75 * 3600 * 1000).toISOString();
+
+    const payload = {
+      type,
+      title,
+      startsAt,
+      arrivalAt,
+      location,
+      notes,
+      availabilityEnabled: true,
+      callupEnabled: type !== "TRAINING"
+    };
+
+    try {
+      await this.ensureAuth("coach");
+      const res = await api.events.createEvent(activeTeamSeasonId, payload);
+      this.showToast(`✓ Evento "${res.title}" creado con éxito.`);
+      if (titleInput) titleInput.value = "";
+      if (locationInput) locationInput.value = "";
+      if (notesInput) notesInput.value = "";
+
+      await this.syncCoachHome();
+      await this.goToScreen("v2_01_coach_home", "inicio");
+    } catch (err) {
+      console.error("Error creating event:", err);
+      this.showToast(`Error al crear evento: ${mapDomainError(err)}`);
     }
   }
 

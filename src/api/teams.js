@@ -38,4 +38,8 @@ export class TeamsService {
   async getPlayer(teamSeasonId, playerId) {
     return this.client.get(`/team-seasons/${teamSeasonId}/players/${playerId}`);
   }
+
+  async getPlayers(teamSeasonId) {
+    return this.client.get(`/team-seasons/${teamSeasonId}/players`);
+  }
 }

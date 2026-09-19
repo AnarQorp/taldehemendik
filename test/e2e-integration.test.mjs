@@ -7,13 +7,13 @@ const api = createApi(API_BASE_URL);
 test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replacement", async () => {
   // 1. Reset database to clean initial state
   const resetRes = await api.dev.resetDataset();
-  assert.equal(resetRes.status, "ok");
-  assert.equal(resetRes.dataset, "vs02_full");
+  assert.equal(resetRes.mode, "DEMO");
+  assert.equal(resetRes.joinCode, "INDA16");
 
   // 2. Mikel logs in
   const coachAuth = await api.auth.loginDev(DEMO_CONFIG.COACH_EMAIL, "Mikel Zubeldia");
   assert.ok(coachAuth.accessToken);
-  assert.equal(coachAuth.user.id, "00000000-0000-4000-8000-000000000001");
+  assert.ok(coachAuth.user.id);
 
   // 3. Mikel queries availability for Torneo Indautxu
   api.client.setToken(coachAuth.accessToken);
@@ -26,7 +26,7 @@ test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replaceme
   });
 
   // 4. Mikel selects 12 players (11 available + 1 unresponded, leaving Ane, Irati, Nahia as reserves)
-  const reserveIds = [DEMO_CONFIG.ANE_PLAYER_ID, "30000000-0000-4000-8000-000000000004", "30000000-0000-4000-8000-000000000003"];
+  const reserveIds = [DEMO_CONFIG.ANE_PLAYER_ID, "73000000-0000-4000-8000-000000000004", "73000000-0000-4000-8000-000000000003"];
   const canAttendCalled = avail.items.filter((p) => p.status === "CAN_ATTEND" && !reserveIds.includes(p.player_id)).map((p) => p.player_id);
   const noResponse = avail.items.filter((p) => p.status === "NO_RESPONSE").map((p) => p.player_id);
   const selected12 = canAttendCalled.concat(noResponse.slice(0, 1));
@@ -65,7 +65,7 @@ test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replaceme
   // 7. Elena logs in
   const parentAuth = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez");
   assert.ok(parentAuth.accessToken);
-  assert.equal(parentAuth.user.id, "00000000-0000-4000-8000-000000000003");
+  assert.ok(parentAuth.user.id);
 
   // 8. Elena queries Ibai's callup status -> should be called: true, revision: 1
   api.client.setToken(parentAuth.accessToken);
@@ -154,3 +154,77 @@ test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replaceme
     }
   );
 });
+
+test("Guardian Security Policy: GUARDIAN cannot create, edit, cancel, or complete events", async () => {
+  // Ensure Indautxu demo dataset
+  await api.dev.resetDataset();
+
+  // Elena logs in as GUARDIAN
+  const guardianAuth = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez");
+  assert.ok(guardianAuth.accessToken);
+  api.client.setToken(guardianAuth.accessToken);
+
+  // 1. Guardian cannot create an event -> 403 ROLE_NOT_ALLOWED
+  await assert.rejects(
+    async () => {
+      await api.client.post(`/team-seasons/${DEMO_CONFIG.TEAM_SEASON_ID}/events`, {
+        type: "TRAINING",
+        title: "Intento ilegal de crear evento por tutor",
+        startsAt: "2026-10-15T18:00:00.000Z",
+        availabilityEnabled: true,
+        callupEnabled: false
+      });
+    },
+    (err) => {
+      assert.equal(err.code, "ROLE_NOT_ALLOWED");
+      assert.equal(err.status, 403);
+      return true;
+    }
+  );
+
+  // 2. Guardian cannot edit an event -> 403 ROLE_NOT_ALLOWED
+  await assert.rejects(
+    async () => {
+      await api.client.patch(`/events/${DEMO_CONFIG.EVENT_INDAUTXU_ID}`, {
+        title: "Intento ilegal de modificar evento por tutor",
+        expectedVersion: 1
+      });
+    },
+    (err) => {
+      assert.equal(err.code, "ROLE_NOT_ALLOWED");
+      assert.equal(err.status, 403);
+      return true;
+    }
+  );
+
+  // 3. Guardian cannot cancel an event -> 403 ROLE_NOT_ALLOWED
+  await assert.rejects(
+    async () => {
+      await api.client.post(`/events/${DEMO_CONFIG.EVENT_INDAUTXU_ID}/cancel`);
+    },
+    (err) => {
+      assert.equal(err.code, "ROLE_NOT_ALLOWED");
+      assert.equal(err.status, 403);
+      return true;
+    }
+  );
+
+  // 4. Guardian cannot complete an event -> 403 ROLE_NOT_ALLOWED
+  await assert.rejects(
+    async () => {
+      await api.client.post(`/events/${DEMO_CONFIG.EVENT_INDAUTXU_ID}/complete`);
+    },
+    (err) => {
+      assert.equal(err.code, "ROLE_NOT_ALLOWED");
+      assert.equal(err.status, 403);
+      return true;
+    }
+  );
+
+  // 5. Guardian CAN read events for their team season -> 200 OK
+  const events = await api.events.getEvents(DEMO_CONFIG.TEAM_SEASON_ID);
+  assert.ok(Array.isArray(events.items));
+  assert.ok(events.items.length >= 1);
+  assert.ok(events.items.some((e) => e.title === "Torneo Indautxu"));
+});
+

@@ -367,7 +367,7 @@ export class TeamAppState {
     } else if (membershipId === "indautxu_ale_b" || membershipId === "parent") {
       this.currentRole = "parent";
       await this.ensureAuth("parent");
-      const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_02_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
+      const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_03_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
         ? "v2_07_parent_home"
         : this.currentScreen;
       await this.goToScreen(target, "inicio");
@@ -382,6 +382,21 @@ export class TeamAppState {
   }
 
   async goToScreen(screenId, tab = null) {
+    const coachOnlyScreens = [
+      "screen_c_create_event",
+      "screen_e_create_squad",
+      "v2_01_coach_home",
+      "v2_03_coach_roster",
+      "v2_05_event_hub_normal",
+      "v2_06_event_hub_injury"
+    ];
+    if (this.currentRole === "parent" && coachOnlyScreens.includes(screenId)) {
+      this.showToast("⚠️ Acción restringida: las familias no tienen permisos sobre esta vista.");
+      const select = document.getElementById("demo-screen-select");
+      if (select) select.value = this.currentScreen;
+      return;
+    }
+
     this.currentScreen = screenId;
     if (tab) this.currentTab = tab;
 
@@ -399,6 +414,7 @@ export class TeamAppState {
     if (select) select.value = screenId;
 
     this.updateBottomNav();
+    this.updateRoleUI();
     await this.syncCurrentScreen();
   }
 
@@ -479,6 +495,52 @@ export class TeamAppState {
       btnCoach.className = "px-2 py-1 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-xs transition-all cursor-pointer";
     } else if (this.currentRole === "parent" && btnParent) {
       btnParent.className = "px-2 py-1 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-xs transition-all cursor-pointer";
+    }
+
+    // Role-based visibility for Agenda & Event Management CTAs
+    const createEventBtn = document.getElementById("agenda-create-event-btn");
+    const card1CoachActions = document.getElementById("agenda-card1-coach-actions");
+    const card1ParentActions = document.getElementById("agenda-card1-parent-actions");
+    const card2CoachBanner = document.getElementById("agenda-card2-coach-banner");
+    const card2CoachBtn = document.getElementById("agenda-card2-coach-btn");
+    const card2ParentBtn = document.getElementById("agenda-card2-parent-btn");
+    const card3CoachAction = document.getElementById("agenda-card3-coach-action");
+    const playerDetailCoachBar = document.getElementById("player-detail-coach-bar");
+
+    const isCoach = this.currentRole === "coach";
+    const isParent = this.currentRole === "parent";
+
+    if (createEventBtn) {
+      if (isCoach) createEventBtn.classList.remove("hidden");
+      else createEventBtn.classList.add("hidden");
+    }
+    if (card1CoachActions) {
+      if (isCoach) card1CoachActions.classList.remove("hidden");
+      else card1CoachActions.classList.add("hidden");
+    }
+    if (card1ParentActions) {
+      if (isParent) card1ParentActions.classList.remove("hidden");
+      else card1ParentActions.classList.add("hidden");
+    }
+    if (card2CoachBanner) {
+      if (isCoach) card2CoachBanner.classList.remove("hidden");
+      else card2CoachBanner.classList.add("hidden");
+    }
+    if (card2CoachBtn) {
+      if (isCoach) card2CoachBtn.classList.remove("hidden");
+      else card2CoachBtn.classList.add("hidden");
+    }
+    if (card2ParentBtn) {
+      if (isParent) card2ParentBtn.classList.remove("hidden");
+      else card2ParentBtn.classList.add("hidden");
+    }
+    if (card3CoachAction) {
+      if (isCoach) card3CoachAction.classList.remove("hidden");
+      else card3CoachAction.classList.add("hidden");
+    }
+    if (playerDetailCoachBar) {
+      if (isCoach) playerDetailCoachBar.classList.remove("hidden");
+      else playerDetailCoachBar.classList.add("hidden");
     }
   }
 
@@ -660,9 +722,10 @@ export class TeamAppState {
   }
 
   async syncCoachAgenda() {
-    await this.ensureAuth("coach");
+    await this.ensureAuth(this.currentRole === "parent" ? "parent" : "coach");
     const eventsRes = await api.events.getEvents(DEMO_CONFIG.TEAM_SEASON_ID);
     this.live.events = eventsRes.items || [];
+    this.updateRoleUI();
   }
 
   async syncEventHubNormal() {

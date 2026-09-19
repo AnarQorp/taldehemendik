@@ -7,7 +7,7 @@ const demo={
   ibai:"73000000-0000-4000-8000-000000000001",event:"74000000-0000-4000-8000-000000000001"
 };
 const roster=[
-  [demo.ibai,"Ibai","Aranguren",9],["73000000-0000-4000-8000-000000000002","Ane","Agirre",4],["73000000-0000-4000-8000-000000000003","Nahia","Etxeberria",6],["73000000-0000-4000-8000-000000000004","Irati","López",8],
+  [demo.ibai,"Ibai","Aranguren",9],["73000000-0000-4000-8000-000000000002","Ane","Mintegi",16],["73000000-0000-4000-8000-000000000003","Nahia","Garcia",12],["73000000-0000-4000-8000-000000000004","Irati","Fernandez",15],
   ...Array.from({length:14},(_,i)=>[`73000000-0000-4000-8000-${String(i+5).padStart(12,"0")}`,`Demo${i+5}`,"Indautxu",i+1] as const)
 ] as const;
 
@@ -30,5 +30,11 @@ export async function resetDemoDatabase(db:pg.PoolClient){
   await db.query(`INSERT INTO guardian_links(guardian_user_id,player_id,status) VALUES($1,$2,'ACTIVE'),('70000000-0000-4000-8000-000000000004',$2,'ACTIVE')`,[demo.guardian,demo.ibai]);
   await db.query(`INSERT INTO invitations(team_season_id,player_id,purpose,token_hash,expires_at,created_by_user_id) VALUES($1,NULL,'GUARDIAN_LINK',$2,now()+interval '1 year',$3)`,[demo.season,createHash("sha256").update("INDA16").digest("hex"),demo.coach]);
   await db.query(`INSERT INTO events(id,team_season_id,title,type,starts_at,arrival_at,location,availability_enabled,availability_deadline,callup_enabled,status,created_by_user_id) VALUES($1,$2,'Torneo Indautxu','TOURNAMENT','2026-10-10T08:00:00Z','2026-10-10T07:30:00Z','Polideportivo Municipal Indautxu',true,'2026-10-08T20:00:00Z',true,'ACTIVE',$3)`,[demo.event,demo.season,demo.coach]);
+  for (let i = 0; i < 14; i++) {
+    await db.query(`INSERT INTO availability_responses(event_id, player_id, status, source, actor_user_id, version, updated_at) VALUES($1, $2, 'CAN_ATTEND', 'STAFF_RECORDED', $3, 1, now())`, [demo.event, roster[i][0], demo.coach]);
+  }
+  for (let i = 14; i < 16; i++) {
+    await db.query(`INSERT INTO availability_responses(event_id, player_id, status, source, actor_user_id, version, updated_at) VALUES($1, $2, 'CANNOT_ATTEND', 'STAFF_RECORDED', $3, 1, now())`, [demo.event, roster[i][0], demo.coach]);
+  }
   return {mode:"DEMO",team:{id:demo.team,name:"C.D. Indautxu"},teamSeason:{id:demo.season,displayLabel:"Infantil A",seasonLabel:"2026/27"},players:roster.length,joinCode:"INDA16"};
 }

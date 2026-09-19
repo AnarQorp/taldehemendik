@@ -264,7 +264,7 @@ screens_html["v2_01_coach_home"] = re.sub(
 # --- 2. Screen V2-02: Coach Agenda ---
 screens_html["v2_02_coach_agenda"] = re.sub(
     r'(<button class="[^"]*bg-primary-container[^"]*">\s*<span[^>]*>add</span>\s*<span>Crear evento</span>\s*</button>)',
-    r'<button onclick="teamApp.goToScreen(\'screen_c_create_event\', \'agenda\')" class="h-10 px-3.5 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-xl flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-transform shrink-0 cursor-pointer"><span class="material-symbols-outlined text-[18px]">add</span><span>Crear evento</span></button>',
+    r'<button id="agenda-create-event-btn" onclick="teamApp.goToScreen(\'screen_c_create_event\', \'agenda\')" class="h-10 px-3.5 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-xl flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-transform shrink-0 cursor-pointer"><span class="material-symbols-outlined text-[18px]">add</span><span>Crear evento</span></button>',
     screens_html["v2_02_coach_agenda"],
     count=1
 )
@@ -282,13 +282,13 @@ screens_html["v2_02_coach_agenda"] = re.sub(
 )
 screens_html["v2_02_coach_agenda"] = re.sub(
     r'(<button class="[^"]*bg-primary-container[^"]*">\s*<span[^>]*>manage_accounts</span>\s*<span>Gestionar evento</span>\s*</button>)',
-    r'<button onclick="teamApp.goToScreen(\'v2_06_event_hub_injury\', \'agenda\')" class="h-12 w-full bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform mt-1 cursor-pointer"><span class="material-symbols-outlined text-[20px]">manage_accounts</span><span>Gestionar evento</span></button>',
+    r'<button id="agenda-card2-coach-btn" onclick="teamApp.goToScreen(\'v2_06_event_hub_injury\', \'agenda\')" class="h-12 w-full bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform mt-1 cursor-pointer"><span class="material-symbols-outlined text-[20px]">manage_accounts</span><span>Gestionar evento</span></button><button id="agenda-card2-parent-btn" onclick="teamApp.goToScreen(\'v2_08_parent_rsvp\', \'agenda\')" class="hidden h-12 w-full bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-transform mt-1 cursor-pointer"><span class="material-symbols-outlined text-[20px]">how_to_reg</span><span>Ver convocatoria y responder</span></button>',
     screens_html["v2_02_coach_agenda"],
     count=1
 )
 screens_html["v2_02_coach_agenda"] = re.sub(
     r'(<button class="[^"]*bg-surface-container-high[^"]*">\s*<span[^>]*>campaign</span>\s*<span>Recordar a familias</span>\s*</button>)',
-    r'<button onclick="teamApp.showToast(\'🔔 Recordatorio de respuestas enviado a las familias para el lunes.\')" class="h-11 w-full bg-surface-container-high hover:bg-surface-container text-primary font-label-md text-label-md rounded-xl flex items-center justify-center gap-2 border border-outline-variant/50 active:scale-[0.98] transition-transform cursor-pointer"><span class="material-symbols-outlined text-[18px]">campaign</span><span>Recordar a familias</span></button>',
+    r'<button id="agenda-card3-coach-action" onclick="teamApp.showToast(\'🔔 Recordatorio de respuestas enviado a las familias para el lunes.\')" class="h-11 w-full bg-surface-container-high hover:bg-surface-container text-primary font-label-md text-label-md rounded-xl flex items-center justify-center gap-2 border border-outline-variant/50 active:scale-[0.98] transition-transform cursor-pointer"><span class="material-symbols-outlined text-[18px]">campaign</span><span>Recordar a familias</span></button>',
     screens_html["v2_02_coach_agenda"],
     count=1
 )

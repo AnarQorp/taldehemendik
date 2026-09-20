@@ -145,6 +145,91 @@
     </div>
   </div>
 
+  <!-- Modal de alta de deportista en plantilla activa -->
+  <div id="modal-add-player" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white text-slate-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[20px]">person_add</span>
+          </div>
+          <h3 class="text-base font-bold text-slate-900">Añadir a la plantilla</h3>
+        </div>
+        <button type="button" onclick="teamApp.closeAddPlayerModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1" for="modal-player-firstname">Nombre *</label>
+          <input id="modal-player-firstname" type="text" placeholder="Ej: Mikel" class="w-full h-10 px-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1" for="modal-player-lastname">Apellidos *</label>
+          <input id="modal-player-lastname" type="text" placeholder="Ej: Vesga" class="w-full h-10 px-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"/>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1" for="modal-player-number">Dorsal</label>
+            <input id="modal-player-number" type="number" placeholder="Ej: 6" class="w-full h-10 px-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"/>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1" for="modal-player-position">Posición</label>
+            <input id="modal-player-position" type="text" placeholder="Ej: Centrocampista" class="w-full h-10 px-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-2">
+        <button type="button" onclick="teamApp.closeAddPlayerModal()" class="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer">
+          Cancelar
+        </button>
+        <button id="modal-btn-save-player" type="button" onclick="teamApp.saveNewPlayerFromRoster()" class="h-10 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1">
+          <span class="material-symbols-outlined text-[16px]">save</span>
+          <span>Guardar deportista</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de invitación individual de familia -->
+  <div id="modal-player-invite" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white text-slate-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center">
+            <span class="material-symbols-outlined text-[20px]">send</span>
+          </div>
+          <h3 id="modal-invite-title" class="text-base font-bold text-slate-900">Invitar familia</h3>
+        </div>
+        <button type="button" onclick="teamApp.closePlayerInviteModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Comparte este enlace directo con la familia del deportista. Al abrirlo, el tutor se identifica de forma segura sin requerir códigos ni exponer datos previos del menor:
+        </p>
+        <div class="relative">
+          <input id="modal-invite-link-input" type="text" readonly class="w-full bg-slate-900 text-emerald-400 font-mono text-xs p-3 rounded-xl border-0 select-all"/>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <button id="modal-btn-copy-invite-link" type="button" onclick="teamApp.copyInviteLinkFromModal()" class="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px]">content_copy</span>
+          <span id="modal-copy-link-text">Copiar enlace</span>
+        </button>
+        <button id="modal-btn-open-invite-link" type="button" onclick="teamApp.openInviteLinkFromModal()" class="h-10 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px]">open_in_new</span>
+          <span>Abrir enlace</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================================================== -->
   <!-- DEMO TOOLBAR & GUIDED TOUR (Ocultos por defecto, visibles con ?demo=1 o botón) -->
   <!-- ======================================================== -->
@@ -839,8 +924,29 @@
   </p>
 </div>
 
-<!-- SECCIÓN 1: Código de invitación & Club Localizado -->
-<section aria-labelledby="section-team-title" class="space-y-space-sm">
+<!-- SECCIÓN 1A: Invitación Individual Directa (Activa cuando se abre con ?inviteToken=...) -->
+<section id="parent-individual-invite-banner" class="hidden p-4 bg-emerald-500/10 border-2 border-emerald-500/40 rounded-2xl space-y-2.5 shadow-sm">
+  <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-emerald-800">
+    <span class="material-symbols-outlined text-[18px] text-emerald-600">how_to_reg</span>
+    <span>Invitación individual de club</span>
+  </div>
+  <div class="flex items-center gap-3">
+    <div id="parent-individual-team-crest" class="w-12 h-12 rounded-xl bg-primary-container text-on-primary flex items-center justify-center font-headline-sm text-headline-sm font-extrabold shadow-sm ring-2 ring-primary-fixed shrink-0">
+      TH
+    </div>
+    <div class="flex-1 min-w-0">
+      <h2 id="parent-individual-team-title" class="font-headline-sm text-headline-sm text-on-surface truncate">Equipo Localizado</h2>
+      <p id="parent-individual-team-sub" class="font-body-sm text-body-sm text-on-surface-variant font-medium">Temporada Oficial · Invitación Individual</p>
+    </div>
+  </div>
+  <div class="border-t border-emerald-500/20 pt-2 text-emerald-900 text-xs flex items-center gap-1.5">
+    <span class="material-symbols-outlined text-[16px] text-emerald-700">shield</span>
+    <span>Por privacidad del menor, no se exponen datos personales antes de la vinculación.</span>
+  </div>
+</section>
+
+<!-- SECCIÓN 1B: Código general de equipo (Mecanismo de respaldo) -->
+<section id="parent-general-code-section" aria-labelledby="section-team-title" class="space-y-space-sm">
 <div class="flex items-center justify-between">
 <label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5" id="section-team-title">
 <span class="material-symbols-outlined text-[18px] text-primary" data-icon="vpn_key">vpn_key</span>
@@ -850,8 +956,8 @@
 </div>
 <!-- Input verificado -->
 <div class="relative flex items-center gap-2">
-<input id="parent-join-code-input" class="w-full h-[50px] bg-surface-container-lowest border-2 border-secondary rounded-xl px-4 font-headline-sm text-headline-sm tracking-widest text-on-surface uppercase focus:outline-none focus:ring-0" type="text" placeholder="Código o token..." value=""/>
-<button id="parent-btn-check-code" onclick="teamApp.verifyParentJoinInput()" class="h-[50px] px-3.5 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs shrink-0 cursor-pointer" type="button">Comprobar</button>
+<input id="parent-join-code-input" class="w-full h-[50px] bg-surface-container-lowest border-2 border-secondary rounded-xl px-4 font-headline-sm text-headline-sm tracking-widest text-on-surface uppercase focus:outline-none focus:ring-0" type="text" placeholder="CÓDIGO DE EQUIPO (EJ: BARA12)" value=""/>
+<button id="parent-btn-check-code" onclick="teamApp.verifyGeneralJoinCode()" class="h-[50px] px-3.5 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs shrink-0 cursor-pointer" type="button">Comprobar</button>
 <div id="parent-code-valid-badge" class="hidden absolute right-28 flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-fixed/40 text-on-secondary-container font-label-sm text-label-sm font-bold border border-secondary/30">
 <span class="material-symbols-outlined material-symbols-fill text-[16px] text-secondary" data-icon="check_circle">check_circle</span>
 <span>Válido</span>
@@ -1527,7 +1633,7 @@
 <h1 class="font-headline-md text-headline-md text-on-surface">Plantilla del equipo</h1>
 <p id="roster-header-count" class="font-body-sm text-body-sm text-on-surface-variant">18 jugadores inscritos</p>
 </div>
-<button onclick="teamApp.goToScreen('v2_01_coach_home', 'inicio'); setTimeout(() => { document.getElementById('coach-roster-management-section')?.scrollIntoView({behavior: 'smooth'}); }, 100);" class="h-10 px-3.5 rounded-lg bg-primary-container text-on-primary flex items-center gap-1.5 font-label-md text-label-md shadow-sm active:scale-[0.98] transition-transform cursor-pointer" type="button">
+<button id="roster-add-player-btn" onclick="teamApp.openAddPlayerModal()" class="h-10 px-3.5 rounded-lg bg-primary-container text-on-primary flex items-center gap-1.5 font-label-md text-label-md shadow-sm active:scale-[0.98] transition-transform cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[18px]">person_add</span>
 <span>Añadir</span>
 </button>
@@ -1593,7 +1699,7 @@
     <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">No hay jugadores inscritos</h3>
     <p class="font-body-sm text-body-sm text-on-surface-variant max-w-xs mx-auto">Añade deportistas a la plantilla para comenzar a convocar y vincular familias.</p>
   </div>
-  <button onclick="teamApp.goToScreen('v2_01_coach_home', 'inicio'); setTimeout(() => { document.getElementById('coach-roster-management-section')?.scrollIntoView({behavior: 'smooth'}); }, 100);" class="mt-2 h-10 px-4 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-xl flex items-center gap-2 shadow-sm cursor-pointer">
+  <button id="roster-empty-add-player-btn" onclick="teamApp.openAddPlayerModal()" class="mt-2 h-10 px-4 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-xl flex items-center gap-2 shadow-sm cursor-pointer">
     <span class="material-symbols-outlined text-[18px]">person_add</span>
     <span>Añadir primer deportista</span>
   </button>

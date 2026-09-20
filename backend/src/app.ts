@@ -123,7 +123,7 @@ export async function buildApp(options: BuildOptions = {}) {
 
   app.get("/v1/me/memberships",async(request)=>{
     const {userId}=await actor(request);
-    const result=await pool.query(`SELECT m.id,m.role,m.status,m.created_at,ts.id team_season_id,ts.season_label,ts.category,ts.display_label,ts.status team_season_status,t.id team_id,t.name team_name,t.sport FROM memberships m JOIN team_seasons ts ON ts.id=m.team_season_id JOIN teams t ON t.id=ts.team_id WHERE m.user_id=$1 AND m.status='ACTIVE' ORDER BY t.name,ts.season_label`,[userId]);
+    const result=await pool.query(`SELECT m.id,m.role,m.status,m.created_at,ts.id team_season_id,ts.season_label,ts.category,ts.display_label,ts.status team_season_status,ts.join_code,t.id team_id,t.name team_name,t.sport FROM memberships m JOIN team_seasons ts ON ts.id=m.team_season_id JOIN teams t ON t.id=ts.team_id WHERE m.user_id=$1 AND m.status='ACTIVE' ORDER BY t.name,ts.season_label`,[userId]);
     return {items:result.rows};
   });
 

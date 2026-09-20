@@ -296,10 +296,17 @@ export class TeamAppState {
         if (coachCodeSection) coachCodeSection.classList.remove("hidden");
         if (rosterMgmtSection) rosterMgmtSection.classList.remove("hidden");
 
-        if (localStorage.getItem("talde_join_code")) {
-          this.beta.joinCode = localStorage.getItem("talde_join_code");
+        this.beta.joinCode = coachMem.join_code || localStorage.getItem("talde_join_code");
+        if (this.beta.joinCode) {
+          localStorage.setItem("talde_join_code", this.beta.joinCode);
           const codeDisplay = document.getElementById("coach-code-display");
           if (codeDisplay) codeDisplay.textContent = this.beta.joinCode;
+        }
+        const urlParams = new URLSearchParams(window.location.search);
+        const screenParam = urlParams.get("screen");
+        if (!screenParam && (this.currentScreen === "beta_entry_screen" || this.currentScreen === "v2_00_onboarding_welcome")) {
+          const lastScreen = localStorage.getItem("talde_last_screen");
+          this.currentScreen = (lastScreen && document.getElementById(lastScreen)) ? lastScreen : "v2_01_coach_home";
         }
         if (localStorage.getItem("talde_players")) {
           try {
@@ -399,6 +406,7 @@ export class TeamAppState {
 
     this.currentScreen = screenId;
     if (tab) this.currentTab = tab;
+    try { localStorage.setItem("talde_last_screen", screenId); } catch {}
 
     const allScreens = document.querySelectorAll(".app-screen-view");
     allScreens.forEach(s => s.classList.add("hidden"));

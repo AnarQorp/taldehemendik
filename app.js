@@ -266,7 +266,40 @@ export class TeamAppState {
   async loadUserContext() {
     if (this.appMode === "DEMO") return;
     try {
-      const activeToken = this.tokens.coach || this.tokens.parent || api.client.getToken() || localStorage.getItem("talde_token_coach") || localStorage.getItem("talde_token_parent");
+      const activeRole = localStorage.getItem("talde_active_role") || this.currentRole || "coach";
+      const coachToken = this.tokens.coach || localStorage.getItem("talde_token_coach");
+      const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
+
+      if (activeRole === "parent" && parentToken) {
+        api.client.setToken(parentToken);
+        this.tokens.parent = parentToken;
+        const res = await api.teams.getMyMemberships();
+        const items = res?.items || [];
+        const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
+        if (guardianMem) {
+          this.currentRole = "parent";
+          this.beta.teamSeasonId = guardianMem.team_season_id;
+          this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
+          this.beta.teamSeason = {
+            id: guardianMem.team_season_id,
+            display_label: guardianMem.display_label,
+            season_label: guardianMem.season_label,
+            category: guardianMem.category
+          };
+          this.beta.guardianPlayers = guardianMem.guardian_players || [];
+          this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+
+          const urlParams = new URLSearchParams(window.location.search);
+          const screenParam = urlParams.get("screen");
+          if (!screenParam) {
+            const lastScreen = localStorage.getItem("talde_last_screen");
+            this.currentScreen = (lastScreen && lastScreen.startsWith("v2_07_")) ? lastScreen : "v2_07_parent_home";
+          }
+          return;
+        }
+      }
+
+      const activeToken = coachToken || parentToken || api.client.getToken();
       if (!activeToken) return;
       api.client.setToken(activeToken);
       const res = await api.teams.getMyMemberships();
@@ -322,7 +355,15 @@ export class TeamAppState {
         this.currentRole = "parent";
         this.tokens.parent = activeToken;
         this.beta.teamSeasonId = guardianMem.team_season_id;
-        this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name };
+        this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
+        this.beta.teamSeason = {
+          id: guardianMem.team_season_id,
+          display_label: guardianMem.display_label,
+          season_label: guardianMem.season_label,
+          category: guardianMem.category
+        };
+        this.beta.guardianPlayers = guardianMem.guardian_players || [];
+        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
       }
     } catch (err) {
       console.warn("loadUserContext deferred or no active session:", err);
@@ -343,18 +384,35 @@ export class TeamAppState {
   }
 
   async ensureAuth(role) {
+    if (this.appMode === "DEMO") {
+      if (role === "coach") {
+        if (!this.tokens.coach) {
+          const res = await api.auth.loginDev(DEMO_CONFIG.COACH_EMAIL, "Mikel Zubeldia");
+          this.tokens.coach = res.accessToken;
+        }
+        api.client.setToken(this.tokens.coach);
+      } else if (role === "parent") {
+        if (!this.tokens.parent) {
+          const res = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez");
+          this.tokens.parent = res.accessToken;
+        }
+        api.client.setToken(this.tokens.parent);
+      }
+      return;
+    }
+
     if (role === "coach") {
-      if (!this.tokens.coach) {
-        const res = await api.auth.loginDev(DEMO_CONFIG.COACH_EMAIL, "Mikel Zubeldia");
-        this.tokens.coach = res.accessToken;
+      const token = this.tokens.coach || localStorage.getItem("talde_token_coach");
+      if (token) {
+        this.tokens.coach = token;
+        api.client.setToken(token);
       }
-      api.client.setToken(this.tokens.coach);
     } else if (role === "parent") {
-      if (!this.tokens.parent) {
-        const res = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez");
-        this.tokens.parent = res.accessToken;
+      const token = this.tokens.parent || localStorage.getItem("talde_token_parent");
+      if (token) {
+        this.tokens.parent = token;
+        api.client.setToken(token);
       }
-      api.client.setToken(this.tokens.parent);
     }
   }
 
@@ -365,20 +423,22 @@ export class TeamAppState {
       this.showToast("Modo Acceso Inicial / Onboarding");
     } else if (membershipId === "indautxu_inf_a" || membershipId === "coach") {
       this.currentRole = "coach";
+      localStorage.setItem("talde_active_role", "coach");
       await this.ensureAuth("coach");
       const target = (this.currentScreen.startsWith("v2_07_") || this.currentScreen.startsWith("v2_08_") || this.currentScreen.startsWith("v2_00_"))
         ? "v2_01_coach_home"
         : this.currentScreen;
       await this.goToScreen(target, "inicio");
-      this.showToast("Modo Entrenador: Mikel Zubeldia (Sesión autenticada)");
+      this.showToast(this.appMode === "DEMO" ? "Modo Entrenador: Mikel Zubeldia (Sesión autenticada)" : "Modo Entrenador (Sesión BETA)");
     } else if (membershipId === "indautxu_ale_b" || membershipId === "parent") {
       this.currentRole = "parent";
+      localStorage.setItem("talde_active_role", "parent");
       await this.ensureAuth("parent");
       const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_03_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
         ? "v2_07_parent_home"
         : this.currentScreen;
       await this.goToScreen(target, "inicio");
-      this.showToast("Modo Familia: Elena Gómez / Ibai #9 (Sesión autenticada)");
+      this.showToast(this.appMode === "DEMO" ? "Modo Familia: Elena Gómez / Ibai #9 (Sesión autenticada)" : "Modo Familia (Sesión BETA)");
     }
     this.updateRoleUI();
     this.updateBottomNav();
@@ -416,6 +476,17 @@ export class TeamAppState {
       target.classList.remove("hidden");
       const viewport = document.getElementById("phone-viewport");
       if (viewport) viewport.scrollTop = 0;
+    }
+
+    if (screenId === "screen_c_create_event") {
+      const dateEl = document.getElementById("event-date");
+      if (dateEl && !dateEl.value) {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        dateEl.value = `${yyyy}-${mm}-${dd}`;
+      }
     }
 
     const select = document.getElementById("demo-screen-select");
@@ -600,6 +671,10 @@ export class TeamAppState {
         await this.syncCoachHome();
       } else if (this.currentScreen === "v2_02_coach_agenda") {
         await this.syncCoachAgenda();
+      } else if (this.currentScreen === "v2_03_coach_roster") {
+        await this.syncCoachRoster();
+      } else if (this.currentScreen === "screen_k_notices") {
+        await this.syncNotices();
       } else if (this.currentScreen === "v2_05_event_hub_normal") {
         await this.syncEventHubNormal();
       } else if (this.currentScreen === "v2_06_event_hub_injury") {
@@ -1063,15 +1138,36 @@ export class TeamAppState {
     const titleInput = document.getElementById("event-title");
     const locationInput = document.getElementById("location-input");
     const notesInput = document.getElementById("event-notes");
+    const dateInput = document.getElementById("event-date");
+    const timeInput = document.getElementById("event-time");
+    const arrivalInput = document.getElementById("event-arrival");
 
     const title = titleInput?.value?.trim() || "Entrenamiento semanal";
     const location = locationInput?.value?.trim() || "Campo Municipal";
     const notes = notesInput?.value?.trim() || null;
     const type = this.selectedEventType || "TRAINING";
 
-    const now = new Date();
-    const startsAt = new Date(now.getTime() + 2 * 3600 * 1000).toISOString();
-    const arrivalAt = new Date(now.getTime() + 1.75 * 3600 * 1000).toISOString();
+    let startsAtDate;
+    if (dateInput?.value && timeInput?.value) {
+      const [year, month, day] = dateInput.value.split("-").map(Number);
+      const [hours, minutes] = timeInput.value.split(":").map(Number);
+      startsAtDate = new Date(year, month - 1, day, hours, minutes, 0);
+    } else {
+      const now = new Date();
+      startsAtDate = new Date(now.getTime() + 2 * 3600 * 1000);
+    }
+
+    let arrivalAtDate;
+    if (dateInput?.value && arrivalInput?.value) {
+      const [year, month, day] = dateInput.value.split("-").map(Number);
+      const [arrHours, arrMinutes] = arrivalInput.value.split(":").map(Number);
+      arrivalAtDate = new Date(year, month - 1, day, arrHours, arrMinutes, 0);
+    } else {
+      arrivalAtDate = new Date(startsAtDate.getTime() - 15 * 60 * 1000);
+    }
+
+    const startsAt = startsAtDate.toISOString();
+    const arrivalAt = arrivalAtDate.toISOString();
 
     const payload = {
       type,
@@ -1101,10 +1197,290 @@ export class TeamAppState {
   }
 
   async syncCoachAgenda() {
-    await this.ensureAuth(this.currentRole === "parent" ? "parent" : "coach");
-    const eventsRes = await api.events.getEvents(DEMO_CONFIG.TEAM_SEASON_ID);
-    this.live.events = eventsRes.items || [];
-    this.updateRoleUI();
+    const isDemo = this.appMode === "DEMO";
+    const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : this.beta.teamSeasonId;
+
+    const teamTitleEl = document.getElementById("agenda-team-title");
+    const seasonLabelEl = document.getElementById("agenda-season-label");
+    const crestEl = document.getElementById("agenda-team-crest");
+    const emptyContainer = document.getElementById("agenda-empty-container");
+    const eventsContainer = document.getElementById("agenda-events-container");
+    const statsWidget = document.getElementById("agenda-weekly-stats-widget");
+    const createBtn = document.getElementById("agenda-create-event-btn");
+    const emptyCreateBtn = document.getElementById("agenda-empty-create-btn");
+
+    const isGuardian = this.currentRole === "parent";
+    if (createBtn) createBtn.classList.toggle("hidden", isGuardian);
+    if (emptyCreateBtn) emptyCreateBtn.classList.toggle("hidden", isGuardian);
+
+    if (isDemo) {
+      if (teamTitleEl) teamTitleEl.textContent = "C.D. Indautxu · Infantil A";
+      if (seasonLabelEl) seasonLabelEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Temporada 2026/27`;
+      if (crestEl) crestEl.textContent = "IN";
+      if (emptyContainer) emptyContainer.classList.add("hidden");
+      if (statsWidget) statsWidget.classList.remove("hidden");
+      if (eventsContainer) {
+        eventsContainer.classList.remove("hidden");
+        if (this._demoAgendaHtml) {
+          eventsContainer.innerHTML = this._demoAgendaHtml;
+        } else {
+          this._demoAgendaHtml = eventsContainer.innerHTML;
+        }
+      }
+      return;
+    }
+
+    // BETA_NORMAL
+    if (eventsContainer && !this._demoAgendaHtml) {
+      this._demoAgendaHtml = eventsContainer.innerHTML;
+    }
+
+    if (teamTitleEl) {
+      teamTitleEl.textContent = `${this.beta.team?.name || 'Equipo'} · ${this.beta.teamSeason?.display_label || 'Categoría'}`;
+    }
+    if (seasonLabelEl) {
+      seasonLabelEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Temporada ${this.beta.teamSeason?.season_label || '2026/27'}`;
+    }
+    if (crestEl) {
+      crestEl.textContent = (this.beta.team?.name || 'EQ').slice(0, 2).toUpperCase();
+    }
+
+    if (!activeTeamSeasonId) {
+      if (emptyContainer) emptyContainer.classList.remove("hidden");
+      if (eventsContainer) eventsContainer.classList.add("hidden");
+      if (statsWidget) statsWidget.classList.add("hidden");
+      return;
+    }
+
+    try {
+      await this.ensureAuth(isGuardian ? "parent" : "coach");
+      const eventsRes = await api.events.getEvents(activeTeamSeasonId);
+      const events = eventsRes?.items || [];
+      this.live.events = events;
+
+      if (events.length === 0) {
+        if (emptyContainer) emptyContainer.classList.remove("hidden");
+        if (eventsContainer) eventsContainer.classList.add("hidden");
+        if (statsWidget) statsWidget.classList.add("hidden");
+      } else {
+        if (emptyContainer) emptyContainer.classList.add("hidden");
+        if (statsWidget) statsWidget.classList.add("hidden");
+        if (eventsContainer) {
+          eventsContainer.classList.remove("hidden");
+          eventsContainer.innerHTML = events.map(ev => {
+            const d = new Date(ev.starts_at);
+            const dateFormatted = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+            const timeFormatted = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            let arrivalFormatted = '';
+            if (ev.arrival_at) {
+              const arrD = new Date(ev.arrival_at);
+              arrivalFormatted = ` (Citación: ${arrD.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}h)`;
+            }
+            const typeLabel = ev.type === 'MATCH' ? 'Partido' : (ev.type === 'TOURNAMENT' ? 'Torneo' : 'Entrenamiento');
+            return `
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between px-0.5">
+                  <div class="flex items-center gap-2">
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+                    <h2 class="font-label-lg text-label-lg text-on-surface tracking-wide uppercase capitalize">${dateFormatted}</h2>
+                  </div>
+                  <span class="font-label-sm text-label-sm bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-md font-bold">
+                    ${typeLabel}
+                  </span>
+                </div>
+                <article class="bg-surface-container-lowest rounded-2xl border border-outline-variant/80 p-4 shadow-sm flex flex-col gap-3.5 transition-all">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="font-label-sm text-label-sm bg-surface-container text-primary font-bold px-2 py-0.5 rounded">
+                          ${typeLabel}
+                        </span>
+                      </div>
+                      <h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">${ev.title}</h3>
+                    </div>
+                    <span class="material-symbols-outlined text-outline">fitness_center</span>
+                  </div>
+                  <div class="bg-surface-bright rounded-xl p-3 border border-outline-variant/40 flex flex-col gap-2 text-body-sm font-body-sm text-on-surface">
+                    <div class="flex items-center gap-2.5">
+                      <span class="material-symbols-outlined text-primary text-[18px]">schedule</span>
+                      <span><strong>${timeFormatted}</strong> <span class="text-on-surface-variant font-normal">${arrivalFormatted}</span></span>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                      <span class="material-symbols-outlined text-primary text-[18px]">location_on</span>
+                      <span class="text-on-surface-variant">${ev.location || 'Campo de juego'}</span>
+                    </div>
+                    ${ev.notes ? `
+                    <div class="flex items-center gap-2.5 text-xs text-on-surface-variant italic">
+                      <span class="material-symbols-outlined text-outline text-[16px]">notes</span>
+                      <span>${ev.notes}</span>
+                    </div>` : ''}
+                  </div>
+                </article>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    } catch (err) {
+      console.warn("Error syncing agenda:", err);
+    }
+  }
+
+  async syncCoachRoster() {
+    const isDemo = this.appMode === "DEMO";
+    const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : this.beta.teamSeasonId;
+
+    const teamTitleEl = document.getElementById("roster-team-title");
+    const seasonLabelEl = document.getElementById("roster-season-label");
+    const crestEl = document.getElementById("roster-team-crest");
+    const headerCount = document.getElementById("roster-header-count");
+    const listCount = document.getElementById("roster-list-count");
+    const countAll = document.getElementById("roster-count-all");
+    const countDisp = document.getElementById("roster-count-disp");
+    const countCallup = document.getElementById("roster-count-callup");
+    const countBaja = document.getElementById("roster-count-baja");
+    const summaryText = document.getElementById("roster-summary-text");
+    const statusSubtext = document.getElementById("roster-status-subtext");
+    const emptyContainer = document.getElementById("roster-empty-container");
+    const listContainer = document.getElementById("roster-players-list-container");
+    const staffBar = document.getElementById("roster-staff-bar");
+
+    if (isDemo) {
+      if (teamTitleEl) teamTitleEl.textContent = "C.D. Indautxu · Infantil A";
+      if (seasonLabelEl) seasonLabelEl.textContent = "Temporada 2026/27 · C.D. Indautxu Cantera";
+      if (crestEl) crestEl.innerHTML = `<span class="tracking-tight text-sm">IN</span>`;
+      if (headerCount) headerCount.textContent = "18 jugadores inscritos";
+      if (listCount) listCount.textContent = "18 jugadores";
+      if (countAll) countAll.textContent = "18";
+      if (countDisp) countDisp.textContent = "15";
+      if (countCallup) countCallup.textContent = "11";
+      if (countBaja) countBaja.textContent = "1";
+      if (summaryText) summaryText.textContent = "18 Jugadores · 2 Entrenadores";
+      if (statusSubtext) statusSubtext.textContent = "Plantilla al día (18 jugadores)";
+      if (staffBar) staffBar.classList.remove("hidden");
+      if (emptyContainer) emptyContainer.classList.add("hidden");
+      if (listContainer) {
+        listContainer.classList.remove("hidden");
+        if (this._demoRosterHtml) {
+          listContainer.innerHTML = this._demoRosterHtml;
+        } else {
+          this._demoRosterHtml = listContainer.innerHTML;
+        }
+      }
+      return;
+    }
+
+    // BETA_NORMAL
+    if (listContainer && !this._demoRosterHtml) {
+      this._demoRosterHtml = listContainer.innerHTML;
+    }
+
+    if (teamTitleEl) {
+      teamTitleEl.textContent = `${this.beta.team?.name || 'Equipo'} · ${this.beta.teamSeason?.display_label || 'Categoría'}`;
+    }
+    if (seasonLabelEl) {
+      seasonLabelEl.textContent = `Temporada ${this.beta.teamSeason?.season_label || '2026/27'}`;
+    }
+    if (crestEl) {
+      crestEl.innerHTML = `<span class="tracking-tight text-sm">${(this.beta.team?.name || 'EQ').slice(0, 2).toUpperCase()}</span>`;
+    }
+    if (staffBar) {
+      staffBar.classList.add("hidden");
+    }
+
+    if (!activeTeamSeasonId) {
+      if (emptyContainer) emptyContainer.classList.remove("hidden");
+      if (listContainer) listContainer.classList.add("hidden");
+      if (headerCount) headerCount.textContent = "0 jugadores inscritos";
+      if (listCount) listCount.textContent = "0 jugadores";
+      if (countAll) countAll.textContent = "0";
+      if (countDisp) countDisp.textContent = "0";
+      if (countCallup) countCallup.textContent = "0";
+      if (countBaja) countBaja.textContent = "0";
+      return;
+    }
+
+    try {
+      await this.ensureAuth("coach");
+      const playersRes = await api.teams.getPlayers(activeTeamSeasonId);
+      const players = playersRes?.items || [];
+      const total = players.length;
+
+      if (headerCount) headerCount.textContent = `${total} ${total === 1 ? 'jugador inscrito' : 'jugadores inscritos'}`;
+      if (listCount) listCount.textContent = `${total} ${total === 1 ? 'jugador' : 'jugadores'}`;
+      if (countAll) countAll.textContent = `${total}`;
+      if (countDisp) countDisp.textContent = `${total}`;
+      if (countCallup) countCallup.textContent = "0";
+      if (countBaja) countBaja.textContent = "0";
+      if (summaryText) summaryText.textContent = `${total} ${total === 1 ? 'Jugador' : 'Jugadores'} · Cuerpo Técnico`;
+      if (statusSubtext) statusSubtext.textContent = total === 0 ? "Sin jugadores registrados" : `Plantilla al día (${total} ${total === 1 ? 'jugador' : 'jugadores'})`;
+
+      if (total === 0) {
+        if (emptyContainer) emptyContainer.classList.remove("hidden");
+        if (listContainer) listContainer.classList.add("hidden");
+      } else {
+        if (emptyContainer) emptyContainer.classList.add("hidden");
+        if (listContainer) {
+          listContainer.classList.remove("hidden");
+          listContainer.innerHTML = players.map(p => {
+            const num = p.shirt_number !== null && p.shirt_number !== undefined ? `#${p.shirt_number}` : '-';
+            const pos = p.position || 'Deportista';
+            return `
+              <article class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-3 shadow-sm flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-11 h-11 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-bold text-sm shrink-0">
+                    <span>${num}</span>
+                  </div>
+                  <div class="truncate">
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-label-lg text-label-lg text-on-surface truncate font-bold">${p.first_name} ${p.last_name}</span>
+                    </div>
+                    <p class="font-body-sm text-body-sm text-outline mb-1">${pos}</p>
+                    <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                      <span class="font-label-sm text-label-sm font-bold">En regla</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button onclick="teamApp.generatePlayerInvite('${p.id}')" class="px-2.5 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-primary font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer">
+                    <span class="material-symbols-outlined text-[16px]">share</span>
+                    <span>Invitar</span>
+                  </button>
+                </div>
+              </article>
+            `;
+          }).join('');
+        }
+      }
+    } catch (err) {
+      console.warn("Error syncing roster:", err);
+    }
+  }
+
+  async syncNotices() {
+    const isDemo = this.appMode === "DEMO";
+    const teamTitle = document.getElementById("notices-team-title");
+    const badgeCount = document.getElementById("notices-badge-count");
+    const badgePill = document.getElementById("notices-badge-pill");
+    const emptyContainer = document.getElementById("notices-empty-container");
+    const feedContainer = document.getElementById("notices-feed-container");
+
+    if (isDemo) {
+      if (teamTitle) teamTitle.textContent = "C.D. Indautxu · Infantil A";
+      if (badgeCount) badgeCount.textContent = "1 nuevo";
+      if (badgePill) badgePill.classList.remove("hidden");
+      if (emptyContainer) emptyContainer.classList.add("hidden");
+      if (feedContainer) feedContainer.classList.remove("hidden");
+      return;
+    }
+
+    // BETA_NORMAL: Authentically empty
+    if (teamTitle) teamTitle.textContent = `${this.beta.team?.name || 'Equipo'}`;
+    if (badgeCount) badgeCount.textContent = "0 avisos";
+    if (badgePill) badgePill.classList.add("hidden");
+    if (emptyContainer) emptyContainer.classList.remove("hidden");
+    if (feedContainer) feedContainer.classList.add("hidden");
   }
 
   async syncEventHubNormal() {
@@ -1269,20 +1645,106 @@ export class TeamAppState {
     // Clean BETA mode
     if (this.tokens.parent) api.client.setToken(this.tokens.parent);
     try {
-      const playerId = this.beta.linkedPlayerId || localStorage.getItem("talde_linked_player_id");
-      if (this.beta.teamSeasonId && playerId) {
-        const player = await api.teams.getPlayer(this.beta.teamSeasonId, playerId);
-        this.beta.guardianPlayer = player;
-        const nameEl = document.getElementById("parent-home-player-name");
-        if (nameEl) nameEl.textContent = `${player.first_name} ${player.last_name}`;
-        const teamEl = document.getElementById("parent-home-team-name");
-        if (teamEl && this.beta.team) teamEl.textContent = `${this.beta.team.name} · ${this.beta.teamSeason?.display_label || 'Temporada'}`;
-        const jerseyBadge = document.getElementById("parent-home-jersey-badge");
-        if (jerseyBadge) jerseyBadge.textContent = player.shirt_number || "-";
+      if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
+        await this.loadUserContext();
+      }
+      const activePlayer = this.beta.guardianPlayer || (this.beta.guardianPlayers && this.beta.guardianPlayers[0]);
+      const pName = activePlayer ? `${activePlayer.firstName || activePlayer.first_name} ${activePlayer.lastName || activePlayer.last_name}` : "Deportista";
+      const pNum = activePlayer ? (activePlayer.shirtNumber ?? activePlayer.shirt_number ?? "-") : "-";
+
+      const nameEl = document.getElementById("parent-home-player-name");
+      if (nameEl) nameEl.textContent = pName;
+      const teamEl = document.getElementById("parent-home-team-name");
+      if (teamEl && this.beta.team) teamEl.textContent = `${this.beta.team.name} · ${this.beta.teamSeason?.display_label || 'Temporada'}`;
+      const jerseyBadge = document.getElementById("parent-home-jersey-badge");
+      if (jerseyBadge) jerseyBadge.textContent = `${pNum}`;
+
+      const greetingEl = document.getElementById("parent-home-greeting");
+      if (greetingEl) greetingEl.textContent = "Hola, Familia";
+
+      const commitmentsTitle = document.getElementById("parent-commitments-title");
+      if (commitmentsTitle) commitmentsTitle.textContent = `Próximos compromisos de ${activePlayer?.first_name || activePlayer?.firstName || 'deportista'}`;
+
+      const childSwitcher = document.getElementById("parent-home-child-switcher");
+      if (childSwitcher) {
+        if (this.beta.guardianPlayers && this.beta.guardianPlayers.length > 1) {
+          childSwitcher.onclick = () => this.cycleGuardianPlayer();
+          childSwitcher.title = "Haz clic para cambiar de hijo/a";
+        } else {
+          childSwitcher.onclick = null;
+        }
+      }
+
+      const urgentSection = document.getElementById("parent-urgent-section");
+      const commitmentsList = document.getElementById("parent-commitments-list");
+      const summaryEl = document.getElementById("parent-home-pending-summary");
+
+      if (this.beta.teamSeasonId) {
+        const eventsRes = await api.events.getEvents(this.beta.teamSeasonId);
+        const events = eventsRes?.items || [];
+
+        if (events.length === 0) {
+          if (urgentSection) urgentSection.classList.add("hidden");
+          if (summaryEl) {
+            summaryEl.innerHTML = `<span class="material-symbols-outlined text-secondary text-[18px]">check_circle</span><span>No tienes acciones pendientes para esta semana</span>`;
+          }
+          if (commitmentsList) {
+            commitmentsList.innerHTML = `
+              <div class="py-12 px-4 bg-surface-container-lowest rounded-2xl border border-dashed border-outline-variant text-center flex flex-col items-center gap-3 shadow-xs">
+                <div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-primary-container">
+                  <span class="material-symbols-outlined text-[28px]">event_available</span>
+                </div>
+                <div class="space-y-1">
+                  <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Sin compromisos pendientes</h3>
+                  <p class="font-body-sm text-body-sm text-on-surface-variant max-w-xs mx-auto">El cuerpo técnico aún no ha convocado o programado próximos eventos.</p>
+                </div>
+              </div>
+            `;
+          }
+        } else {
+          if (urgentSection) urgentSection.classList.add("hidden");
+          if (commitmentsList) {
+            commitmentsList.innerHTML = events.map(ev => {
+              const d = new Date(ev.starts_at);
+              const dateFormatted = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+              const timeFormatted = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+              return `
+                <article class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 p-4 shadow-sm flex flex-col gap-2.5">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 font-label-sm text-label-sm font-bold text-primary">
+                      <span class="material-symbols-outlined text-[16px]">today</span>
+                      <span>${dateFormatted} · ${timeFormatted}</span>
+                    </div>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-[11px] font-bold">
+                      ${ev.type === 'MATCH' ? 'Partido' : (ev.type === 'TOURNAMENT' ? 'Torneo' : 'Entrenamiento')}
+                    </span>
+                  </div>
+                  <div class="flex flex-col">
+                    <h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">${ev.title}</h3>
+                    <div class="flex items-center gap-1.5 text-on-surface-variant mt-1">
+                      <span class="material-symbols-outlined text-[16px] text-outline">location_on</span>
+                      <span class="font-body-sm text-body-sm">${ev.location || 'Instalaciones del club'}</span>
+                    </div>
+                  </div>
+                </article>
+              `;
+            }).join('');
+          }
+        }
       }
     } catch (err) {
       console.warn("Parent clean home sync error:", err);
     }
+  }
+
+  cycleGuardianPlayer() {
+    if (!this.beta.guardianPlayers || this.beta.guardianPlayers.length <= 1) return;
+    const currentId = this.beta.guardianPlayer?.playerId || this.beta.guardianPlayer?.id;
+    const currentIndex = this.beta.guardianPlayers.findIndex(p => (p.playerId || p.id) === currentId);
+    const nextIndex = (currentIndex + 1) % this.beta.guardianPlayers.length;
+    this.beta.guardianPlayer = this.beta.guardianPlayers[nextIndex];
+    this.showToast(`Cambiando vista a: ${this.beta.guardianPlayer.firstName || this.beta.guardianPlayer.first_name}`);
+    this.syncParentHome();
   }
 
   async syncParentRsvp() {
@@ -2100,7 +2562,7 @@ export class TeamAppState {
       return;
     }
 
-    const tutorName = document.getElementById("tutor-name")?.value?.trim() || "Elena Gómez";
+    const tutorName = document.getElementById("tutor-name")?.value?.trim() || "Tutor Familia";
     const tutorEmail = document.getElementById("tutor-email")?.value?.trim() || "tutor@beta.test";
 
     if (!this.beta.verifiedInvitation) {
@@ -2186,6 +2648,17 @@ export class TeamAppState {
     }
 
     try {
+      // CRITICAL: Guarantee coach session token is active before calling coach endpoint
+      if (this.tokens.coach) {
+        api.client.setToken(this.tokens.coach);
+      } else {
+        const coachTok = localStorage.getItem("talde_token_coach");
+        if (coachTok) {
+          this.tokens.coach = coachTok;
+          api.client.setToken(coachTok);
+        }
+      }
+
       const res = await api.teams.approveGuardianRequest(requestId, playerId);
       this.showToast("✓ Solicitud de vinculación aprobada en PostgreSQL.");
 
@@ -2207,6 +2680,17 @@ export class TeamAppState {
 
   async rejectBetaGuardianRequest(requestId) {
     try {
+      // CRITICAL: Guarantee coach session token is active before calling coach endpoint
+      if (this.tokens.coach) {
+        api.client.setToken(this.tokens.coach);
+      } else {
+        const coachTok = localStorage.getItem("talde_token_coach");
+        if (coachTok) {
+          this.tokens.coach = coachTok;
+          api.client.setToken(coachTok);
+        }
+      }
+
       await api.teams.rejectGuardianRequest(requestId);
       this.showToast("Solicitud rechazada en PostgreSQL.");
       await this.syncCoachHome();

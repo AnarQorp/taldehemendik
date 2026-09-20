@@ -121,11 +121,41 @@ export async function buildApp(options: BuildOptions = {}) {
     return reply.code(result.idempotentReplay?200:201).send(result);
   });
 
-  app.get("/v1/me/memberships",async(request)=>{
-    const {userId}=await actor(request);
-    const result=await pool.query(`SELECT m.id,m.role,m.status,m.created_at,ts.id team_season_id,ts.season_label,ts.category,ts.display_label,ts.status team_season_status,ts.join_code,t.id team_id,t.name team_name,t.sport FROM memberships m JOIN team_seasons ts ON ts.id=m.team_season_id JOIN teams t ON t.id=ts.team_id WHERE m.user_id=$1 AND m.status='ACTIVE' ORDER BY t.name,ts.season_label`,[userId]);
-    return {items:result.rows};
+  app.get("/v1/me/memberships", async (request) => {
+    const { userId } = await actor(request);
+    const result = await pool.query(
+      `SELECT m.id, m.role, m.status, m.created_at,
+              ts.id team_season_id, ts.season_label, ts.category, ts.display_label, ts.status team_season_status, ts.join_code,
+              t.id team_id, t.name team_name, t.sport,
+              COALESCE(
+                (
+                  SELECT json_agg(
+                    json_build_object(
+                      'playerId', p.id,
+                      'firstName', p.first_name,
+                      'lastName', p.last_name,
+                      'shortName', p.short_name,
+                      'shirtNumber', re.shirt_number,
+                      'position', re.position
+                    ) ORDER BY re.shirt_number NULLS LAST, p.first_name
+                  )
+                  FROM guardian_links gl
+                  JOIN roster_entries re ON re.player_id = gl.player_id AND re.team_season_id = ts.id AND re.status = 'ACTIVE'
+                  JOIN players p ON p.id = re.player_id
+                  WHERE gl.guardian_user_id = m.user_id AND gl.status = 'ACTIVE'
+                ),
+                '[]'::json
+              ) as guardian_players
+       FROM memberships m
+       JOIN team_seasons ts ON ts.id = m.team_season_id
+       JOIN teams t ON t.id = ts.team_id
+       WHERE m.user_id = $1 AND m.status = 'ACTIVE'
+       ORDER BY t.name, ts.season_label`,
+      [userId]
+    );
+    return { items: result.rows };
   });
+
 
   app.post("/v1/team-seasons/:teamSeasonId/players",async(request,reply)=>{
     const {userId}=await actor(request);const {teamSeasonId}=z.object({teamSeasonId:uuid}).parse(request.params);

@@ -105,4 +105,109 @@ describe("VS03 clean BETA bootstrap",()=>{
     const countEmpty=await pool.query(`SELECT count(*) count FROM teams`);expect(countEmpty.rows[0].count).toBe("0");
     await demoApp.close();
   });
+
+  it("supports guardian with multiple linked children in the same team season without duplicating membership", async () => {
+    const coachAuth = await login("coach-multi@example.test", "Coach Multi");
+    const bs = await app.inject({
+      method: "POST",
+      url: "/v1/teams/bootstrap",
+      headers: bearer(coachAuth.accessToken, "bs-multi"),
+      payload: {
+        team: { name: "Multi Club", sport: "FOOTBALL" },
+        teamSeason: { seasonLabel: "2026/27", category: "Infantil", displayLabel: "Infantil B" },
+        createGeneralJoinCode: true
+      }
+    });
+    const tsId = bs.json().teamSeason.id;
+    const jCode = bs.json().joinCode;
+
+    // Coach adds 3 players: Child 1, Child 2, and Unrelated Child 3
+    const res1 = await app.inject({
+      method: "POST",
+      url: `/v1/team-seasons/${tsId}/players`,
+      headers: bearer(coachAuth.accessToken, "add-player-1"),
+      payload: { firstName: "ChildOne", lastName: "Family", shirtNumber: 7 }
+    });
+    expect(res1.statusCode).toBe(201);
+    const p1 = res1.json().player;
+
+    const res2 = await app.inject({
+      method: "POST",
+      url: `/v1/team-seasons/${tsId}/players`,
+      headers: bearer(coachAuth.accessToken, "add-player-2"),
+      payload: { firstName: "ChildTwo", lastName: "Family", shirtNumber: 9 }
+    });
+    expect(res2.statusCode).toBe(201);
+    const p2 = res2.json().player;
+
+    const res3 = await app.inject({
+      method: "POST",
+      url: `/v1/team-seasons/${tsId}/players`,
+      headers: bearer(coachAuth.accessToken, "add-player-3"),
+      payload: { firstName: "Unrelated", lastName: "Other", shirtNumber: 11 }
+    });
+    expect(res3.statusCode).toBe(201);
+    const p3 = res3.json().player;
+
+
+    // Parent logs in
+    const parentAuth = await login("parent-multi@example.test", "Parent Multi");
+
+    // Parent claims Child 1
+    const claim1 = (await app.inject({
+      method: "POST",
+      url: `/v1/team-join/${jCode}/guardian-link-requests`,
+      headers: bearer(parentAuth.accessToken),
+      payload: { claimedPlayerName: "ChildOne Family", claimedShirtNumber: 7 }
+    })).json();
+
+    // Coach approves Child 1
+    const app1 = await app.inject({
+      method: "POST",
+      url: `/v1/guardian-link-requests/${claim1.id}/approve`,
+      headers: bearer(coachAuth.accessToken),
+      payload: { playerId: p1.id }
+    });
+    expect(app1.statusCode).toBe(200);
+
+    // Parent claims Child 2
+    const claim2 = (await app.inject({
+      method: "POST",
+      url: `/v1/team-join/${jCode}/guardian-link-requests`,
+      headers: bearer(parentAuth.accessToken),
+      payload: { claimedPlayerName: "ChildTwo Family", claimedShirtNumber: 9 }
+    })).json();
+
+    // Coach approves Child 2
+    const app2 = await app.inject({
+      method: "POST",
+      url: `/v1/guardian-link-requests/${claim2.id}/approve`,
+      headers: bearer(coachAuth.accessToken),
+      payload: { playerId: p2.id }
+    });
+    expect(app2.statusCode).toBe(200);
+
+    // Parent fetches /v1/me/memberships (simulating F5 reload / session start)
+    const memRes = await app.inject({
+      method: "GET",
+      url: "/v1/me/memberships",
+      headers: bearer(parentAuth.accessToken)
+    });
+    expect(memRes.statusCode).toBe(200);
+    const items = memRes.json().items;
+
+    // Must have EXACTLY 1 membership row for this team season
+    expect(items.length).toBe(1);
+    const mem = items[0];
+    expect(mem.role).toBe("GUARDIAN");
+    expect(mem.team_season_id).toBe(tsId);
+
+    // guardian_players must contain both children and NOT the unrelated child
+    expect(mem.guardian_players.length).toBe(2);
+    const ids = mem.guardian_players.map((gp: any) => gp.playerId);
+    expect(ids).toContain(p1.id);
+    expect(ids).toContain(p2.id);
+    expect(ids).not.toContain(p3.id);
+  });
 });
+

@@ -19,7 +19,7 @@ export async function resetDemoDatabase(db:pg.PoolClient){
     ('70000000-0000-4000-8000-000000000003','dev-email:mikel@example.test','mikel@example.test','Mikel Zubeldia'),
     ('70000000-0000-4000-8000-000000000004','dev-email:elena@example.test','elena@example.test','Elena Gómez')`,
     [demo.coach,demo.guardian]);
-  await db.query(`INSERT INTO teams(id,name,sport) VALUES($1,'C.D. Indautxu','FOOTBALL')`,[demo.team]);
+  await db.query(`INSERT INTO teams(id,name,sport) VALUES($1,'S. D. Indautxu','FOOTBALL')`,[demo.team]);
   await db.query(`INSERT INTO team_seasons(id,team_id,season_label,category,display_label,status,created_by_user_id,join_code) VALUES($1,$2,'2026/27','Infantil','Infantil A','ACTIVE',$3,'INDA16')`,[demo.season,demo.team,demo.coach]);
   await db.query(`INSERT INTO memberships(user_id,team_season_id,role,status) VALUES
     ($1,$3,'COACH','ACTIVE'),($2,$3,'GUARDIAN','ACTIVE'),
@@ -41,5 +41,5 @@ export async function resetDemoDatabase(db:pg.PoolClient){
     await db.query(`INSERT INTO availability_responses(event_id, player_id, status, source, actor_user_id, version, updated_at) VALUES($1, $2, 'CANNOT_ATTEND', 'STAFF_RECORDED', $3, 1, now())`, [demo.event, roster[i][0], demo.coach]);
   }
   await db.query(`INSERT INTO action_items(id,team_season_id,event_id,player_id,type,status,created_at) VALUES('80000000-0000-4000-8000-000000000001',$1,$2,$3,'CALLED_PLAYER_UNAVAILABLE','OPEN',now()) ON CONFLICT DO NOTHING`, [demo.season, demo.event, demo.ibai]);
-  return {mode:"DEMO",team:{id:demo.team,name:"C.D. Indautxu"},teamSeason:{id:demo.season,displayLabel:"Infantil A",seasonLabel:"2026/27"},players:roster.length,joinCode:"INDA16"};
+  return {mode:"DEMO",team:{id:demo.team,name:"S. D. Indautxu"},teamSeason:{id:demo.season,displayLabel:"Infantil A",seasonLabel:"2026/27"},players:roster.length,joinCode:"INDA16"};
 }

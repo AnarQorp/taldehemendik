@@ -9,7 +9,7 @@
  */
 
 export const MASTER_DATASET = {
-  CLUB_NAME: "C.D. Indautxu",
+  CLUB_NAME: "S. D. Indautxu",
   TEAM_NAME: "Infantil A",
   SEASON: "2026/27",
   INVITE_CODE: "INDA16",

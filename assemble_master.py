@@ -440,7 +440,7 @@ master_template = """<!DOCTYPE html>
             <span class="font-extrabold text-xs sm:text-sm tracking-tight text-white">Talde Hemendik!</span>
             <span class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-blue-900/60 text-blue-300 border border-blue-700/50">Demo MVP</span>
           </div>
-          <p class="text-[10px] sm:text-[11px] text-slate-400">C.D. Indautxu · Infantil A (18 jug.)</p>
+          <p class="text-[10px] sm:text-[11px] text-slate-400">S. D. Indautxu · Infantil A (18 jug.)</p>
         </div>
       </div>
 
@@ -665,7 +665,7 @@ master_template = """<!DOCTYPE html>
           <span id="sheet-player-num" class="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-extrabold flex items-center justify-center text-sm">#9</span>
           <div>
             <h4 id="sheet-player-name" class="font-bold text-base text-slate-900 leading-tight">Ibai Aranguren</h4>
-            <p id="sheet-player-role" class="text-xs text-slate-500">Delantero · C.D. Indautxu Infantil A</p>
+            <p id="sheet-player-role" class="text-xs text-slate-500">Delantero · S. D. Indautxu Infantil A</p>
           </div>
         </div>
         <button onclick="teamApp.closePlayerModal()" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-full cursor-pointer">

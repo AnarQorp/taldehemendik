@@ -845,7 +845,7 @@ export class TeamAppState {
 
       if (titleEl) {
         titleEl.textContent = isDemo
-          ? "C.D. Indautxu · Infantil A"
+          ? "S. D. Indautxu · Infantil A"
           : `${this.beta.team?.name || 'Mi Club'} · ${this.beta.teamSeason?.display_label || this.beta.teamSeason?.displayLabel || 'Mi Equipo'}`;
       }
       if (seasonEl) {
@@ -1337,7 +1337,7 @@ export class TeamAppState {
     if (emptyCreateBtn) emptyCreateBtn.classList.toggle("hidden", isGuardian);
 
     if (isDemo) {
-      if (teamTitleEl) teamTitleEl.textContent = "C.D. Indautxu · Infantil A";
+      if (teamTitleEl) teamTitleEl.textContent = "S. D. Indautxu · Infantil A";
       if (seasonLabelEl) seasonLabelEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Temporada 2026/27`;
       if (crestEl) crestEl.textContent = "IN";
       if (emptyContainer) emptyContainer.classList.add("hidden");
@@ -1568,8 +1568,8 @@ export class TeamAppState {
     const staffBar = document.getElementById("roster-staff-bar");
 
     if (isDemo) {
-      if (teamTitleEl) teamTitleEl.textContent = "C.D. Indautxu · Infantil A";
-      if (seasonLabelEl) seasonLabelEl.textContent = "Temporada 2026/27 · C.D. Indautxu Cantera";
+      if (teamTitleEl) teamTitleEl.textContent = "S. D. Indautxu · Infantil A";
+      if (seasonLabelEl) seasonLabelEl.textContent = "Temporada 2026/27 · S. D. Indautxu Cantera";
       if (crestEl) crestEl.innerHTML = `<span class="tracking-tight text-sm">IN</span>`;
       if (headerCount) headerCount.textContent = "18 jugadores inscritos";
       if (listCount) listCount.textContent = "18 jugadores";
@@ -1689,7 +1689,7 @@ export class TeamAppState {
     const feedContainer = document.getElementById("notices-feed-container");
 
     if (isDemo) {
-      if (teamTitle) teamTitle.textContent = "C.D. Indautxu · Infantil A";
+      if (teamTitle) teamTitle.textContent = "S. D. Indautxu · Infantil A";
       if (badgeCount) badgeCount.textContent = "1 nuevo";
       if (badgePill) badgePill.classList.remove("hidden");
       if (emptyContainer) emptyContainer.classList.add("hidden");
@@ -2322,7 +2322,7 @@ export class TeamAppState {
               </div>
             </div>
             <div class="flex-1 min-w-0">
-              <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-secondary">C.D. Indautxu · Infantil A</span>
+              <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-secondary">S. D. Indautxu · Infantil A</span>
               <h1 class="font-headline-lg text-headline-lg font-extrabold text-on-surface truncate leading-tight mt-0.5">Ibai Aranguren</h1>
               <p class="font-label-md text-label-md font-semibold text-on-surface-variant flex items-center gap-1 mt-0.5">
                 <span class="material-symbols-outlined text-[16px] text-secondary">sports_soccer</span>
@@ -2711,7 +2711,7 @@ export class TeamAppState {
     await this.resetBackendDataset(true);
     this.applyDemoUI();
     this.goToScreen("v2_00_onboarding_welcome", "onboard");
-    this.showToast("✓ Modo DEMO: Escenario C.D. Indautxu cargado (PostgreSQL sincronizado).");
+    this.showToast("✓ Modo DEMO: Escenario S. D. Indautxu cargado (PostgreSQL sincronizado).");
   }
 
   confirmResetBeta() {
@@ -2884,17 +2884,17 @@ export class TeamAppState {
   applyDemoUI() {
     // Header badge & cards
     const badgeText = document.getElementById("welcome-club-badge-text");
-    if (badgeText) badgeText.textContent = "C.D. Indautxu · Infantil A";
+    if (badgeText) badgeText.textContent = "S. D. Indautxu · Infantil A";
     const demoCard = document.getElementById("welcome-demo-indicator-card");
     if (demoCard) demoCard.classList.remove("hidden");
 
     // Coach setup screen
     const coachBadge = document.getElementById("coach-club-badge");
-    if (coachBadge) coachBadge.textContent = "C.D. Indautxu";
+    if (coachBadge) coachBadge.textContent = "S. D. Indautxu";
     const teamName = document.getElementById("team-name");
     if (teamName) teamName.value = "Infantil A";
     const clubName = document.getElementById("club-name");
-    if (clubName) clubName.value = "C.D. Indautxu";
+    if (clubName) clubName.value = "S. D. Indautxu";
     const pitchLoc = document.getElementById("pitch-location");
     if (pitchLoc) pitchLoc.value = "Campo Municipal Indautxu";
 
@@ -2929,7 +2929,7 @@ export class TeamAppState {
     const coachShareBtn = document.getElementById("coach-share-btn");
     if (coachShareBtn) coachShareBtn.classList.remove("hidden");
     const coachFooter = document.getElementById("coach-footer-text");
-    if (coachFooter) coachFooter.textContent = "Talde Hemendik! • Gestión de cantera C.D. Indautxu";
+    if (coachFooter) coachFooter.textContent = "Talde Hemendik! • Gestión de cantera S. D. Indautxu";
 
     // Parent join screen
     const parentNotice = document.getElementById("parent-clean-backend-notice");
@@ -2958,7 +2958,7 @@ export class TeamAppState {
     const parentValDesc = document.getElementById("parent-validation-desc");
     if (parentValDesc) parentValDesc.innerHTML = "Por protección y privacidad del menor (Privacidad del Menor), el entrenador <strong>Mikel Zubeldia</strong> validará esta solicitud antes de conceder acceso a los agenda, convocatorias y avisos del equipo.";
     const parentProtocol = document.getElementById("parent-footer-protocol");
-    if (parentProtocol) parentProtocol.textContent = "Protocolo C.D. Indautxu";
+    if (parentProtocol) parentProtocol.textContent = "Protocolo S. D. Indautxu";
   }
 
   // --- Reset y Pruebas de Conflicto en Vivo ---
@@ -3045,7 +3045,7 @@ export class TeamAppState {
     if (this.appMode === "DEMO") {
       await this.switchMembership("indautxu_inf_a");
       await this.goToScreen("v2_01_coach_home", "inicio");
-      this.showToast("✓ Equipo C.D. Indautxu · Infantil A creado con éxito. Código INDA16.");
+      this.showToast("✓ Equipo S. D. Indautxu · Infantil A creado con éxito. Código INDA16.");
       return;
     }
 
@@ -3668,7 +3668,7 @@ export class TeamAppState {
     if (modal) {
       document.getElementById("sheet-player-num").textContent = `#${player.number}`;
       document.getElementById("sheet-player-name").textContent = player.name;
-      document.getElementById("sheet-player-role").textContent = `${player.role} · C.D. Indautxu Infantil A`;
+      document.getElementById("sheet-player-role").textContent = `${player.role} · S. D. Indautxu Infantil A`;
       document.getElementById("sheet-player-status").textContent = player.rsvp;
       document.getElementById("sheet-tutor-name").textContent = player.tutor;
       document.getElementById("sheet-tutor-phone").textContent = player.phone;

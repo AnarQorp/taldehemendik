@@ -8,7 +8,7 @@ Status: implemented and verified on 2026-09-18. Experimental backend branch; not
 
 1. Mikel authenticates as COACH.
 2. He creates an individual invitation for Ibai.
-3. Public resolution returns only C.D. Indautxu / Infantil A / 2026/27.
+3. Public resolution returns only S. D. Indautxu / Infantil A / 2026/27.
 4. Elena authenticates; access remains denied.
 5. Elena creates a pending GuardianLinkRequest; access remains denied.
 6. Mikel approves; replay returns the same relationship without duplicates.

@@ -32,10 +32,10 @@ npm run demo:vs02
 npm run demo:vs03
 ```
 
-The seed is deliberately minimal and isolated: C.D. Indautxu, season 2026/27 Infantil A, Mikel Zubeldia, Ibai Aranguren #9, Torneo Indautxu, plus a second team used only for access-isolation tests.
+The seed is deliberately minimal and isolated: S. D. Indautxu, season 2026/27 Infantil A, Mikel Zubeldia, Ibai Aranguren #9, Torneo Indautxu, plus a second team used only for access-isolation tests.
 
 See [HTTP contracts](./docs/HTTP-CONTRACTS-VS01.md) and [RLS decision](./docs/RLS-DECISION-VS01.md).
 
 VS02 adds [operational contracts](./docs/HTTP-CONTRACTS-VS02.md), [schema](./docs/SCHEMA-VS02.md) and a complete Event → Callup → ActionItem → Replacement proof through `npm run demo:vs02`.
 
-VS03 adds a seed-free [BETA bootstrap](./docs/HTTP-CONTRACTS-VS03.md) and an isolated, explicitly enabled C.D. Indautxu DEMO reset. Run `npm run demo:vs03` to prove a clean signup-to-guardian-access flow without seed or hardcoded IDs.
+VS03 adds a seed-free [BETA bootstrap](./docs/HTTP-CONTRACTS-VS03.md) and an isolated, explicitly enabled S. D. Indautxu DEMO reset. Run `npm run demo:vs03` to prove a clean signup-to-guardian-access flow without seed or hardcoded IDs.

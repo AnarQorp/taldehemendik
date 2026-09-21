@@ -41,7 +41,7 @@ export async function resetDemoDataset(db = pool) {
       [ids.coach, ids.staff, ids.otherCoach, elenaUserId]);
 
     // Teams & Seasons
-    await db.query(`INSERT INTO teams (id, name) VALUES ($1, 'C.D. Indautxu'), ($2, 'Equipo B')`, [ids.team, ids.otherTeam]);
+    await db.query(`INSERT INTO teams (id, name) VALUES ($1, 'S. D. Indautxu'), ($2, 'Equipo B')`, [ids.team, ids.otherTeam]);
     await db.query(`INSERT INTO team_seasons (id, team_id, season_label, category, display_label, status) VALUES
       ($1, $2, '2026/27', 'Infantil', 'Infantil A', 'ACTIVE'),
       ($3, $4, '2026/27', 'Infantil', 'Infantil B', 'ACTIVE')`, [ids.season, ids.team, ids.otherSeason, ids.otherTeam]);

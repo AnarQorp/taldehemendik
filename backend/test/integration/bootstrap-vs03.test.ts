@@ -99,8 +99,8 @@ describe("VS03 clean BETA bootstrap",()=>{
     const disabled=await app.inject({method:"POST",url:"/v1/dev/reset"});expect(disabled.statusCode).toBe(404);
     const emptyDisabled=await app.inject({method:"POST",url:"/v1/dev/empty"});expect(emptyDisabled.statusCode).toBe(404);
     const demoApp=await buildApp({authAdapter:new DevelopmentAuthAdapter(true),enableDevReset:true});
-    const reset=await demoApp.inject({method:"POST",url:"/v1/dev/reset"});expect(reset.statusCode).toBe(200);expect(reset.json()).toEqual({mode:"DEMO",team:{id:"71000000-0000-4000-8000-000000000001",name:"C.D. Indautxu"},teamSeason:{id:"72000000-0000-4000-8000-000000000001",displayLabel:"Infantil A",seasonLabel:"2026/27"},players:18,joinCode:"INDA16"});
-    const count=await pool.query(`SELECT count(*) count FROM teams WHERE name='C.D. Indautxu'`);expect(count.rows[0].count).toBe("1");
+    const reset=await demoApp.inject({method:"POST",url:"/v1/dev/reset"});expect(reset.statusCode).toBe(200);expect(reset.json()).toEqual({mode:"DEMO",team:{id:"71000000-0000-4000-8000-000000000001",name:"S. D. Indautxu"},teamSeason:{id:"72000000-0000-4000-8000-000000000001",displayLabel:"Infantil A",seasonLabel:"2026/27"},players:18,joinCode:"INDA16"});
+    const count=await pool.query(`SELECT count(*) count FROM teams WHERE name='S. D. Indautxu'`);expect(count.rows[0].count).toBe("1");
     const empty=await demoApp.inject({method:"POST",url:"/v1/dev/empty"});expect(empty.statusCode).toBe(200);expect(empty.json()).toEqual({mode:"CLEAN_BETA",status:"EMPTIED",scope:"application_data"});
     const countEmpty=await pool.query(`SELECT count(*) count FROM teams`);expect(countEmpty.rows[0].count).toBe("0");
     await demoApp.close();

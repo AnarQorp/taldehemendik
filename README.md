@@ -29,7 +29,7 @@ La mayoría de herramientas de gestión deportiva trasladan la lógica administr
 
 ## 👥 Datos de Demostración (Temporada 2026/27)
 
-* **Club**: **C.D. Indautxu**
+* **Club**: **S. D. Indautxu**
 * **Equipo**: **Infantil A** (Fútbol Base)
 * **Código de Invitación**: `INDA16`
 * **Fecha de Referencia de la Demo**: **Viernes 18 de Septiembre de 2026**

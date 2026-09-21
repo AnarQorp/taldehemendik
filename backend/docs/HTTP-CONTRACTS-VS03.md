@@ -40,7 +40,7 @@ There is no roster listing, autocomplete, partial-match or match-status endpoint
 
 ## DEMO reset
 
-`POST /v1/dev/reset` is not registered unless `DEV_RESET_ENABLED=true` (or explicitly enabled in a test harness). It transactionally recreates the independent C.D. Indautxu / Infantil A / 2026/27 / INDA16 DEMO. Default BETA returns 404 and never calls it.
+`POST /v1/dev/reset` is not registered unless `DEV_RESET_ENABLED=true` (or explicitly enabled in a test harness). It transactionally recreates the independent S. D. Indautxu / Infantil A / 2026/27 / INDA16 DEMO. Default BETA returns 404 and never calls it.
 
 ## Added stable errors
 

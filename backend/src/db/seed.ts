@@ -20,7 +20,7 @@ try {
     ($1, 'dev-email:mikel@example.test', 'mikel@example.test', 'Mikel Zubeldia'),
     ($2, 'dev-email:staff@example.test', 'staff@example.test', 'Ane Staff'),
     ($3, 'dev-email:coach-b@example.test', 'coach-b@example.test', 'Coach B')`, [ids.coach, ids.staff, ids.otherCoach]);
-  await pool.query(`INSERT INTO teams (id, name, sport) VALUES ($1, 'C.D. Indautxu','FOOTBALL'), ($2, 'Equipo B','FOOTBALL')`, [ids.team, ids.otherTeam]);
+  await pool.query(`INSERT INTO teams (id, name, sport) VALUES ($1, 'S. D. Indautxu','FOOTBALL'), ($2, 'Equipo B','FOOTBALL')`, [ids.team, ids.otherTeam]);
   await pool.query(`INSERT INTO team_seasons (id, team_id, season_label, category, display_label, status, created_by_user_id) VALUES
     ($1, $2, '2026/27', 'Infantil', 'Infantil A', 'ACTIVE',$5),
     ($3, $4, '2026/27', 'Infantil', 'Infantil B', 'ACTIVE',$6)`, [ids.season, ids.team, ids.otherSeason, ids.otherTeam,ids.coach,ids.otherCoach]);

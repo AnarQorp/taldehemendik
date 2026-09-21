@@ -20,7 +20,7 @@ auth → Team/TeamSeason/COACH bootstrap → Player/RosterEntry → individual i
 10. Tutor access still requires ACTIVE Membership + GuardianLink + RosterEntry.
 11. STAFF/GUARDIAN cannot add roster Players or manage link requests.
 12. Known cross-team UUIDs do not grant read or mutation access.
-13. Normal BETA is independent of C.D. Indautxu, seed and `/dev/reset`.
+13. Normal BETA is independent of S. D. Indautxu, seed and `/dev/reset`.
 14. DEMO reset is absent by default and explicitly dev-only.
 
 ## Objective fixes discovered

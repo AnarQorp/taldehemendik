@@ -1701,57 +1701,242 @@ export class TeamAppState {
 
   async syncEventHubNormal() {
     await this.ensureAuth("coach");
-    const availRes = await api.availability.getEventAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID);
+
+    const isDemo = this.appMode === "DEMO";
+    const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : (this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id"));
+
+    let eventId = isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : (this.beta.activeEventId || localStorage.getItem("talde_active_event_id"));
+    let activeEvent = null;
+
+    if (!isDemo && activeTeamSeasonId) {
+      const eventsRes = await api.events.getEvents(activeTeamSeasonId).catch(() => ({ items: [] }));
+      const events = eventsRes.items || [];
+      if (events.length > 0) {
+        if (eventId) {
+          activeEvent = events.find(e => e.id === eventId) || events[0];
+        } else {
+          activeEvent = events[0];
+        }
+        eventId = activeEvent.id;
+        this.beta.activeEventId = eventId;
+      }
+    }
+
+    if (isDemo && !eventId) eventId = DEMO_CONFIG.EVENT_INDAUTXU_ID;
+
+    if (!eventId) {
+      const titleEl = document.getElementById("hub-hero-title");
+      if (titleEl) titleEl.textContent = "No hay eventos creados";
+      return;
+    }
+
+    // 1. Fetch Availability & Roster
+    const availRes = await api.availability.getEventAvailability(eventId).catch(() => ({ counts: {}, items: [] }));
     this.live.availability = availRes;
 
-    const counts = availRes.counts || { CAN_ATTEND: 14, CANNOT_ATTEND: 2, UNSURE: 0, NO_RESPONSE: 2 };
+    let players = [];
+    if (!isDemo && activeTeamSeasonId) {
+      const playersRes = await api.teams.getPlayers(activeTeamSeasonId).catch(() => ({ items: [] }));
+      players = playersRes.items || [];
+    } else {
+      players = (availRes.items || []);
+    }
+
+    const totalSquad = !isDemo ? (players.length || (availRes.items || []).length || 1) : 18;
+
+    const rawCounts = availRes.counts || {};
+    const canAttendCount = rawCounts.CAN_ATTEND ?? 0;
+    const cannotAttendCount = rawCounts.CANNOT_ATTEND ?? 0;
+    const unsureCount = rawCounts.UNSURE ?? 0;
+    const noResponseCount = isDemo ? (rawCounts.NO_RESPONSE ?? 2) : Math.max(0, totalSquad - (canAttendCount + cannotAttendCount + unsureCount));
+
+    const pendingTotal = noResponseCount + unsureCount;
+
+    // 2. DOM Counts & Breakdown
     const elDisp = document.getElementById("hub-count-disponibles");
     const elBajas = document.getElementById("hub-count-bajas");
     const elPend = document.getElementById("hub-count-pendientes");
 
-    if (elDisp) elDisp.textContent = counts.CAN_ATTEND;
-    if (elBajas) elBajas.textContent = counts.CANNOT_ATTEND;
-    if (elPend) elPend.textContent = counts.NO_RESPONSE + counts.UNSURE;
+    if (elDisp) elDisp.textContent = canAttendCount;
+    if (elBajas) elBajas.textContent = cannotAttendCount;
+    if (elPend) elPend.textContent = pendingTotal;
 
-    const total = (counts.CAN_ATTEND + counts.CANNOT_ATTEND + counts.UNSURE + counts.NO_RESPONSE) || 18;
-    const pctDisp = Math.round((counts.CAN_ATTEND / total) * 100);
-    const pctBajas = Math.round((counts.CANNOT_ATTEND / total) * 100);
-    const pctPend = Math.round(((counts.NO_RESPONSE + counts.UNSURE) / total) * 100);
+    const pctDisp = totalSquad > 0 ? Math.round((canAttendCount / totalSquad) * 100) : 0;
+    const pctBajas = totalSquad > 0 ? Math.round((cannotAttendCount / totalSquad) * 100) : 0;
+    const pctPend = totalSquad > 0 ? Math.round((pendingTotal / totalSquad) * 100) : 0;
+    const pctAnswered = Math.min(100, pctDisp + pctBajas);
 
     const barDisp = document.getElementById("hub-bar-disponibles");
     const barBajas = document.getElementById("hub-bar-bajas");
     const barPend = document.getElementById("hub-bar-pendientes");
     const pctLabel = document.getElementById("hub-progress-pct");
+    const progressHeader = document.getElementById("hub-progress-header");
     const statSi = document.getElementById("hub-stat-si");
     const statNo = document.getElementById("hub-stat-no");
     const statDuda = document.getElementById("hub-stat-duda");
+    const squadChip = document.getElementById("hub-squad-chip-text");
 
     if (barDisp) barDisp.style.width = `${pctDisp}%`;
     if (barBajas) barBajas.style.width = `${pctBajas}%`;
     if (barPend) barPend.style.width = `${pctPend}%`;
-    if (pctLabel) pctLabel.textContent = `${pctDisp + pctBajas}% respondido`;
-    if (statSi) statSi.textContent = `${counts.CAN_ATTEND} Sí (${pctDisp}%)`;
-    if (statNo) statNo.textContent = `${counts.CANNOT_ATTEND} No (${pctBajas}%)`;
-    if (statDuda) statDuda.textContent = `${counts.NO_RESPONSE + counts.UNSURE} Espera (${pctPend}%)`;
+    if (pctLabel) pctLabel.textContent = `${pctAnswered}% respondido`;
+    if (progressHeader) progressHeader.textContent = `Progreso de respuestas (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'})`;
+    if (statSi) statSi.textContent = `${canAttendCount} Sí (${pctDisp}%)`;
+    if (statNo) statNo.textContent = `${cannotAttendCount} No (${pctBajas}%)`;
+    if (statDuda) statDuda.textContent = `${pendingTotal} Espera (${pctPend}%)`;
+    if (squadChip) squadChip.textContent = `Plantilla completa para el evento (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'})`;
 
-    // Convocatoria state check
+    // 3. Hydrate Event Header & Hero Details
+    if (isDemo) {
+      const headerTitle = document.getElementById("hub-header-title");
+      const headerSub = document.getElementById("hub-header-subtitle");
+      const heroTitle = document.getElementById("hub-hero-title");
+      const heroSchedule = document.getElementById("hub-hero-schedule");
+      const heroLocation = document.getElementById("hub-hero-location-name");
+      const heroLocationSub = document.getElementById("hub-hero-location-sub");
+      const heroBadge = document.getElementById("hub-hero-badge");
+      const arrivalContainer = document.getElementById("hub-hero-arrival-container");
+      const arrivalTime = document.getElementById("hub-hero-arrival-time");
+      const logisticsEq = document.getElementById("hub-logistics-equipment");
+
+      if (headerTitle) headerTitle.textContent = "Torneo Apertura";
+      if (headerSub) headerSub.textContent = "Sábado 19 Sep · 09:30 h";
+      if (heroTitle) heroTitle.textContent = "Torneo Indautxu";
+      if (heroSchedule) heroSchedule.textContent = "Sábado 19 Sep · 09:30 - 14:00";
+      if (heroLocation) heroLocation.textContent = "Polideportivo Municipal Indautxu";
+      if (heroLocationSub) heroLocationSub.textContent = "Pabellón 1 · Pista Central";
+      if (heroBadge) heroBadge.textContent = "Torneo Oficial";
+      if (arrivalContainer) arrivalContainer.classList.remove("hidden");
+      if (arrivalTime) arrivalTime.textContent = "Citación vestuario: 08:45 h";
+      if (logisticsEq) logisticsEq.textContent = "1ª Equipación Oficial (Azul)";
+    } else if (activeEvent) {
+      const headerTitle = document.getElementById("hub-header-title");
+      const headerSub = document.getElementById("hub-header-subtitle");
+      const heroTitle = document.getElementById("hub-hero-title");
+      const heroSchedule = document.getElementById("hub-hero-schedule");
+      const heroLocation = document.getElementById("hub-hero-location-name");
+      const heroLocationSub = document.getElementById("hub-hero-location-sub");
+      const heroBadge = document.getElementById("hub-hero-badge");
+      const arrivalContainer = document.getElementById("hub-hero-arrival-container");
+      const arrivalTime = document.getElementById("hub-hero-arrival-time");
+      const logisticsEq = document.getElementById("hub-logistics-equipment");
+
+      const startDate = activeEvent.starts_at ? new Date(activeEvent.starts_at) : new Date();
+      const dateFormatted = startDate.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+      const timeFormatted = startDate.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+      if (headerTitle) headerTitle.textContent = activeEvent.title;
+      if (headerSub) headerSub.textContent = `${dateFormatted} · ${timeFormatted} h`;
+      if (heroTitle) heroTitle.textContent = activeEvent.title;
+      if (heroSchedule) heroSchedule.textContent = `${dateFormatted} · ${timeFormatted} h`;
+      if (heroLocation) heroLocation.textContent = activeEvent.location || "Campo de juego";
+      if (heroLocationSub) heroLocationSub.textContent = activeEvent.notes || "Instalaciones del equipo";
+      if (heroBadge) heroBadge.textContent = activeEvent.type === "MATCH" ? "Partido Oficial" : (activeEvent.type === "TRAINING" ? "Entrenamiento" : "Evento");
+
+      if (activeEvent.arrival_at) {
+        const arrDate = new Date(activeEvent.arrival_at);
+        const arrTimeStr = arrDate.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+        if (arrivalTime) arrivalTime.textContent = `Citación vestuario: ${arrTimeStr} h`;
+        if (arrivalContainer) arrivalContainer.classList.remove("hidden");
+      } else if (arrivalContainer) {
+        arrivalContainer.classList.add("hidden");
+      }
+
+      if (logisticsEq) logisticsEq.textContent = activeEvent.notes || "1ª Equipación Oficial del equipo";
+    }
+
+    // 4. Hydrate Pending Names & Alerts
+    const pendingAlertBanner = document.getElementById("hub-pending-alert-banner");
+    const pendingNamesEl = document.getElementById("hub-pending-names");
+    const nudgeBtn = document.getElementById("hub-btn-nudge");
+
+    if (!isDemo) {
+      const items = availRes.items || [];
+      const pendingItems = items.filter(p => p.status === "NO_RESPONSE" || p.status === "UNSURE");
+      if (pendingItems.length > 0) {
+        const namesFormatted = pendingItems.map(p => `<strong class="text-on-surface">${p.first_name || p.firstName || ''} ${p.last_name || p.lastName || ''} (#${p.shirt_number || p.shirtNumber || '-'})</strong>`).join(" y ");
+        if (pendingNamesEl) pendingNamesEl.innerHTML = `${namesFormatted} aún no ${pendingItems.length === 1 ? 'ha' : 'han'} respondido al aviso.`;
+        if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
+      } else {
+        if (pendingNamesEl) pendingNamesEl.innerHTML = `<span class="text-emerald-800 font-bold">✓ Todos los jugadores han respondido a la disponibilidad.</span>`;
+        if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
+      }
+
+      if (nudgeBtn) {
+        if (pendingTotal > 0) {
+          nudgeBtn.classList.remove("hidden");
+          nudgeBtn.onclick = () => this.showToast("⚠️ Recordatorio registrado. Canal SMS/Push reservado a producción.");
+          const textSpan = nudgeBtn.querySelector("span:last-child");
+          if (textSpan) textSpan.textContent = `Recordar a pendientes (${pendingTotal})`;
+        } else {
+          nudgeBtn.classList.add("hidden");
+        }
+      }
+
+      const sendNoticeBtn = document.getElementById("hub-btn-send-notice");
+      if (sendNoticeBtn) {
+        sendNoticeBtn.onclick = () => this.showToast("⚠️ Los avisos a familias se enviarán al publicar la convocatoria.");
+      }
+    } else {
+      if (pendingNamesEl) pendingNamesEl.innerHTML = `<strong class="text-on-surface">Ane Mintegi (#16)</strong> y <strong class="text-on-surface">Peio Gómez (#18)</strong> aún no han respondido al aviso.`;
+      if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
+      if (nudgeBtn) {
+        nudgeBtn.classList.remove("hidden");
+        nudgeBtn.onclick = () => this.showToast("Simulación DEMO: Recordatorio enviado.");
+        const textSpan = nudgeBtn.querySelector("span:last-child");
+        if (textSpan) textSpan.textContent = "Recordar a pendientes (2)";
+      }
+    }
+
+    // 5. Hydrate Callup Section State
     const callupBtn = document.getElementById("hub-callup-btn");
     const callupBadge = document.getElementById("hub-callup-phase-badge");
     const callupNotice = document.getElementById("hub-callup-notice");
+    const callupSubtitle = document.getElementById("hub-callup-subtitle");
+    const callupBtnText = document.getElementById("hub-callup-btn-text");
 
-    if (this.live.callup && this.live.callup.status === "PUBLISHED") {
+    const isPublished = isDemo ? (this.live.callup && this.live.callup.status === "PUBLISHED") : (activeEvent && activeEvent.callup_status === "PUBLISHED");
+    const callupRev = isDemo ? (this.live.callup?.current_revision_number || 1) : (activeEvent?.callup_revision || 1);
+
+    if (isPublished) {
       if (callupBadge) {
         callupBadge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-label-sm text-label-sm font-bold border border-emerald-300";
-        callupBadge.innerHTML = `<span class="material-symbols-outlined text-[13px]">check_circle</span> Convocatoria Publicada (Rev. ${this.live.callup.current_revision_number || 1})`;
+        callupBadge.innerHTML = `<span class="material-symbols-outlined text-[13px]">check_circle</span> Convocatoria Publicada (Rev. ${callupRev})`;
+      }
+      if (callupSubtitle) {
+        callupSubtitle.textContent = `${totalSquad} ${totalSquad === 1 ? 'jugador convocado' : 'jugadores convocados'} de ${totalSquad} en plantilla`;
       }
       if (callupNotice) {
         callupNotice.innerHTML = `<p class="font-body-sm text-body-sm text-emerald-800 font-medium leading-relaxed">
-          <strong class="text-emerald-900 font-bold">Convocatoria oficial cerrada y comunicada.</strong> 12 jugadores citados para el Torneo Indautxu a las 08:45 h.
+          <strong class="text-emerald-900 font-bold">Convocatoria oficial cerrada y comunicada.</strong> ${totalSquad} ${totalSquad === 1 ? 'jugador convocado' : 'jugadores convocados'} para ${isDemo ? 'el Torneo Indautxu' : (activeEvent?.title || 'el evento')}.
         </p>`;
       }
       if (callupBtn) {
         callupBtn.className = "w-full h-[50px] bg-secondary hover:bg-emerald-700 text-white font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm";
-        callupBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">verified</span><span>Convocatoria publicada (12 jugadores)</span>`;
+        callupBtn.onclick = () => this.showToast(`✓ Convocatoria publicada (${totalSquad} jugadores).`);
+        if (callupBtnText) callupBtnText.textContent = `✓ Convocatoria publicada (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'})`;
+      }
+    } else {
+      if (callupBadge) {
+        callupBadge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-label-sm text-label-sm font-extrabold border border-amber-300";
+        callupBadge.innerHTML = `<span class="material-symbols-outlined text-[13px] text-amber-700">hourglass_top</span> Convocatoria Pendiente`;
+      }
+      if (callupSubtitle) {
+        callupSubtitle.textContent = `${totalSquad} ${totalSquad === 1 ? 'jugador disponible en plantilla' : 'jugadores disponibles en plantilla'}`;
+      }
+      if (callupNotice) {
+        callupNotice.innerHTML = `<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+          <strong class="text-on-surface font-medium">Paso 2 · Convocatoria por publicar.</strong> Podrás seleccionar y publicar los convocados del equipo cuando lo desees.
+        </p>`;
+      }
+      if (callupBtn) {
+        callupBtn.className = "w-full h-[50px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 cursor-pointer border border-primary/30 shadow-sm active:scale-[0.98] transition-all";
+        if (isDemo) {
+          callupBtn.onclick = () => this.handlePublishCallup();
+        } else {
+          callupBtn.onclick = () => this.prepareAndPublishCallup(eventId);
+        }
+        if (callupBtnText) callupBtnText.textContent = `Preparar y publicar convocatoria (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'})`;
       }
     }
   }
@@ -2442,6 +2627,11 @@ export class TeamAppState {
 
   async startDemoMode() {
     this.appMode = "DEMO";
+    this.currentRole = "coach";
+    this.beta.activeEventId = null;
+    this.beta.teamSeasonId = null;
+    localStorage.removeItem("talde_active_event_id");
+    localStorage.removeItem("talde_team_season_id");
     localStorage.setItem("talde_app_mode", "DEMO");
     document.getElementById("demo-mode-badge")?.classList.remove("hidden");
     await this.resetBackendDataset(true);

@@ -486,8 +486,11 @@ export async function buildApp(options: BuildOptions = {}) {
     const query = z.object({ from: z.string().datetime().optional(), to: z.string().datetime().optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).parse(request.query);
     await requireRole(pool, userId, teamSeasonId, ["COACH", "STAFF", "GUARDIAN"]);
     const result = await pool.query(
-      `SELECT * FROM events WHERE team_season_id=$1 AND ($2::timestamptz IS NULL OR starts_at >= $2) AND ($3::timestamptz IS NULL OR starts_at < $3)
-       ORDER BY starts_at LIMIT $4`, [teamSeasonId,query.from ?? null,query.to ?? null,query.limit]
+      `SELECT e.*, c.id AS callup_id, c.status AS callup_status, c.current_revision_number AS callup_revision
+       FROM events e
+       LEFT JOIN callups c ON c.event_id = e.id AND c.status != 'CANCELLED'
+       WHERE e.team_season_id=$1 AND ($2::timestamptz IS NULL OR e.starts_at >= $2) AND ($3::timestamptz IS NULL OR e.starts_at < $3)
+       ORDER BY e.starts_at LIMIT $4`, [teamSeasonId,query.from ?? null,query.to ?? null,query.limit]
     );
     return { items: result.rows };
   });
@@ -495,7 +498,12 @@ export async function buildApp(options: BuildOptions = {}) {
   app.get("/v1/events/:eventId", async (request) => {
     const { userId } = await actor(request);
     const { eventId } = z.object({ eventId: uuid }).parse(request.params);
-    const found = await pool.query(`SELECT * FROM events WHERE id=$1`, [eventId]);
+    const found = await pool.query(
+      `SELECT e.*, c.id AS callup_id, c.status AS callup_status, c.current_revision_number AS callup_revision
+       FROM events e
+       LEFT JOIN callups c ON c.event_id = e.id AND c.status != 'CANCELLED'
+       WHERE e.id=$1`, [eventId]
+    );
     if (!found.rowCount) throw new DomainError("PLAYER_NOT_ACCESSIBLE", 404, "Event not found");
     await requireRole(pool,userId,found.rows[0].team_season_id,["COACH","STAFF","GUARDIAN"]);
     return found.rows[0];

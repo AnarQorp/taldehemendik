@@ -472,6 +472,56 @@ export class TeamAppState {
     this.switchMembership(role);
   }
 
+  async handleParentAccess() {
+    this.currentRole = "parent";
+    localStorage.setItem("talde_active_role", "parent");
+
+    if (this.appMode === "DEMO") {
+      await this.ensureAuth("parent");
+      await this.goToScreen("v2_07_parent_home", "inicio");
+      return;
+    }
+
+    const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
+    if (parentToken) {
+      api.client.setToken(parentToken);
+      this.tokens.parent = parentToken;
+      try {
+        const res = await api.teams.getMyMemberships();
+        const items = res?.items || [];
+        const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
+        if (guardianMem) {
+          this.beta.teamSeasonId = guardianMem.team_season_id;
+          localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
+          this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
+          this.beta.teamSeason = {
+            id: guardianMem.team_season_id,
+            display_label: guardianMem.display_label,
+            season_label: guardianMem.season_label,
+            category: guardianMem.category,
+            join_code: guardianMem.join_code
+          };
+          this.beta.guardianPlayers = guardianMem.guardian_players || [];
+          this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+          await this.goToScreen("v2_07_parent_home", "inicio");
+          this.showToast(`Sesión familiar recuperada: ${this.beta.guardianPlayer ? (this.beta.guardianPlayer.firstName || this.beta.guardianPlayer.first_name) : 'Hijo'}`);
+          return;
+        }
+      } catch (e) {
+        console.warn("Error restoring parent session:", e);
+      }
+    }
+    await this.goToScreen("v2_00_parent_join_team");
+  }
+
+  handlePlayerDetailBack() {
+    if (this.currentRole === "parent") {
+      this.goToScreen("v2_07_parent_home", "inicio");
+    } else {
+      this.goToScreen("v2_03_coach_roster", "equipo");
+    }
+  }
+
   async goToScreen(screenId, tab = null) {
     const coachOnlyScreens = [
       "screen_c_create_event",
@@ -514,6 +564,24 @@ export class TeamAppState {
     }
 
     if (screenId === "v2_00_parent_join_team") {
+      const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
+      if (this.appMode === "DEMO") {
+        await this.ensureAuth("parent");
+        this.currentRole = "parent";
+        this.goToScreen("v2_07_parent_home", "inicio");
+        return;
+      }
+      if (!this.beta.individualInviteToken && !this.beta.joinCode && parentToken) {
+        if (!this.beta.guardianPlayers?.length) {
+          await this.loadUserContext();
+        }
+        if (this.beta.guardianPlayers && this.beta.guardianPlayers.length > 0) {
+          this.currentRole = "parent";
+          localStorage.setItem("talde_active_role", "parent");
+          this.goToScreen("v2_07_parent_home", "inicio");
+          return;
+        }
+      }
       if (!this.beta.individualInviteToken) {
         document.getElementById("parent-general-code-section")?.classList.remove("hidden");
         document.getElementById("parent-individual-invite-banner")?.classList.add("hidden");
@@ -563,7 +631,16 @@ export class TeamAppState {
     const equipoLabel = document.getElementById("nav-label-equipo");
     const equipoIcon = document.getElementById("nav-icon-equipo");
 
-    if (equipoLabel) equipoLabel.textContent = this.currentRole === "coach" ? "Equipo" : "Ibai #9";
+    const activeChild = this.beta.guardianPlayer || (this.beta.guardianPlayers && this.beta.guardianPlayers[0]);
+    const childFirstName = activeChild ? (activeChild.firstName || activeChild.first_name) : null;
+    const childDorsal = activeChild ? (activeChild.shirtNumber ?? activeChild.shirt_number) : null;
+    const childNavLabel = childFirstName ? `${childFirstName}${childDorsal ? ` #${childDorsal}` : ''}` : "Hijos";
+
+    if (equipoLabel) {
+      equipoLabel.textContent = this.currentRole === "coach"
+        ? "Equipo"
+        : (this.appMode === "DEMO" ? "Ibai #9" : childNavLabel);
+    }
     if (equipoIcon) equipoIcon.textContent = this.currentRole === "coach" ? "groups" : "face";
 
     [tabInicio, tabAgenda, tabEquipo, tabAvisos].forEach(el => {
@@ -704,6 +781,8 @@ export class TeamAppState {
         await this.syncCoachAgenda();
       } else if (this.currentScreen === "v2_03_coach_roster") {
         await this.syncCoachRoster();
+      } else if (this.currentScreen === "v2_04_player_detail") {
+        await this.syncPlayerDetail();
       } else if (this.currentScreen === "screen_k_notices") {
         await this.syncNotices();
       } else if (this.currentScreen === "v2_05_event_hub_normal") {
@@ -1315,6 +1394,56 @@ export class TeamAppState {
               arrivalFormatted = ` (Citación: ${arrD.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}h)`;
             }
             const typeLabel = ev.type === 'MATCH' ? 'Partido' : (ev.type === 'TOURNAMENT' ? 'Torneo' : 'Entrenamiento');
+            let callupSectionHtml = '';
+            if (ev.callup_enabled) {
+              if (isGuardian) {
+                if (!ev.callup_status || ev.callup_status !== 'PUBLISHED') {
+                  callupSectionHtml = `
+                    <div class="mt-2 pt-2 border-t border-outline-variant/30 flex items-center justify-between">
+                      <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 font-label-sm text-[11px] font-extrabold">
+                        <span class="material-symbols-outlined text-[13px] text-amber-700">hourglass_top</span>
+                        <span>Convocatoria pendiente</span>
+                      </span>
+                      <span class="text-[11px] text-on-surface-variant font-medium">Por publicar</span>
+                    </div>
+                  `;
+                } else {
+                  callupSectionHtml = `
+                    <div class="mt-2 pt-2 border-t border-outline-variant/30 flex items-center justify-between">
+                      <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-bold">
+                        <span class="material-symbols-outlined text-[13px] text-emerald-700">check_circle</span>
+                        <span>Convocatoria publicada (Rev. ${ev.callup_revision || 1})</span>
+                      </span>
+                    </div>
+                  `;
+                }
+              } else {
+                if (!ev.callup_status || ev.callup_status !== 'PUBLISHED') {
+                  callupSectionHtml = `
+                    <div class="mt-2 pt-2 border-t border-outline-variant/30 flex items-center justify-between gap-2">
+                      <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 font-label-sm text-[11px] font-extrabold">
+                        <span class="material-symbols-outlined text-[13px] text-amber-700">hourglass_top</span>
+                        <span>Convocatoria pendiente</span>
+                      </span>
+                      <button id="coach-agenda-publish-btn-${ev.id}" onclick="teamApp.prepareAndPublishCallup('${ev.id}')" class="h-8 px-3 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-sm text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition-all">
+                        <span class="material-symbols-outlined text-[14px]">send</span>
+                        <span>Publicar convocatoria</span>
+                      </button>
+                    </div>
+                  `;
+                } else {
+                  callupSectionHtml = `
+                    <div class="mt-2 pt-2 border-t border-outline-variant/30 flex items-center justify-between">
+                      <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-bold">
+                        <span class="material-symbols-outlined text-[13px] text-emerald-700">check_circle</span>
+                        <span>✓ Convocatoria publicada (Rev. ${ev.callup_revision || 1})</span>
+                      </span>
+                    </div>
+                  `;
+                }
+              }
+            }
+
             return `
               <div class="flex flex-col gap-2">
                 <div class="flex items-center justify-between px-0.5">
@@ -1353,6 +1482,7 @@ export class TeamAppState {
                       <span>${ev.notes}</span>
                     </div>` : ''}
                   </div>
+                  ${callupSectionHtml}
                 </article>
               </div>
             `;
@@ -1361,6 +1491,54 @@ export class TeamAppState {
       }
     } catch (err) {
       console.warn("Error syncing agenda:", err);
+    }
+  }
+
+  async prepareAndPublishCallup(eventId) {
+    await this.ensureAuth("coach");
+    try {
+      const activeTeamSeasonId = this.beta.teamSeasonId;
+      if (!activeTeamSeasonId) throw new Error("No active team season");
+
+      const playersRes = await api.teams.getPlayers(activeTeamSeasonId);
+      const players = playersRes.items || [];
+      if (players.length === 0) {
+        this.showToast("⚠️ La plantilla no tiene jugadores para convocar.");
+        return;
+      }
+      const playerIds = players.map(p => p.id);
+
+      let draft;
+      try {
+        draft = await api.callup.createDraft(eventId, playerIds);
+      } catch (err) {
+        const ev = await api.events.getEvent(eventId);
+        if (ev && ev.callup_id) {
+          const existingCallup = await api.callup.getCallup(ev.callup_id);
+          draft = await api.callup.updateDraft(ev.callup_id, {
+            playerIds,
+            expectedVersion: existingCallup.version ?? 1
+          });
+        } else {
+          throw err;
+        }
+      }
+
+      if (!draft || !draft.id) throw new Error("No se pudo obtener el borrador de convocatoria.");
+
+      const confirmKeys = (draft.warnings || []).map(w => w.key);
+
+      await api.callup.publishCallup(
+        draft.id,
+        { expectedVersion: draft.version ?? 1, confirmWarnings: confirmKeys },
+        `pub-${Date.now()}`
+      );
+
+      this.showToast(`✓ Convocatoria publicada (${playerIds.length} jugadores convocados).`);
+      await this.syncCurrentScreen();
+    } catch (err) {
+      console.error("Error publicando convocatoria:", err);
+      this.showToast(`Error al publicar convocatoria: ${err.message || 'Error en backend'}`);
     }
   }
 
@@ -1709,7 +1887,8 @@ export class TeamAppState {
           childSwitcher.onclick = () => this.cycleGuardianPlayer();
           childSwitcher.title = "Haz clic para cambiar de hijo/a";
         } else {
-          childSwitcher.onclick = null;
+          childSwitcher.onclick = () => this.goToScreen("v2_04_player_detail", "hijos");
+          childSwitcher.title = "Haz clic para ver la ficha del menor";
         }
       }
 
@@ -1742,12 +1921,53 @@ export class TeamAppState {
         } else {
           if (urgentSection) urgentSection.classList.add("hidden");
           if (commitmentsList) {
-            commitmentsList.innerHTML = events.map(ev => {
+            const eventCards = await Promise.all(events.map(async ev => {
               const d = new Date(ev.starts_at);
               const dateFormatted = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
               const timeFormatted = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+              
+              let callupBadge = '';
+              if (ev.callup_enabled) {
+                if (!ev.callup_status || ev.callup_status !== 'PUBLISHED') {
+                  callupBadge = `
+                    <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
+                      <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 font-label-sm text-[11px] font-extrabold">
+                        <span class="material-symbols-outlined text-[13px] text-amber-700">hourglass_top</span>
+                        <span>Convocatoria pendiente</span>
+                      </span>
+                      <span class="text-[11px] text-on-surface-variant">Sin publicar</span>
+                    </div>
+                  `;
+                } else {
+                  try {
+                    const status = await api.callup.getPlayerCallupStatus(ev.id, activePlayer.id || activePlayer.playerId);
+                    if (status.called) {
+                      callupBadge = `
+                        <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
+                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-extrabold">
+                            <span class="material-symbols-outlined text-[13px] text-emerald-700">check_circle</span>
+                            <span>✓ Convocado (Rev. ${status.revision || 1})</span>
+                          </span>
+                        </div>
+                      `;
+                    } else {
+                      callupBadge = `
+                        <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
+                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-300 text-slate-700 font-label-sm text-[11px] font-bold">
+                            <span class="material-symbols-outlined text-[13px] text-slate-500">remove_circle_outline</span>
+                            <span>No convocado (Rev. ${status.revision || 1})</span>
+                          </span>
+                        </div>
+                      `;
+                    }
+                  } catch (e) {
+                    console.warn("Could not fetch child callup status:", e);
+                  }
+                }
+              }
+
               return `
-                <article class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 p-4 shadow-sm flex flex-col gap-2.5">
+                <article class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 p-4 shadow-sm flex flex-col gap-2.5 cursor-pointer hover:border-secondary transition-colors" onclick="teamApp.goToScreen('v2_04_player_detail', 'hijos')">
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-1.5 font-label-sm text-label-sm font-bold text-primary">
                       <span class="material-symbols-outlined text-[16px]">today</span>
@@ -1764,9 +1984,11 @@ export class TeamAppState {
                       <span class="font-body-sm text-body-sm">${ev.location || 'Instalaciones del club'}</span>
                     </div>
                   </div>
+                  ${callupBadge}
                 </article>
               `;
-            }).join('');
+            }));
+            commitmentsList.innerHTML = eventCards.join('');
           }
         }
       }
@@ -1782,7 +2004,273 @@ export class TeamAppState {
     const nextIndex = (currentIndex + 1) % this.beta.guardianPlayers.length;
     this.beta.guardianPlayer = this.beta.guardianPlayers[nextIndex];
     this.showToast(`Cambiando vista a: ${this.beta.guardianPlayer.firstName || this.beta.guardianPlayer.first_name}`);
-    this.syncParentHome();
+    this.syncCurrentScreen();
+  }
+
+  selectGuardianChild(playerId) {
+    if (!this.beta.guardianPlayers?.length) return;
+    const found = this.beta.guardianPlayers.find(p => (p.id || p.playerId) === playerId);
+    if (found) {
+      this.beta.guardianPlayer = found;
+      this.showToast(`Mostrando ficha de: ${found.first_name || found.firstName}`);
+      this.syncCurrentScreen();
+    }
+  }
+
+  async syncPlayerDetail() {
+    const isDemo = this.appMode === "DEMO";
+    const demoContainer = document.getElementById("player-detail-demo-container");
+    const parentContainer = document.getElementById("player-detail-parent-container");
+    const coachBar = document.getElementById("player-detail-coach-bar");
+    const coachActions = document.getElementById("player-detail-coach-actions");
+    const backLabel = document.getElementById("player-detail-back-label");
+    const categoryBadge = document.getElementById("player-detail-category-badge");
+
+    if (this.currentRole === "coach") {
+      if (backLabel) backLabel.textContent = "Plantilla";
+      if (coachActions) coachActions.classList.remove("hidden");
+      if (coachBar) coachBar.classList.remove("hidden");
+      if (parentContainer) parentContainer.classList.add("hidden");
+      if (demoContainer) demoContainer.classList.remove("hidden");
+      if (categoryBadge) {
+        categoryBadge.textContent = isDemo
+          ? "Infantil A"
+          : (this.beta.teamSeason?.display_label || this.beta.teamSeason?.category || "Equipo");
+      }
+      return;
+    }
+
+    // Role is PARENT / GUARDIAN: strictly clean view for GuardianLink
+    if (backLabel) backLabel.textContent = "Inicio";
+    if (coachActions) coachActions.classList.add("hidden");
+    if (coachBar) coachBar.classList.add("hidden");
+    if (demoContainer) demoContainer.classList.add("hidden");
+    if (!parentContainer) return;
+    parentContainer.classList.remove("hidden");
+
+    if (isDemo) {
+      if (categoryBadge) categoryBadge.textContent = "Infantil A";
+      parentContainer.innerHTML = `
+        <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-1 bg-secondary"></div>
+          <div class="flex items-start gap-4">
+            <div class="relative flex-shrink-0">
+              <div class="w-16 h-16 rounded-full bg-surface-container-highest border-2 border-secondary flex items-center justify-center text-secondary font-headline-lg text-headline-lg font-extrabold shadow-sm">
+                IA
+              </div>
+              <div class="absolute -bottom-1 -right-1 bg-secondary text-on-secondary font-headline-sm text-headline-sm font-black px-2 py-0.5 rounded-md border-2 border-surface-container-lowest shadow-sm">
+                #9
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-secondary">C.D. Indautxu · Infantil A</span>
+              <h1 class="font-headline-lg text-headline-lg font-extrabold text-on-surface truncate leading-tight mt-0.5">Ibai Aranguren</h1>
+              <p class="font-label-md text-label-md font-semibold text-on-surface-variant flex items-center gap-1 mt-0.5">
+                <span class="material-symbols-outlined text-[16px] text-secondary">sports_soccer</span>
+                Delantero Centro
+              </p>
+            </div>
+          </div>
+        </section>
+      `;
+      return;
+    }
+
+    // BETA_NORMAL mode
+    await this.ensureAuth("parent");
+    if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
+      await this.loadUserContext();
+    }
+
+    const players = this.beta.guardianPlayers || [];
+    const activePlayer = this.beta.guardianPlayer || players[0];
+
+    if (categoryBadge) {
+      categoryBadge.textContent = this.beta.teamSeason?.display_label || this.beta.teamSeason?.category || "Equipo";
+    }
+
+    if (!activePlayer) {
+      parentContainer.innerHTML = `
+        <div class="p-6 bg-surface-container-lowest rounded-2xl border border-dashed border-outline-variant text-center space-y-2">
+          <p class="font-label-lg font-bold text-on-surface">No hay deportista vinculado a este perfil familiar</p>
+          <p class="font-body-sm text-on-surface-variant">Usa el enlace o código de invitación proporcionado por el entrenador.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const firstName = activePlayer.first_name || activePlayer.firstName || "Deportista";
+    const lastName = activePlayer.last_name || activePlayer.lastName || "";
+    const shirtNum = activePlayer.shirt_number ?? activePlayer.shirtNumber ?? "-";
+    const position = activePlayer.position || "Deportista";
+    const initials = `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase();
+    const teamName = this.beta.team?.name || "Equipo";
+    const seasonLabel = this.beta.teamSeason?.display_label || this.beta.teamSeason?.season_label || "Temporada";
+
+    // Multi-child switcher HTML
+    let switcherHtml = "";
+    if (players.length > 1) {
+      switcherHtml = `
+        <div class="flex items-center gap-1.5 p-1 bg-surface-container-low rounded-xl border border-outline-variant/50">
+          ${players.map(p => {
+            const pId = p.id || p.playerId;
+            const isSel = pId === (activePlayer.id || activePlayer.playerId);
+            const pName = p.first_name || p.firstName;
+            const pNum = p.shirt_number ?? p.shirtNumber ?? '-';
+            return `
+              <button onclick="teamApp.selectGuardianChild('${pId}')" class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${isSel ? 'bg-secondary text-white shadow-xs' : 'text-on-surface-variant hover:bg-surface-container'}">
+                ${pName} (#${pNum})
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    // Upcoming events and callup status for this child
+    let eventsHtml = "";
+    try {
+      if (this.beta.teamSeasonId) {
+        const eventsRes = await api.events.getEvents(this.beta.teamSeasonId);
+        const events = eventsRes?.items || [];
+        if (events.length > 0) {
+          const cards = await Promise.all(events.map(async ev => {
+            const d = new Date(ev.starts_at);
+            const dateFormatted = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+            const timeFormatted = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            let arrivalFormatted = '';
+            if (ev.arrival_at) {
+              const arrD = new Date(ev.arrival_at);
+              arrivalFormatted = ` (Citación: ${arrD.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}h)`;
+            }
+
+            let callupBadgeHtml = "";
+            let callupNoteHtml = "";
+
+            if (ev.callup_enabled) {
+              if (!ev.callup_status || ev.callup_status !== "PUBLISHED") {
+                callupBadgeHtml = `
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-900 font-label-sm text-[11px] font-extrabold">
+                    <span class="material-symbols-outlined text-[14px] text-amber-700">hourglass_top</span>
+                    <span>Convocatoria pendiente</span>
+                  </span>
+                `;
+                callupNoteHtml = `<p class="font-body-sm text-xs text-on-surface-variant mt-1.5 flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[14px] text-amber-600">info</span>
+                  El cuerpo técnico aún no ha publicado la convocatoria oficial para este evento.
+                </p>`;
+              } else {
+                try {
+                  const status = await api.callup.getPlayerCallupStatus(ev.id, activePlayer.id || activePlayer.playerId);
+                  if (status.called) {
+                    callupBadgeHtml = `
+                      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-extrabold">
+                        <span class="material-symbols-outlined text-[14px] text-emerald-700">check_circle</span>
+                        <span>✓ Convocado (Rev. ${status.revision || 1})</span>
+                      </span>
+                    `;
+                  } else {
+                    callupBadgeHtml = `
+                      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-700 font-label-sm text-[11px] font-bold">
+                        <span class="material-symbols-outlined text-[14px] text-slate-500">remove_circle_outline</span>
+                        <span>No convocado (Rev. ${status.revision || 1})</span>
+                      </span>
+                    `;
+                  }
+                } catch (e) {
+                  console.warn("Could not check child callup status:", e);
+                }
+              }
+            }
+
+            return `
+              <div class="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/40 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="font-label-sm text-label-sm font-bold text-primary flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[15px]">calendar_today</span>
+                    ${dateFormatted} · ${timeFormatted}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full bg-surface-container font-label-sm text-[10px] font-bold text-on-surface-variant">
+                    ${ev.type === 'MATCH' ? 'Partido' : (ev.type === 'TOURNAMENT' ? 'Torneo' : 'Entrenamiento')}
+                  </span>
+                </div>
+                <div>
+                  <h4 class="font-headline-sm text-sm font-bold text-on-surface">${ev.title}</h4>
+                  <p class="font-body-sm text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
+                    <span class="material-symbols-outlined text-[13px]">location_on</span>
+                    ${ev.location || 'Campo de juego'} ${arrivalFormatted}
+                  </p>
+                </div>
+                ${callupBadgeHtml ? `<div class="pt-2 border-t border-outline-variant/30 flex items-center justify-between">${callupBadgeHtml}</div>` : ''}
+                ${callupNoteHtml}
+              </div>
+            `;
+          }));
+          eventsHtml = cards.join('');
+        }
+      }
+    } catch (e) {
+      console.warn("Error loading child events:", e);
+    }
+
+    parentContainer.innerHTML = `
+      ${switcherHtml}
+      <!-- Hero Card del Menor Vinculado -->
+      <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm relative overflow-hidden">
+        <div class="absolute top-0 left-0 right-0 h-1 bg-secondary"></div>
+        <div class="flex items-start gap-4">
+          <div class="relative flex-shrink-0">
+            <div class="w-16 h-16 rounded-full bg-surface-container-highest border-2 border-secondary flex items-center justify-center text-secondary font-headline-lg text-headline-lg font-extrabold shadow-sm">
+              ${initials}
+            </div>
+            <div class="absolute -bottom-1 -right-1 bg-secondary text-on-secondary font-headline-sm text-headline-sm font-black px-2 py-0.5 rounded-md border-2 border-surface-container-lowest shadow-sm">
+              #${shirtNum}
+            </div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-secondary">${teamName}</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                Plantilla activa
+              </span>
+            </div>
+            <h1 class="font-headline-lg text-headline-lg font-extrabold text-on-surface truncate leading-tight mt-0.5">
+              ${firstName} ${lastName}
+            </h1>
+            <p class="font-label-md text-label-md font-semibold text-on-surface-variant flex items-center gap-1 mt-0.5">
+              <span class="material-symbols-outlined text-[16px] text-secondary">sports_soccer</span>
+              ${position} · Dorsal #${shirtNum}
+            </p>
+          </div>
+        </div>
+
+        <!-- Metadatos Básicos -->
+        <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-outline-variant/30">
+          <div class="bg-surface-container-low rounded-xl p-2.5 text-center border border-outline-variant/30">
+            <span class="block font-label-sm text-[10px] uppercase font-bold text-on-surface-variant">Equipo</span>
+            <span class="font-label-md text-label-md font-extrabold text-on-surface truncate block">${teamName}</span>
+          </div>
+          <div class="bg-surface-container-low rounded-xl p-2.5 text-center border border-outline-variant/30">
+            <span class="block font-label-sm text-[10px] uppercase font-bold text-on-surface-variant">Temporada</span>
+            <span class="font-label-md text-label-md font-extrabold text-on-surface truncate block">${seasonLabel}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Próximos eventos y Convocatoria -->
+      <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="font-headline-sm text-headline-sm font-bold text-on-surface">Próximos eventos y convocatoria</h2>
+          <span class="font-label-sm text-[11px] font-bold text-secondary bg-secondary-container/30 px-2 py-0.5 rounded-full">Oficial</span>
+        </div>
+        ${eventsHtml || `
+          <div class="p-4 bg-surface-container-low rounded-xl text-center text-body-sm text-on-surface-variant">
+            No hay eventos programados para este equipo en este momento.
+          </div>
+        `}
+      </section>
+    `;
   }
 
   async syncParentRsvp() {

@@ -523,6 +523,10 @@ export class TeamAppState {
   }
 
   async goToScreen(screenId, tab = null) {
+    if (this.appMode !== "DEMO" && screenId === "v2_06_event_hub_injury") {
+      screenId = "v2_05_event_hub_normal";
+    }
+
     const coachOnlyScreens = [
       "screen_c_create_event",
       "screen_e_create_squad",
@@ -789,6 +793,8 @@ export class TeamAppState {
         await this.syncEventHubNormal();
       } else if (this.currentScreen === "v2_06_event_hub_injury") {
         await this.syncEventHubInjury();
+      } else if (this.currentScreen === "screen_e_create_squad") {
+        await this.syncSquadPrep();
       } else if (this.currentScreen === "v2_07_parent_home") {
         await this.syncParentHome();
       } else if (this.currentScreen === "v2_08_parent_rsvp") {
@@ -1708,17 +1714,19 @@ export class TeamAppState {
     let eventId = isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : (this.beta.activeEventId || localStorage.getItem("talde_active_event_id"));
     let activeEvent = null;
 
-    if (!isDemo && activeTeamSeasonId) {
-      const eventsRes = await api.events.getEvents(activeTeamSeasonId).catch(() => ({ items: [] }));
-      const events = eventsRes.items || [];
-      if (events.length > 0) {
-        if (eventId) {
-          activeEvent = events.find(e => e.id === eventId) || events[0];
-        } else {
+    if (activeTeamSeasonId || isDemo) {
+      if (eventId) {
+        const evRes = await api.events.getEvent(eventId).catch(() => null);
+        activeEvent = (evRes && evRes.event) ? evRes.event : evRes;
+      }
+      if (!activeEvent && activeTeamSeasonId) {
+        const eventsRes = await api.events.getEvents(activeTeamSeasonId).catch(() => ({ items: [] }));
+        const events = eventsRes.items || [];
+        if (events.length > 0) {
           activeEvent = events[0];
+          eventId = activeEvent.id;
+          if (!isDemo) this.beta.activeEventId = eventId;
         }
-        eventId = activeEvent.id;
-        this.beta.activeEventId = eventId;
       }
     }
 
@@ -1742,13 +1750,13 @@ export class TeamAppState {
       players = (availRes.items || []);
     }
 
-    const totalSquad = !isDemo ? (players.length || (availRes.items || []).length || 1) : 18;
+    const totalSquad = players.length || (availRes.items || []).length || (isDemo ? 18 : 0);
 
     const rawCounts = availRes.counts || {};
     const canAttendCount = rawCounts.CAN_ATTEND ?? 0;
     const cannotAttendCount = rawCounts.CANNOT_ATTEND ?? 0;
     const unsureCount = rawCounts.UNSURE ?? 0;
-    const noResponseCount = isDemo ? (rawCounts.NO_RESPONSE ?? 2) : Math.max(0, totalSquad - (canAttendCount + cannotAttendCount + unsureCount));
+    const noResponseCount = rawCounts.NO_RESPONSE ?? Math.max(0, totalSquad - (canAttendCount + cannotAttendCount + unsureCount));
 
     const pendingTotal = noResponseCount + unsureCount;
 
@@ -1786,30 +1794,8 @@ export class TeamAppState {
     if (statDuda) statDuda.textContent = `${pendingTotal} Espera (${pctPend}%)`;
     if (squadChip) squadChip.textContent = `Plantilla completa para el evento (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'})`;
 
-    // 3. Hydrate Event Header & Hero Details
-    if (isDemo) {
-      const headerTitle = document.getElementById("hub-header-title");
-      const headerSub = document.getElementById("hub-header-subtitle");
-      const heroTitle = document.getElementById("hub-hero-title");
-      const heroSchedule = document.getElementById("hub-hero-schedule");
-      const heroLocation = document.getElementById("hub-hero-location-name");
-      const heroLocationSub = document.getElementById("hub-hero-location-sub");
-      const heroBadge = document.getElementById("hub-hero-badge");
-      const arrivalContainer = document.getElementById("hub-hero-arrival-container");
-      const arrivalTime = document.getElementById("hub-hero-arrival-time");
-      const logisticsEq = document.getElementById("hub-logistics-equipment");
-
-      if (headerTitle) headerTitle.textContent = "Torneo Apertura";
-      if (headerSub) headerSub.textContent = "Sábado 19 Sep · 09:30 h";
-      if (heroTitle) heroTitle.textContent = "Torneo Indautxu";
-      if (heroSchedule) heroSchedule.textContent = "Sábado 19 Sep · 09:30 - 14:00";
-      if (heroLocation) heroLocation.textContent = "Polideportivo Municipal Indautxu";
-      if (heroLocationSub) heroLocationSub.textContent = "Pabellón 1 · Pista Central";
-      if (heroBadge) heroBadge.textContent = "Torneo Oficial";
-      if (arrivalContainer) arrivalContainer.classList.remove("hidden");
-      if (arrivalTime) arrivalTime.textContent = "Citación vestuario: 08:45 h";
-      if (logisticsEq) logisticsEq.textContent = "1ª Equipación Oficial (Azul)";
-    } else if (activeEvent) {
+    // 3. Hydrate Event Header & Hero Details dynamically
+    if (activeEvent) {
       const headerTitle = document.getElementById("hub-header-title");
       const headerSub = document.getElementById("hub-header-subtitle");
       const heroTitle = document.getElementById("hub-hero-title");
@@ -1831,7 +1817,7 @@ export class TeamAppState {
       if (heroSchedule) heroSchedule.textContent = `${dateFormatted} · ${timeFormatted} h`;
       if (heroLocation) heroLocation.textContent = activeEvent.location || "Campo de juego";
       if (heroLocationSub) heroLocationSub.textContent = activeEvent.notes || "Instalaciones del equipo";
-      if (heroBadge) heroBadge.textContent = activeEvent.type === "MATCH" ? "Partido Oficial" : (activeEvent.type === "TRAINING" ? "Entrenamiento" : "Evento");
+      if (heroBadge) heroBadge.textContent = activeEvent.type === "MATCH" ? "Partido Oficial" : (activeEvent.type === "TRAINING" ? "Entrenamiento" : (activeEvent.type === "TOURNAMENT" ? "Torneo Oficial" : "Evento"));
 
       if (activeEvent.arrival_at) {
         const arrDate = new Date(activeEvent.arrival_at);
@@ -1845,46 +1831,37 @@ export class TeamAppState {
       if (logisticsEq) logisticsEq.textContent = activeEvent.notes || "1ª Equipación Oficial del equipo";
     }
 
-    // 4. Hydrate Pending Names & Alerts
+    // 4. Hydrate Pending Names & Alerts (Dynamic from Availability API for both BETA and DEMO)
     const pendingAlertBanner = document.getElementById("hub-pending-alert-banner");
     const pendingNamesEl = document.getElementById("hub-pending-names");
     const nudgeBtn = document.getElementById("hub-btn-nudge");
+    const sendNoticeBtn = document.getElementById("hub-btn-send-notice");
+
+    const items = availRes.items || [];
+    const pendingItems = items.filter(p => p.status === "NO_RESPONSE" || p.status === "UNSURE");
+
+    if (pendingItems.length > 0) {
+      const namesFormatted = pendingItems.map(p => `<strong class="text-on-surface">${p.first_name || p.firstName || ''} ${p.last_name || p.lastName || ''} (#${p.shirt_number || p.shirtNumber || '-'})</strong>`).join(" y ");
+      if (pendingNamesEl) pendingNamesEl.innerHTML = `${namesFormatted} aún no ${pendingItems.length === 1 ? 'ha' : 'han'} respondido al aviso.`;
+      if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
+    } else {
+      if (pendingNamesEl) pendingNamesEl.innerHTML = `<span class="text-emerald-800 font-bold">✓ Todos los jugadores han respondido a la disponibilidad.</span>`;
+      if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
+    }
 
     if (!isDemo) {
-      const items = availRes.items || [];
-      const pendingItems = items.filter(p => p.status === "NO_RESPONSE" || p.status === "UNSURE");
-      if (pendingItems.length > 0) {
-        const namesFormatted = pendingItems.map(p => `<strong class="text-on-surface">${p.first_name || p.firstName || ''} ${p.last_name || p.lastName || ''} (#${p.shirt_number || p.shirtNumber || '-'})</strong>`).join(" y ");
-        if (pendingNamesEl) pendingNamesEl.innerHTML = `${namesFormatted} aún no ${pendingItems.length === 1 ? 'ha' : 'han'} respondido al aviso.`;
-        if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
-      } else {
-        if (pendingNamesEl) pendingNamesEl.innerHTML = `<span class="text-emerald-800 font-bold">✓ Todos los jugadores han respondido a la disponibilidad.</span>`;
-        if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
-      }
-
-      if (nudgeBtn) {
-        if (pendingTotal > 0) {
-          nudgeBtn.classList.remove("hidden");
-          nudgeBtn.onclick = () => this.showToast("⚠️ Recordatorio registrado. Canal SMS/Push reservado a producción.");
-          const textSpan = nudgeBtn.querySelector("span:last-child");
-          if (textSpan) textSpan.textContent = `Recordar a pendientes (${pendingTotal})`;
-        } else {
-          nudgeBtn.classList.add("hidden");
-        }
-      }
-
-      const sendNoticeBtn = document.getElementById("hub-btn-send-notice");
-      if (sendNoticeBtn) {
-        sendNoticeBtn.onclick = () => this.showToast("⚠️ Los avisos a familias se enviarán al publicar la convocatoria.");
-      }
+      if (nudgeBtn) nudgeBtn.classList.add("hidden");
+      if (sendNoticeBtn) sendNoticeBtn.classList.add("hidden");
     } else {
-      if (pendingNamesEl) pendingNamesEl.innerHTML = `<strong class="text-on-surface">Ane Mintegi (#16)</strong> y <strong class="text-on-surface">Peio Gómez (#18)</strong> aún no han respondido al aviso.`;
-      if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
       if (nudgeBtn) {
         nudgeBtn.classList.remove("hidden");
         nudgeBtn.onclick = () => this.showToast("Simulación DEMO: Recordatorio enviado.");
         const textSpan = nudgeBtn.querySelector("span:last-child");
-        if (textSpan) textSpan.textContent = "Recordar a pendientes (2)";
+        if (textSpan) textSpan.textContent = `Recordar a pendientes (${pendingTotal})`;
+      }
+      if (sendNoticeBtn) {
+        sendNoticeBtn.classList.remove("hidden");
+        sendNoticeBtn.onclick = () => this.showToast("Simulación DEMO: Aviso a familias enviado.");
       }
     }
 
@@ -1913,7 +1890,7 @@ export class TeamAppState {
       }
       if (callupBtn) {
         callupBtn.className = "w-full h-[50px] bg-secondary hover:bg-emerald-700 text-white font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm";
-        callupBtn.onclick = () => this.showToast(`✓ Convocatoria publicada (${totalSquad} jugadores).`);
+        callupBtn.onclick = () => this.showToast(`✓ Convocatoria publicada (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'}).`);
         if (callupBtnText) callupBtnText.textContent = `✓ Convocatoria publicada (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'})`;
       }
     } else {
@@ -1926,18 +1903,115 @@ export class TeamAppState {
       }
       if (callupNotice) {
         callupNotice.innerHTML = `<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
-          <strong class="text-on-surface font-medium">Paso 2 · Convocatoria por publicar.</strong> Podrás seleccionar y publicar los convocados del equipo cuando lo desees.
+          <strong class="text-on-surface font-medium">Paso 2 · Convocatoria por publicar.</strong> Podrás seleccionar los convocados y publicar la lista oficial cuando lo desees.
         </p>`;
       }
       if (callupBtn) {
         callupBtn.className = "w-full h-[50px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 cursor-pointer border border-primary/30 shadow-sm active:scale-[0.98] transition-all";
-        if (isDemo) {
-          callupBtn.onclick = () => this.handlePublishCallup();
-        } else {
-          callupBtn.onclick = () => this.prepareAndPublishCallup(eventId);
-        }
-        if (callupBtnText) callupBtnText.textContent = `Preparar y publicar convocatoria (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'})`;
+        callupBtn.onclick = () => this.handlePrepareCallup(eventId);
+        if (callupBtnText) callupBtnText.textContent = `Preparar convocatoria (${totalSquad} ${totalSquad === 1 ? 'jugador' : 'jugadores'})`;
       }
+    }
+  }
+
+  async handlePrepareCallup(eventId) {
+    await this.ensureAuth("coach");
+    if (eventId) {
+      this.beta.activeEventId = eventId;
+      try { localStorage.setItem("talde_active_event_id", eventId); } catch {}
+    }
+    if (this.appMode === "DEMO") {
+      await this.handlePublishCallup();
+    } else {
+      await this.goToScreen("screen_e_create_squad", "agenda");
+    }
+  }
+
+  async syncSquadPrep() {
+    await this.ensureAuth("coach");
+    const eventId = this.beta.activeEventId || localStorage.getItem("talde_active_event_id");
+    const activeTeamSeasonId = this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+
+    if (!eventId || !activeTeamSeasonId) return;
+
+    const [playersRes, availRes, evRes] = await Promise.all([
+      api.teams.getPlayers(activeTeamSeasonId).catch(() => ({ items: [] })),
+      api.availability.getEventAvailability(eventId).catch(() => ({ counts: {}, items: [] })),
+      api.events.getEvent(eventId).catch(() => null)
+    ]);
+
+    const players = playersRes.items || [];
+    const event = (evRes && evRes.event) ? evRes.event : evRes;
+
+    const submitBtn = document.querySelector("#screen_e_create_squad footer button");
+    if (submitBtn) {
+      submitBtn.onclick = () => this.executePublishCallupFromSquad();
+      const btnSpan = submitBtn.querySelector("span:first-child");
+      if (btnSpan) btnSpan.textContent = `Publicar Convocatoria Oficial (${players.length})`;
+    }
+  }
+
+  async executePublishCallupFromSquad() {
+    await this.ensureAuth("coach");
+    const eventId = this.beta.activeEventId || localStorage.getItem("talde_active_event_id");
+    const activeTeamSeasonId = this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+
+    if (!eventId || !activeTeamSeasonId) return;
+
+    try {
+      const playersRes = await api.teams.getPlayers(activeTeamSeasonId);
+      const players = playersRes.items || [];
+      if (players.length === 0) {
+        this.showToast("⚠️ La plantilla no tiene jugadores para convocar.");
+        return;
+      }
+
+      const availRes = await api.availability.getEventAvailability(eventId).catch(() => ({ items: [] }));
+      const availItems = availRes.items || [];
+
+      const cannotAttendIds = new Set(availItems.filter(a => a.status === "CANNOT_ATTEND").map(a => a.player_id));
+      const selectedPlayerIds = players.filter(p => !cannotAttendIds.has(p.id)).map(p => p.id);
+
+      if (selectedPlayerIds.length === 0) {
+        this.showToast("⚠️ Todos los jugadores están dados de baja.");
+        return;
+      }
+
+      let draft;
+      try {
+        draft = await api.callup.createDraft(eventId, selectedPlayerIds);
+      } catch (err) {
+        const evRes = await api.events.getEvent(eventId);
+        const ev = (evRes && evRes.event) ? evRes.event : evRes;
+        if (ev && ev.callup_id) {
+          const existingCallup = await api.callup.getCallup(ev.callup_id);
+          draft = await api.callup.updateDraft(ev.callup_id, {
+            playerIds: selectedPlayerIds,
+            expectedVersion: existingCallup.version ?? 1
+          });
+        } else {
+          throw err;
+        }
+      }
+
+      const callupId = draft ? draft.id : null;
+      const expectedVersion = draft ? draft.version : 1;
+      const confirmWarnings = (draft?.warnings || []).map(w => w.key);
+
+      const idemKey = idempotencyManager.getOrCreateKey(`publish-callup-${callupId || eventId}`);
+      const res = await api.callup.publishCallup(callupId, {
+        expectedVersion,
+        confirmWarnings
+      }, idemKey);
+
+      idempotencyManager.clearKey(`publish-callup-${callupId || eventId}`);
+      this.live.callup = res;
+      this.showToast(`✓ Convocatoria publicada (${selectedPlayerIds.length} ${selectedPlayerIds.length === 1 ? 'jugador convocado' : 'jugadores convocados'}).`);
+
+      await this.goToScreen("v2_05_event_hub_normal", "agenda");
+    } catch (err) {
+      console.error("Error al publicar convocatoria desde plantilla:", err);
+      this.showToast(`Error publicando convocatoria: ${mapDomainError(err)}`);
     }
   }
 

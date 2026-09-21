@@ -78,15 +78,17 @@ class CdpClient {
 async function runVerification() {
   console.log("=== STARTING EVENT HUB HYDRATION VERIFICATION ===");
 
-  const resetRes = await fetch(`${API_BASE}/v1/dev/reset`, { method: "POST" });
-  console.log("Dev reset status:", resetRes.status);
+  // 1. Clean BETA Database with /v1/dev/empty
+  const emptyRes = await fetch(`${API_BASE}/v1/dev/empty`, { method: "POST" });
+  console.log("Dev empty status:", emptyRes.status);
 
   const wsUrl = await getPageWsUrl();
   const cdp = new CdpClient(wsUrl);
   await cdp.connect();
 
-  await cdp.send("Page.navigate", { url: "http://127.0.0.1:8000/" });
-  await delay(1000);
+  console.log("Reloading page in Chrome to load fresh code...");
+  await cdp.send("Page.reload");
+  await delay(2000);
 
   // --- STEP 1: BETA NORMAL with 1 Player & 1 Event ---
   console.log("Checking BETA NORMAL mode with 1 player & 1 event...");
@@ -108,15 +110,19 @@ async function runVerification() {
   await delay(2000);
 
   // Add EXACTLY 1 Player: Unai Lopez
-  await cdp.evaluate(`
+  const playerAddRes = await cdp.evaluate(`
     (async () => {
       document.getElementById('player-firstname').value = 'Unai';
       document.getElementById('player-lastname').value = 'Lopez';
       document.getElementById('player-number').value = '10';
       document.getElementById('player-position').value = 'Centrocampista';
       await teamApp.submitAddPlayer();
+      const tsId = localStorage.getItem('talde_team_season_id');
+      const psRes = await api.teams.getPlayers(tsId);
+      return psRes.items[0];
     })()
   `);
+  console.log("Added player ID:", playerAddRes.id);
   await delay(1500);
 
   // Create 1 Match Event
@@ -144,8 +150,21 @@ async function runVerification() {
   console.log("Created event ID:", createEvRes.id);
   await delay(1200);
 
-  // Navigate to Event Hub
-  await cdp.evaluate(`teamApp.goToScreen('v2_05_event_hub_normal', 'agenda')`);
+  // Set active event ID and navigate to Event Hub
+  const syncNavRes = await cdp.evaluate(`
+    (async () => {
+      try {
+        teamApp.currentRole = 'coach';
+        teamApp.beta.activeEventId = '${createEvRes.id}';
+        localStorage.setItem('talde_active_event_id', '${createEvRes.id}');
+        await teamApp.goToScreen('v2_05_event_hub_normal', 'agenda');
+        return { success: true, activeEvId: teamApp.beta.activeEventId, appMode: teamApp.appMode };
+      } catch (e) {
+        return { error: e.message, stack: e.stack };
+      }
+    })()
+  `);
+  console.log("Nav to Event Hub result:", JSON.stringify(syncNavRes));
   await delay(1500);
   await cdp.captureScreenshot("v5_01_beta_1player_event_hub.png");
 
@@ -158,6 +177,8 @@ async function runVerification() {
   const pendingNamesText = await cdp.evaluate(`document.getElementById('hub-pending-names')?.innerText`);
   const callupBadgeText = await cdp.evaluate(`document.getElementById('hub-callup-phase-badge')?.innerText`);
   const callupBtnText = await cdp.evaluate(`document.getElementById('hub-callup-btn-text')?.innerText`);
+  const nudgeHidden = await cdp.evaluate(`document.getElementById('hub-btn-nudge')?.classList.contains('hidden')`);
+  const sendNoticeHidden = await cdp.evaluate(`document.getElementById('hub-btn-send-notice')?.classList.contains('hidden')`);
 
   console.log("BETA Hub Verification:");
   console.log("- Hero Title:", heroTitle);
@@ -166,6 +187,7 @@ async function runVerification() {
   console.log("- Pending Names Text:", pendingNamesText);
   console.log("- Callup Badge:", callupBadgeText);
   console.log("- Callup Button Text:", callupBtnText);
+  console.log("- Communication Buttons Hidden (Nudge / Notice):", nudgeHidden, "/", sendNoticeHidden);
 
   if (heroTitle.includes("Indautxu")) {
     throw new Error("BETA Hub failed: Hero title leaked Indautxu!");
@@ -182,24 +204,49 @@ async function runVerification() {
   if (!callupBadgeText.includes("Convocatoria Pendiente")) {
     throw new Error(`BETA Hub failed: Callup badge expected 'Convocatoria Pendiente', got '${callupBadgeText}'!`);
   }
+  if (!callupBtnText.includes("Preparar convocatoria")) {
+    throw new Error(`BETA Hub failed: Callup button text expected 'Preparar convocatoria', got '${callupBtnText}'!`);
+  }
+  if (!nudgeHidden || !sendNoticeHidden) {
+    throw new Error("BETA Hub failed: Unbacked communication buttons should be hidden in BETA!");
+  }
 
-  const pubDebug = await cdp.evaluate(`
+  // --- STEP 2: Register Staff Availability (Authorized API) & Publish Callup ---
+  console.log("Registering staff availability for Unai Lopez (STAFF_RECORDED)...");
+  await cdp.evaluate(`
     (async () => {
-      try {
-        await teamApp.prepareAndPublishCallup('${createEvRes.id}');
-        const tsId = localStorage.getItem('talde_team_season_id');
-        const evsRes = await api.events.getEvents(tsId);
-        const ev = evsRes.items.find(e => e.id === '${createEvRes.id}');
-        await teamApp.syncEventHubNormal();
-        const badge = document.getElementById('hub-callup-phase-badge')?.innerText;
-        return { ev, badge };
-      } catch (e) {
-        return { error: e.message };
-      }
+      await api.availability.setStaffAvailability('${createEvRes.id}', '${playerAddRes.id}', {
+        status: 'CAN_ATTEND',
+        expectedVersion: 0,
+        note: 'Registrado por entrenador en BETA'
+      });
+      await teamApp.syncEventHubNormal();
     })()
   `);
-  console.log("Publish Debug Result:", JSON.stringify(pubDebug));
   await delay(1200);
+
+  const postAvailDispCount = await cdp.evaluate(`document.getElementById('hub-count-disponibles')?.innerText`);
+  console.log("Post-staff availability Disponibles count:", postAvailDispCount);
+  if (postAvailDispCount !== "1") {
+    throw new Error(`BETA Hub failed: Post-staff availability expected 1 disponible, got ${postAvailDispCount}!`);
+  }
+
+  // Click 'Preparar convocatoria' -> Navigates to screen_e_create_squad -> Execute Publish
+  console.log("Executing Callup preparation & publication from squad screen...");
+  await cdp.evaluate(`
+    (async () => {
+      await teamApp.handlePrepareCallup('${createEvRes.id}');
+    })()
+  `);
+  await delay(1200);
+
+  await cdp.evaluate(`
+    (async () => {
+      await teamApp.executePublishCallupFromSquad();
+    })()
+  `);
+  await delay(1500);
+
   await cdp.captureScreenshot("v5_02_beta_1player_callup_published.png");
 
   const pubBadgeText = await cdp.evaluate(`document.getElementById('hub-callup-phase-badge')?.innerText`);
@@ -211,41 +258,32 @@ async function runVerification() {
     throw new Error(`BETA Hub failed: Post-publish badge expected 'Convocatoria Publicada', got '${pubBadgeText}'!`);
   }
 
-  // --- STEP 2: DEMO Mode Verification ---
-  console.log("Checking DEMO mode hydration...");
-  const demoInitRes = await cdp.evaluate(`(async () => {
-    try {
-      await teamApp.startDemoMode();
-      return { success: true, appMode: teamApp.appMode };
-    } catch (e) {
-      return { error: e.message, stack: e.stack };
-    }
-  })()`);
-  console.log("DEMO startDemoMode Result:", JSON.stringify(demoInitRes));
-  await delay(2000);
-
-  const syncRes = await cdp.evaluate(`(async () => {
-    try {
-      await teamApp.goToScreen('v2_05_event_hub_normal', 'agenda');
-      return { success: true, appMode: teamApp.appMode, currentRole: teamApp.currentRole, activeEvId: teamApp.beta.activeEventId };
-    } catch (e) {
-      return { error: e.message, stack: e.stack };
-    }
-  })()`);
-  console.log("DEMO GoToScreen Result:", JSON.stringify(syncRes));
+  // --- STEP 3: DEMO Mode Verification with startDemoMode ---
+  console.log("Transitioning to DEMO mode via teamApp.startDemoMode()...");
+  await cdp.evaluate(`(async () => { await teamApp.startDemoMode(); })()`);
+  await delay(1500);
+  await cdp.evaluate(`(async () => { await teamApp.goToScreen('v2_05_event_hub_normal', 'agenda'); })()`);
   await delay(1500);
   await cdp.captureScreenshot("v5_03_demo_indautxu_event_hub.png");
 
   const demoTitle = await cdp.evaluate(`document.getElementById('hub-hero-title')?.innerText`);
   const demoPendingNames = await cdp.evaluate(`document.getElementById('hub-pending-names')?.innerText`);
+  const demoDispCount = await cdp.evaluate(`document.getElementById('hub-count-disponibles')?.innerText`);
+  const demoBajasCount = await cdp.evaluate(`document.getElementById('hub-count-bajas')?.innerText`);
+  const demoPendCount = await cdp.evaluate(`document.getElementById('hub-count-pendientes')?.innerText`);
+
   console.log("DEMO Hub Title:", demoTitle);
   console.log("DEMO Pending Names:", demoPendingNames);
+  console.log("DEMO Counts (Disp / Bajas / Pend):", demoDispCount, "/", demoBajasCount, "/", demoPendCount);
 
   if (!demoTitle.includes("Indautxu")) {
     throw new Error("DEMO Hub failed: Hero title missing Indautxu!");
   }
-  if (!demoPendingNames.includes("Ane Mintegi")) {
-    throw new Error("DEMO Hub failed: Pending names missing Ane Mintegi!");
+  if (!demoPendingNames.includes("aún no han respondido al aviso")) {
+    throw new Error(`DEMO Hub failed: Pending names expected pending text, got '${demoPendingNames}'!`);
+  }
+  if (demoDispCount !== "14" || demoBajasCount !== "2" || demoPendCount !== "2") {
+    throw new Error(`DEMO Hub failed: DEMO counts expected 14/2/2, got ${demoDispCount}/${demoBajasCount}/${demoPendCount}!`);
   }
 
   cdp.close();

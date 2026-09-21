@@ -254,11 +254,14 @@ export class TeamAppState {
       document.getElementById("demo-mode-badge")?.classList.add("hidden");
     }
 
+    this.bindGlobalEvents();
+
+    let contextLoaded = false;
     try {
       if (this.currentRole !== "onboard" && this.appMode === "DEMO") {
         await this.ensureAuth(this.currentRole);
       }
-      await this.loadUserContext();
+      contextLoaded = await this.loadUserContext();
       await this.syncCurrentScreen();
     } catch (err) {
       console.warn("Backend auth/sync deferred:", err);
@@ -269,11 +272,11 @@ export class TeamAppState {
     this.updateRoleUI();
     this.updateStepUI();
 
-    if (inviteToken) {
+    if (inviteToken && this.beta.individualInviteToken !== null && !contextLoaded) {
       setTimeout(() => {
         this.setupIndividualInvite(inviteToken);
       }, 150);
-    } else if (joinCode) {
+    } else if (joinCode && !contextLoaded) {
       setTimeout(() => {
         const input = document.getElementById("parent-join-code-input");
         if (input) input.value = joinCode.toUpperCase();
@@ -282,21 +285,125 @@ export class TeamAppState {
     }
   }
 
+  bindGlobalEvents() {
+    if (this._eventsBound) return;
+    this._eventsBound = true;
+
+    const handleFocusCheck = () => {
+      if (document.visibilityState === "visible" && this.currentRole === "parent" && this.appMode === "BETA_NORMAL") {
+        this.checkParentApprovalStatus(true);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleFocusCheck);
+    window.addEventListener("focus", handleFocusCheck);
+  }
+
+  cleanInviteTokenFromUrl() {
+    this.beta.individualInviteToken = null;
+    this.beta.verifiedInvitation = null;
+    try {
+      if (window.location.search.includes("inviteToken") || window.location.search.includes("join")) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("inviteToken");
+        url.searchParams.delete("join");
+        const newUrl = url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : "") + url.hash;
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    } catch (e) {
+      console.warn("Could not replace state:", e);
+    }
+  }
+
+  async checkParentApprovalStatus(silent = false) {
+    if (this.appMode === "DEMO") return false;
+    if (this._isCheckingApproval) return false;
+
+    const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
+    if (!parentToken) return false;
+
+    this._isCheckingApproval = true;
+    try {
+      // EXPLICITLY set client token to parent token
+      api.client.setToken(parentToken);
+      this.tokens.parent = parentToken;
+
+      const res = await api.teams.getMyMemberships();
+      const items = res?.items || [];
+
+      // Requirement 1 & 2: MUST have guardian_players.length > 0 to consolidate
+      const contextTeamSeasonId = this.beta.targetTeamSeasonId || this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+      let guardianMem = contextTeamSeasonId
+        ? items.find(m => m.team_season_id === contextTeamSeasonId && m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0)
+        : null;
+
+      if (!guardianMem) {
+        guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0);
+      }
+
+      if (guardianMem) {
+        this.currentRole = "parent";
+        this.tokens.parent = parentToken;
+        this.beta.teamSeasonId = guardianMem.team_season_id;
+        localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
+        localStorage.setItem("talde_active_role", "parent");
+        this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
+        this.beta.teamSeason = {
+          id: guardianMem.team_season_id,
+          display_label: guardianMem.display_label,
+          season_label: guardianMem.season_label,
+          category: guardianMem.category,
+          join_code: guardianMem.join_code
+        };
+        this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
+        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+
+        this.cleanInviteTokenFromUrl();
+        if (!silent) {
+          this.showToast("✓ Vinculación aprobada por el entrenador. Accediendo a Familia...");
+        }
+        await this.goToScreen("v2_07_parent_home", "inicio");
+        return true;
+      } else if (!silent) {
+        this.showToast("Solicitud aún pendiente de aprobación por el cuerpo técnico.");
+      }
+    } catch (err) {
+      if (!silent) {
+        console.error("Error comprobando estado de aprobación:", err);
+      }
+    } finally {
+      this._isCheckingApproval = false;
+    }
+    return false;
+  }
+
   async loadUserContext() {
-    if (this.appMode === "DEMO") return;
+    if (this.appMode === "DEMO") return false;
     try {
       const activeRole = localStorage.getItem("talde_active_role") || this.currentRole || "coach";
       const coachToken = this.tokens.coach || localStorage.getItem("talde_token_coach");
       const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
 
-      if (activeRole === "parent" && parentToken) {
+      // Requirement 2: Only enter parent restoration if in parent role/context
+      if ((activeRole === "parent" || this.currentRole === "parent") && parentToken) {
         api.client.setToken(parentToken);
         this.tokens.parent = parentToken;
         const res = await api.teams.getMyMemberships();
         const items = res?.items || [];
-        const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
+
+        // Requirement 1: MUST have guardian_players.length > 0
+        const contextTeamSeasonId = this.beta.targetTeamSeasonId || this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+        let guardianMem = contextTeamSeasonId
+          ? items.find(m => m.team_season_id === contextTeamSeasonId && m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0)
+          : null;
+
+        if (!guardianMem) {
+          guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0);
+        }
+
         if (guardianMem) {
           this.currentRole = "parent";
+          localStorage.setItem("talde_active_role", "parent");
           this.beta.teamSeasonId = guardianMem.team_season_id;
           localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
           this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
@@ -307,8 +414,10 @@ export class TeamAppState {
             category: guardianMem.category,
             join_code: guardianMem.join_code
           };
-          this.beta.guardianPlayers = guardianMem.guardian_players || [];
+          this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
           this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+
+          this.cleanInviteTokenFromUrl();
 
           const urlParams = new URLSearchParams(window.location.search);
           const screenParam = urlParams.get("screen");
@@ -316,16 +425,16 @@ export class TeamAppState {
             const lastScreen = localStorage.getItem("talde_last_screen");
             this.currentScreen = (lastScreen && lastScreen.startsWith("v2_07_")) ? lastScreen : "v2_07_parent_home";
           }
-          return;
+          return true;
         }
       }
 
       const activeToken = coachToken || parentToken || api.client.getToken();
-      if (!activeToken) return;
+      if (!activeToken) return false;
       api.client.setToken(activeToken);
       const res = await api.teams.getMyMemberships();
       const items = res?.items || [];
-      if (!items.length) return;
+      if (!items.length) return false;
 
       const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
       if (coachMem) {
@@ -371,10 +480,10 @@ export class TeamAppState {
             this.renderBetaPlayersList();
           } catch {}
         }
-        return;
+        return true;
       }
 
-      const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
+      const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0);
       if (guardianMem) {
         this.currentRole = "parent";
         this.tokens.parent = activeToken;
@@ -386,12 +495,14 @@ export class TeamAppState {
           season_label: guardianMem.season_label,
           category: guardianMem.category
         };
-        this.beta.guardianPlayers = guardianMem.guardian_players || [];
+        this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
         this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+        return true;
       }
     } catch (err) {
       console.warn("loadUserContext deferred or no active session:", err);
     }
+    return false;
   }
 
   toggleDemoTools() {
@@ -3371,6 +3482,12 @@ export class TeamAppState {
   // --- Separación de Flujos de Vinculación de Tutor ---
 
   async setupIndividualInvite(token) {
+    if (this.currentRole === "parent" && (this.beta.guardianPlayers || []).length > 0) {
+      this.cleanInviteTokenFromUrl();
+      this.goToScreen("v2_07_parent_home", "inicio");
+      return;
+    }
+
     this.beta.individualInviteToken = token;
     this.beta.joinFlowType = "INDIVIDUAL";
 
@@ -3550,9 +3667,15 @@ export class TeamAppState {
       if (notice) {
         notice.classList.remove("hidden");
         notice.innerHTML = `
-          <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-amber-800">
-            <span class="material-symbols-outlined text-[18px] text-amber-600">hourglass_top</span>
-            <span>Solicitud enviada al cuerpo técnico</span>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-amber-800">
+              <span class="material-symbols-outlined text-[18px] text-amber-600">hourglass_top</span>
+              <span>Solicitud enviada al cuerpo técnico</span>
+            </div>
+            <button id="btn-check-pending-status" onclick="teamApp.checkParentApprovalStatus()" class="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-lg border border-amber-400 cursor-pointer flex items-center gap-1 shadow-xs transition-all" type="button">
+              <span class="material-symbols-outlined text-[14px]">refresh</span>
+              <span>Comprobar estado</span>
+            </button>
           </div>
           <p class="text-xs text-amber-900 mt-1">
             Tu solicitud está <strong>PENDIENTE DE APROBACIÓN</strong>. Una vez que el entrenador confirme la vinculación, podrás acceder a la ficha y actividades del deportista.

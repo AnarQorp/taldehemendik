@@ -95,15 +95,18 @@ async function runVerification() {
   await delay(1000);
 
   // Bootstrap Coach
-  await cdp.evaluate(`
+  const coachCtx = await cdp.evaluate(`
     (async () => {
       document.getElementById('club-name').value = 'Barakaldo CF';
       document.getElementById('team-name').value = 'Infantil A';
       document.getElementById('coach-name').value = 'Mikel Mister';
       document.getElementById('coach-email').value = 'mister@barakaldo.test';
       await teamApp.submitCoachBootstrap();
+      return { coachToken: localStorage.getItem('talde_token_coach'), tsId: localStorage.getItem('talde_team_season_id') };
     })()
   `);
+  const { coachToken, tsId } = coachCtx;
+  console.log("Captured coachToken:", coachToken ? "PRESENT" : "MISSING", "tsId:", tsId);
   await delay(2000);
   await cdp.captureScreenshot("v4_01_coach_bootstrapped.png");
 
@@ -158,37 +161,51 @@ async function runVerification() {
 
   // Open tutor session via URL
   await cdp.send("Page.navigate", { url: `http://127.0.0.1:8000/?inviteToken=${inviteToken}` });
-  await delay(1500);
+  await delay(2500);
 
-  await cdp.evaluate(`
+  for (let i = 0; i < 20; i++) {
+    const ready = await cdp.evaluate(`typeof window.teamApp !== 'undefined'`);
+    if (ready) break;
+    await delay(300);
+  }
+
+  const submitJoinRes = await cdp.evaluate(`
     (async () => {
-      if (document.getElementById('tutor-name')) document.getElementById('tutor-name').value = 'Amaia Guruzeta';
-      if (document.getElementById('tutor-email')) document.getElementById('tutor-email').value = 'amaia@barakaldo.test';
-      await teamApp.submitParentJoinRequest();
+      try {
+        if ('${inviteToken}') {
+          await teamApp.setupIndividualInvite('${inviteToken}');
+        }
+        if (document.getElementById('tutor-name')) document.getElementById('tutor-name').value = 'Amaia Guruzeta';
+        if (document.getElementById('tutor-email')) document.getElementById('tutor-email').value = 'amaia@barakaldo.test';
+        await teamApp.submitParentJoinRequest();
+        return { success: true, verified: teamApp.beta.verifiedInvitation };
+      } catch (err) {
+        return { error: err.message, stack: err.stack };
+      }
     })()
   `);
-  await delay(1500);
+  console.log("DEBUG submitParentJoinRequest result:", JSON.stringify(submitJoinRes, null, 2));
+  await delay(2000);
   await cdp.captureScreenshot("v4_03_tutor_request_sent.png");
 
   // Switch to Coach to approve
-  const reqId = await cdp.evaluate(`
+  const reqDebug = await cdp.evaluate(`
     (async () => {
-      const coachToken = localStorage.getItem('talde_token_coach');
-      const tsId = localStorage.getItem('talde_team_season_id');
-      const res = await fetch('${API_BASE}/v1/team-seasons/' + tsId + '/guardian-link-requests', {
-        headers: { Authorization: 'Bearer ' + coachToken }
+      const res = await fetch('${API_BASE}/v1/team-seasons/${tsId}/guardian-link-requests', {
+        headers: { Authorization: 'Bearer ${coachToken}' }
       });
       const data = await res.json();
-      return data.items[0]?.id;
+      return { status: res.status, data, reqId: data.items ? data.items[0]?.id : null };
     })()
   `);
+  console.log("DEBUG Pending Request Fetch:", JSON.stringify(reqDebug, null, 2));
+  const reqId = reqDebug?.reqId;
   console.log("Pending request ID:", reqId);
 
   const approveRes = await cdp.evaluate(`
     (async () => {
       try {
-        const coachToken = localStorage.getItem('talde_token_coach');
-        api.client.setToken(coachToken);
+        api.client.setToken('${coachToken}');
         const res = await api.teams.approveGuardianRequest('${reqId}', null);
         return res;
       } catch (e) {

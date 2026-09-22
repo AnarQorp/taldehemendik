@@ -90,6 +90,13 @@ async function runVerification() {
   await cdp.send("Page.reload");
   await delay(3000);
 
+  // Wait for teamApp readiness
+  for (let i = 0; i < 20; i++) {
+    const ready = await cdp.evaluate(`typeof window.teamApp !== 'undefined'`);
+    if (ready) break;
+    await delay(300);
+  }
+
   // --- STEP 1: Coach Bootstrap & Generate Individual Invite Token ---
   console.log("Setting up Coach session & player...");
   const coachSetup = await cdp.evaluate(`(async () => {

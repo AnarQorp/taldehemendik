@@ -1,4 +1,30 @@
-# Talde Hemendik backend — Vertical Slice 01
+# Talde Hemendik backend — private-production candidate
+
+Candidate from frozen `integration/beta-vs03` / `ac49e34326b643b65d69089266fde088a2882ab3`. The Beta 0.1 Local tag is not moved.
+
+**Deployment verdict: BLOCKED until real production SMTP configuration and end-to-end delivery/login are validated.** The development-only authentication blocker is implemented, not bypassed: production uses persistent OTP and verified TLS SMTP, fails closed, and forbids the development adapter. No VPS has been changed.
+
+- [Candidate audit, migration and runtime contract](docs/PRIVATE-PRODUCTION-CANDIDATE.md)
+- [Production authentication](docs/PRODUCTION-AUTH.md)
+- [Outbox semantics and recovery](docs/OUTBOX-WORKER.md)
+- [Recorded security evidence](docs/evidence/private-production/)
+
+Reproduce on a workstation with Docker, Bash, Node >=22 and npm:
+
+```sh
+npm ci
+npm run proof:docker       # fresh PostgreSQL, restricted logins, full backend tests
+bash scripts/prove-container.sh  # compiled API + worker in disposable Compose stack
+```
+
+Production image contains compiled JavaScript and runtime dependencies only. `npm run build && npm start` starts the compiled API; `npm run outbox:production` starts its separate worker. Do not run seeds, reset commands or development OTP in production.
+
+---
+
+## Historical local slice instructions
+
+The following describes the frozen local development workflow, not production readiness. Use the new candidate documentation for the role-separated production runtime.
+
 
 Experimental backend isolated from the V2 frontend. Modular monolith: Fastify + TypeScript + PostgreSQL, SQL-first migrations.
 

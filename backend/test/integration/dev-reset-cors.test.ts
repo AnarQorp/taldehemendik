@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app.js";
 import { DevelopmentAuthAdapter } from "../../src/auth/development-adapter.js";
-import { pool } from "../../src/db/pool.js";
+import { rawPool as pool } from "../../src/db/pool.js";
 
 describe("Dev Reset and CORS configuration", () => {
   it("rejects unauthorized CORS origin", async () => {

@@ -1,0 +1,563 @@
+{
+  "tables": [
+    {
+      "table_name": "action_items",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "audit_events",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "auth_challenges",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "availability_history",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "availability_responses",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "callup_draft_selections",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "callup_revisions",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "callup_selections",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "callups",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "events",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "guardian_link_requests",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "guardian_links",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "invitations",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "memberships",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "outbox_activity_inbox",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "outbox_consumer_receipts",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "outbox_events",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "players",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "roster_entries",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "schema_migrations",
+      "enabled": false,
+      "forced": false,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "team_seasons",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "teams",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    },
+    {
+      "table_name": "users",
+      "enabled": true,
+      "forced": true,
+      "owner": "postgres"
+    }
+  ],
+  "roles": [
+    {
+      "rolname": "proof_api",
+      "rolcanlogin": true,
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false,
+      "rolcreatedb": false
+    },
+    {
+      "rolname": "proof_auth",
+      "rolcanlogin": true,
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false,
+      "rolcreatedb": false
+    },
+    {
+      "rolname": "proof_worker",
+      "rolcanlogin": true,
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false,
+      "rolcreatedb": false
+    },
+    {
+      "rolname": "talde_api",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false,
+      "rolcreatedb": false
+    },
+    {
+      "rolname": "talde_auth",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false,
+      "rolcreatedb": false
+    },
+    {
+      "rolname": "talde_auth_owner",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolbypassrls": true,
+      "rolcreaterole": false,
+      "rolcreatedb": false
+    },
+    {
+      "rolname": "talde_policy_owner",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolbypassrls": true,
+      "rolcreaterole": false,
+      "rolcreatedb": false
+    },
+    {
+      "rolname": "talde_worker",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolbypassrls": false,
+      "rolcreaterole": false,
+      "rolcreatedb": false
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "action_items",
+      "policyname": "action_items_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "action_items",
+      "policyname": "action_items_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "action_items",
+      "policyname": "action_items_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "audit_events",
+      "policyname": "audit_events_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "audit_events",
+      "policyname": "audit_events_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "auth_challenges",
+      "policyname": "auth_service_only",
+      "roles": "{talde_auth}",
+      "cmd": "ALL"
+    },
+    {
+      "tablename": "availability_history",
+      "policyname": "availability_history_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "availability_history",
+      "policyname": "availability_history_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "availability_responses",
+      "policyname": "availability_responses_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "availability_responses",
+      "policyname": "availability_responses_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "availability_responses",
+      "policyname": "availability_responses_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "callup_draft_selections",
+      "policyname": "callup_draft_selections_delete",
+      "roles": "{talde_api}",
+      "cmd": "DELETE"
+    },
+    {
+      "tablename": "callup_draft_selections",
+      "policyname": "callup_draft_selections_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "callup_draft_selections",
+      "policyname": "callup_draft_selections_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "callup_revisions",
+      "policyname": "callup_revisions_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "callup_revisions",
+      "policyname": "callup_revisions_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "callup_selections",
+      "policyname": "callup_selections_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "callup_selections",
+      "policyname": "callup_selections_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "callups",
+      "policyname": "callups_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "callups",
+      "policyname": "callups_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "callups",
+      "policyname": "callups_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "events",
+      "policyname": "events_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "events",
+      "policyname": "events_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "events",
+      "policyname": "events_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "guardian_link_requests",
+      "policyname": "guardian_link_requests_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "guardian_link_requests",
+      "policyname": "guardian_link_requests_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "guardian_link_requests",
+      "policyname": "guardian_link_requests_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "guardian_links",
+      "policyname": "guardian_links_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "guardian_links",
+      "policyname": "guardian_links_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "guardian_links",
+      "policyname": "guardian_links_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "invitations",
+      "policyname": "invitations_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "invitations",
+      "policyname": "invitations_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "invitations",
+      "policyname": "invitations_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "memberships",
+      "policyname": "memberships_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "memberships",
+      "policyname": "memberships_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "memberships",
+      "policyname": "memberships_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "outbox_activity_inbox",
+      "policyname": "inbox_worker_insert",
+      "roles": "{talde_worker}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "outbox_activity_inbox",
+      "policyname": "inbox_worker_select",
+      "roles": "{talde_worker}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "outbox_consumer_receipts",
+      "policyname": "receipts_worker_insert",
+      "roles": "{talde_worker}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "outbox_consumer_receipts",
+      "policyname": "receipts_worker_select",
+      "roles": "{talde_worker}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "outbox_events",
+      "policyname": "outbox_events_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "outbox_events",
+      "policyname": "outbox_events_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "outbox_events",
+      "policyname": "outbox_worker_select",
+      "roles": "{talde_worker}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "outbox_events",
+      "policyname": "outbox_worker_update",
+      "roles": "{talde_worker}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "players",
+      "policyname": "players_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "players",
+      "policyname": "players_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "players",
+      "policyname": "players_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "roster_entries",
+      "policyname": "roster_entries_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "roster_entries",
+      "policyname": "roster_entries_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "roster_entries",
+      "policyname": "roster_entries_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "team_seasons",
+      "policyname": "team_seasons_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "team_seasons",
+      "policyname": "team_seasons_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "team_seasons",
+      "policyname": "team_seasons_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "teams",
+      "policyname": "teams_insert",
+      "roles": "{talde_api}",
+      "cmd": "INSERT"
+    },
+    {
+      "tablename": "teams",
+      "policyname": "teams_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    },
+    {
+      "tablename": "teams",
+      "policyname": "teams_update",
+      "roles": "{talde_api}",
+      "cmd": "UPDATE"
+    },
+    {
+      "tablename": "users",
+      "policyname": "users_select",
+      "roles": "{talde_api}",
+      "cmd": "SELECT"
+    }
+  ],
+  "migrations": [
+    "001_vertical_slice_01.sql",
+    "002_vertical_slice_02.sql",
+    "003_callup_idempotency.sql",
+    "004_beta_bootstrap.sql",
+    "005_general_join_multi_child.sql",
+    "006_tenant_rls.sql",
+    "007_outbox_worker.sql",
+    "008_production_auth.sql",
+    "009_immutable_scope_keys.sql"
+  ]
+}

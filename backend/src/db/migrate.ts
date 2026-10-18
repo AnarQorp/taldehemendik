@@ -1,8 +1,10 @@
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { pool } from "./pool.js";
+import { rawPool as pool } from "./pool.js";
 
 const migrationsDir = fileURLToPath(new URL("../../migrations/", import.meta.url));
+const migrationLock = await pool.connect();
+await migrationLock.query("SELECT pg_advisory_lock(hashtext('talde-schema-migrations'))");
 await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
   name text PRIMARY KEY,
   applied_at timestamptz NOT NULL DEFAULT now()
@@ -33,5 +35,7 @@ for (const name of files) {
     client.release();
   }
 }
+await migrationLock.query("SELECT pg_advisory_unlock(hashtext('talde-schema-migrations'))");
+migrationLock.release();
 await pool.end();
 console.log(JSON.stringify({ event: "database.migrated", migrations: files.length }));

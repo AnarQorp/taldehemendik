@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.*
+!*.example
+proof-artifacts
+test
+scripts
+docs
+.git

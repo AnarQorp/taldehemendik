@@ -1,0 +1,15 @@
+Populated frozen upgrade proof
+Frozen reference: ac49e34326b643b65d69089266fde088a2882ab3
+Environment: isolated local PostgreSQL port55443; no VPS/deployment changes
+Frozen API producers: 5 pending events; 4 event types; 3 distinct target seasons (2 teams plus bootstrap team)
+Preserved frozen dataset before upgrade: {"users":4,"teams":3,"players":19,"events":4}
+Upgrade 006..009 via npm run migrate: PASS; original 001..005 files byte-identical to frozen reference
+Backfill: 5/5 non-null scopes match aggregate provenance; GuardianLinkApproved correctly uses original season despite multi-season roster
+Business dataset counts preserved exactly across upgrade: {"users":4,"teams":3,"players":19,"events":4}
+Actual restricted worker LOGIN verifier: PASS; worker batch {"claimed":5,"processed":5,"failed":0,"deadLettered":0}
+Durable consumer outcome: {"acknowledged":5,"effects":5,"receipts":5}
+Deliberately orphaned pending aggregate: 006 rejected with expected backfill-unresolved error
+Atomic rollback evidence: {"migrations":5,"pending_rows":6,"added_columns":0,"rls_enabled":false,"helper":null}
+Commands: frozen git archive; first 5 frozen SQL files + frozen seed; frozen Fastify app.inject producers; candidate npm run migrate; actual restricted-login runBatch; candidate npm run migrate against orphan clone
+Proof scripts: /tmp/talde-frozen-upgrade-proof/backend/scripts/upgrade-proof.ts and verify-upgrade-proof.ts (temporary test-only credentials omitted from this report)
+Verdict: populated frozen -> candidate upgrade PASS; unsafe orphan upgrade blocked atomically PASS

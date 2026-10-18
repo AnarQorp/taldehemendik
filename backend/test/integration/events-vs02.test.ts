@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app.js";
 import { DevelopmentAuthAdapter } from "../../src/auth/development-adapter.js";
 import { ids } from "../../src/db/ids.js";
-import { pool } from "../../src/db/pool.js";
+import { rawPool as pool } from "../../src/db/pool.js";
 
 const auth = new DevelopmentAuthAdapter(true);
 const app = await buildApp({ authAdapter: auth });
@@ -39,6 +40,46 @@ describe("VS02 events and agenda", () => {
     const agenda=await app.inject({method:"GET",url:`/v1/team-seasons/${ids.season}/events?from=2026-10-01T00:00:00.000Z&to=2026-11-01T00:00:00.000Z`,headers:bearer(guardian)});
     expect(agenda.statusCode).toBe(200);expect(agenda.json().items.some((e:{title:string})=>e.title==="Torneo API")).toBe(true);
     const crossRead=await app.inject({method:"GET",url:`/v1/events/${ids.otherEvent}`,headers:bearer(coach)});expect(crossRead.statusCode).toBe(403);
+  });
+
+  it("serializes concurrent first availability writes without duplicating effects",async()=>{
+    const created=await app.inject({method:"POST",url:`/v1/team-seasons/${ids.season}/events`,headers:bearer(coach),payload:{
+      type:"TRAINING",title:"Concurrent first response",startsAt:new Date(Date.now()+86400000).toISOString(),availabilityEnabled:true,callupEnabled:false
+    }});
+    expect(created.statusCode).toBe(201);
+    const eventId=created.json().id;
+    const responses=await Promise.all(["CAN_ATTEND","UNSURE"].map(status=>app.inject({
+      method:"PUT",url:`/v1/events/${eventId}/players/${ids.ibai}/availability/staff-recorded`,
+      headers:{...bearer(staff),"idempotency-key":`first-response-${randomUUID()}`},payload:{status,expectedVersion:0}
+    })));
+    expect(responses.map(response=>response.statusCode).sort()).toEqual([200,409]);
+    const winner=responses.find(response=>response.statusCode===200)!.json();
+    expect(winner.version).toBe(1);
+    expect(responses.find(response=>response.statusCode===409)!.json().error.code).toBe("AVAILABILITY_VERSION_CONFLICT");
+    const rows=await pool.query("SELECT id,version,status FROM availability_responses WHERE event_id=$1 AND player_id=$2",[eventId,ids.ibai]);
+    expect(rows.rows).toEqual([{id:winner.id,version:1,status:winner.status}]);
+    expect((await pool.query("SELECT count(*)::int n FROM availability_history WHERE event_id=$1 AND player_id=$2",[eventId,ids.ibai])).rows[0].n).toBe(1);
+    expect((await pool.query("SELECT count(*)::int n FROM outbox_events WHERE aggregate_type='AvailabilityResponse' AND aggregate_id=$1 AND event_type='AvailabilityChanged'",[winner.id])).rows[0].n).toBe(1);
+    expect((await pool.query("SELECT count(*)::int n FROM audit_events WHERE entity_type='AvailabilityResponse' AND entity_id=$1",[winner.id])).rows[0].n).toBe(1);
+  });
+
+  it("replays concurrent identical first-write idempotency keys without duplicate effects",async()=>{
+    const created=await app.inject({method:"POST",url:`/v1/team-seasons/${ids.season}/events`,headers:bearer(coach),payload:{
+      type:"TRAINING",title:"Concurrent idempotent response",startsAt:new Date(Date.now()+86400000).toISOString(),availabilityEnabled:true,callupEnabled:false
+    }});
+    expect(created.statusCode).toBe(201);
+    const eventId=created.json().id;
+    const key=`same-first-response-${randomUUID()}`;
+    const responses=await Promise.all(Array.from({length:2},()=>app.inject({
+      method:"PUT",url:`/v1/events/${eventId}/players/${ids.ibai}/availability/staff-recorded`,
+      headers:{...bearer(staff),"idempotency-key":key},payload:{status:"CAN_ATTEND",expectedVersion:0}
+    })));
+    expect(responses.map(response=>response.statusCode)).toEqual([200,200]);
+    const results=responses.map(response=>response.json());
+    expect(new Set(results.map(result=>result.id)).size).toBe(1);
+    expect(results.map(result=>result.idempotentReplay).sort()).toEqual([false,true]);
+    expect((await pool.query("SELECT count(*)::int n FROM availability_history WHERE event_id=$1 AND player_id=$2",[eventId,ids.ibai])).rows[0].n).toBe(1);
+    expect((await pool.query("SELECT count(*)::int n FROM outbox_events WHERE aggregate_type='AvailabilityResponse' AND aggregate_id=$1",[results[0].id])).rows[0].n).toBe(1);
   });
 
   it("rejects availability when disabled and closes cancelled/completed events",async()=>{

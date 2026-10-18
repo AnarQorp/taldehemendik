@@ -1,0 +1,157 @@
+ Image talde-container-proof-645398-migrate Building
+ Image talde-container-proof-645398-api Building
+ Image talde-container-proof-645398-worker Building
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.65kB done
+#1 DONE 0.0s
+
+#2 [migrate internal] load build definition from Dockerfile
+#2 transferring dockerfile: 571B done
+#2 DONE 0.0s
+
+#3 [worker internal] load metadata for docker.io/library/node:24-alpine
+#3 DONE 0.4s
+
+#4 [api internal] load .dockerignore
+#4 transferring context: 120B done
+#4 DONE 0.0s
+
+#5 [api build 1/7] FROM docker.io/library/node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
+#5 resolve docker.io/library/node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f 0.0s done
+#5 DONE 0.1s
+
+#6 [migrate internal] load build context
+#6 transferring context: 66.85kB 0.1s done
+#6 transferring context: 66.85kB 0.1s done
+#6 DONE 0.1s
+
+#7 [worker build 2/7] WORKDIR /app
+#7 CACHED
+
+#8 [worker build 3/7] COPY package.json package-lock.json ./
+#8 CACHED
+
+#9 [worker build 4/7] RUN npm ci
+#9 CACHED
+
+#10 [worker build 5/7] COPY tsconfig*.json ./
+#10 CACHED
+
+#11 [migrate build 6/7] COPY src ./src
+#11 DONE 0.1s
+
+#12 [migrate build 7/7] RUN npm run build && npm prune --omit=dev
+#12 0.551
+#12 0.551 > talde-hemendik-backend@0.1.0 build
+#12 0.551 > tsc -p tsconfig.build.json
+#12 0.551
+#12 16.84
+#12 16.84 removed 47 packages, and audited 100 packages in 6s
+#12 16.84
+#12 16.84 36 packages are looking for funding
+#12 16.84   run `npm fund` for details
+#12 16.84
+#12 16.84 found 0 vulnerabilities
+#12 DONE 17.8s
+
+#13 [worker runtime 3/6] COPY --from=build --chown=node:node /app/node_modules ./node_modules
+#13 CACHED
+
+#14 [worker runtime 4/6] COPY --from=build --chown=node:node /app/dist ./dist
+#14 DONE 0.1s
+
+#13 [migrate runtime 3/6] COPY --from=build --chown=node:node /app/node_modules ./node_modules
+#13 CACHED
+
+#15 [migrate runtime 5/6] COPY --chown=node:node package.json package-lock.json ./
+#15 DONE 0.1s
+
+#16 [api runtime 6/6] COPY --chown=node:node migrations ./migrations
+#16 DONE 0.1s
+
+#17 [api] exporting to image
+#17 exporting layers
+#17 exporting layers 0.2s done
+#17 exporting manifest sha256:18740e6a3580ac0c31c41fe2740986dbeb0733864a9676a6d323991fca05542c 0.1s done
+#17 exporting config sha256:85d7aceb61b81fe6228f822ecefef283b10a49b6eff2c9a9b66d09be41883ea1
+#17 exporting config sha256:85d7aceb61b81fe6228f822ecefef283b10a49b6eff2c9a9b66d09be41883ea1 0.1s done
+#17 exporting attestation manifest sha256:e8d8383efad621010e86fff4e5d29f300de9690c5d1462ff3b1fa07ee2c2288f
+#17 exporting attestation manifest sha256:e8d8383efad621010e86fff4e5d29f300de9690c5d1462ff3b1fa07ee2c2288f 0.1s done
+#17 exporting manifest list sha256:cad0e79eea048310f9ab5c5c0d12b2dca2df625009da1660177151413cedba92 0.1s done
+#17 naming to docker.io/library/talde-container-proof-645398-api:latest 0.0s done
+#17 unpacking to docker.io/library/talde-container-proof-645398-api:latest 0.1s done
+#17 DONE 0.7s
+
+#18 [worker] exporting to image
+#18 exporting layers 0.2s done
+#18 exporting manifest sha256:b2fab2f69a6cb2313b36b15c6c2a5a291bb871ff44ce542151c500cc03b5cc73 0.0s done
+#18 exporting config sha256:af1c7f116105522706861bf18fb9cb4f6150e6b4b23048d6f9f0b25aa76419b2 0.1s done
+#18 exporting attestation manifest sha256:688f419c2ee10181d12bf0d431048e86c92b380c90f343dfdcdec8a1fcbe1c8b 0.1s done
+#18 exporting manifest list sha256:bc887845acd99513af2ec5ffef53a7f3e5b148801377529d789dd54fad023d07 0.0s done
+#18 naming to docker.io/library/talde-container-proof-645398-worker:latest 0.0s done
+#18 unpacking to docker.io/library/talde-container-proof-645398-worker:latest 0.1s done
+#18 DONE 0.7s
+
+#19 [migrate] exporting to image
+#19 exporting layers 0.2s done
+#19 exporting manifest sha256:ae04442ea1aff760cad11180f59f28badfa8c5c69076547cb649ff28fa592e95 0.1s done
+#19 exporting config sha256:1c1a95ec290886c151d91c0e823bc8725cebd03d19b24cfa3bda6ea0c40cde2f 0.1s done
+#19 exporting attestation manifest sha256:d81e53375a881fd7b984b3ab28f861f0340c86b46c8936094dfd701332c5f9e5 0.1s done
+#19 exporting manifest list sha256:fe3af24dfecad46045d35a6feede22de6f059949a7d617d6e5392dfe5e10f536 0.1s done
+#19 naming to docker.io/library/talde-container-proof-645398-migrate:latest done
+#19 unpacking to docker.io/library/talde-container-proof-645398-migrate:latest 0.1s done
+#19 DONE 0.7s
+
+#20 [api] resolving provenance for metadata file
+#20 DONE 0.1s
+
+#21 [worker] resolving provenance for metadata file
+#21 DONE 0.1s
+
+#22 [migrate] resolving provenance for metadata file
+#22 DONE 0.0s
+ Image talde-container-proof-645398-migrate Built
+ Image talde-container-proof-645398-worker Built
+ Image talde-container-proof-645398-api Built
+ Network talde-container-proof-645398_default Creating
+ Volume talde-container-proof-645398_private_pg Creating
+ Volume talde-container-proof-645398_private_pg Creating
+ Network talde-container-proof-645398_default Creating
+ Volume talde-container-proof-645398_private_pg Created
+ Volume talde-container-proof-645398_private_pg Created
+ Network talde-container-proof-645398_default Created
+ Network talde-container-proof-645398_default Created
+ Container talde-container-proof-645398-db-1 Creating
+ Container talde-container-proof-645398-db-1 Created
+ Container talde-container-proof-645398-migrate-1 Creating
+ Container talde-container-proof-645398-migrate-1 Created
+ Container talde-container-proof-645398-api-1 Creating
+ Container talde-container-proof-645398-worker-1 Creating
+ Container talde-container-proof-645398-api-1 Created
+ Container talde-container-proof-645398-worker-1 Created
+ Container talde-container-proof-645398-db-1 Starting
+ Container talde-container-proof-645398-db-1 Started
+ Container talde-container-proof-645398-db-1 Waiting
+ Container talde-container-proof-645398-db-1 Healthy
+ Container talde-container-proof-645398-migrate-1 Starting
+ Container talde-container-proof-645398-migrate-1 Started
+ Container talde-container-proof-645398-migrate-1 Waiting
+ Container talde-container-proof-645398-migrate-1 Waiting
+ Container talde-container-proof-645398-migrate-1 Exited
+ Container talde-container-proof-645398-api-1 Starting
+ Container talde-container-proof-645398-migrate-1 Exited
+ Container talde-container-proof-645398-worker-1 Starting
+ Container talde-container-proof-645398-api-1 Started
+ Container talde-container-proof-645398-worker-1 Started
+ Container talde-container-proof-645398-worker-1 Waiting
+ Container talde-container-proof-645398-db-1 Waiting
+ Container talde-container-proof-645398-migrate-1 Waiting
+ Container talde-container-proof-645398-api-1 Waiting
+ Container talde-container-proof-645398-worker-1 Healthy
+ Container talde-container-proof-645398-migrate-1 Exited
+ Container talde-container-proof-645398-db-1 Healthy
+ Container talde-container-proof-645398-api-1 Healthy
+PASS: compiled non-root API, health, unauthenticated denial, no development toolchain
+ Container talde-container-proof-645398-worker-1 Stopping
+ Container talde-container-proof-645398-worker-1 Stopped
+PASS: isolated Compose migrations, role-separated production API/worker and graceful worker shutdown. SMTP delivery deliberately not tested by this startup proof.

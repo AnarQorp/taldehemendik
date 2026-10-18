@@ -3,3 +3,7 @@ node_modules/
 dist/
 coverage/
 .DS_Store
+
+backend/dist/
+backend/proof-artifacts/
+backend/.env.production

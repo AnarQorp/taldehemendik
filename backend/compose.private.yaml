@@ -1,0 +1,73 @@
+# Prepared private deployment only. Never started against the VPS by this task.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: talde_production
+      POSTGRES_USER: talde_migrator
+      POSTGRES_PASSWORD: ${DB_MIGRATION_PASSWORD:?Set a distinct random hex password}
+      DB_API_PASSWORD: ${DB_API_PASSWORD:?Set a distinct random hex password}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:?Set a distinct random hex password}
+      DB_WORKER_PASSWORD: ${DB_WORKER_PASSWORD:?Set a distinct random hex password}
+    command: ["postgres","-c","log_min_error_statement=panic","-c","log_error_verbosity=terse"]
+    volumes:
+      - private_pg:/var/lib/postgresql/data
+      - ./docker/roles.sh:/docker-entrypoint-initdb.d/010-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -h 127.0.0.1 -U talde_migrator -d talde_production"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  migrate:
+    build: .
+    environment:
+      DATABASE_URL: postgres://talde_migrator:${DB_MIGRATION_PASSWORD}@db:5432/talde_production
+    command: ["node","dist/db/migrate.js"]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: "no"
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3101
+      DATABASE_URL: postgres://talde_api_login:${DB_API_PASSWORD}@db:5432/talde_production
+      AUTH_DATABASE_URL: postgres://talde_auth_login:${DB_AUTH_PASSWORD}@db:5432/talde_production
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:?Set at least 32 random characters}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set the private HTTPS frontend origin}
+      SMTP_HOST: ${SMTP_HOST:?Configure an existing or self-hosted SMTP server}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_FROM: ${SMTP_FROM:?Set the verified sender}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    ports: ["127.0.0.1:3101:3101"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:3101/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+  worker:
+    build: .
+    restart: unless-stopped
+    environment:
+      OUTBOX_DATABASE_URL: postgres://talde_worker_login:${DB_WORKER_PASSWORD}@db:5432/talde_production
+      OUTBOX_POLL_MS: 1000
+    command: ["node","dist/outbox/main.js"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+volumes:
+  private_pg:

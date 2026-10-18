@@ -1,0 +1,124 @@
+
+> talde-hemendik-backend@0.1.0 proof:docker
+> bash scripts/prove-production.sh
+
+
+> talde-hemendik-backend@0.1.0 migrate
+> tsx src/db/migrate.ts
+
+{"event":"database.migration_applied","migration":"001_vertical_slice_01.sql"}
+{"event":"database.migration_applied","migration":"002_vertical_slice_02.sql"}
+{"event":"database.migration_applied","migration":"003_callup_idempotency.sql"}
+{"event":"database.migration_applied","migration":"004_beta_bootstrap.sql"}
+{"event":"database.migration_applied","migration":"005_general_join_multi_child.sql"}
+{"event":"database.migration_applied","migration":"006_tenant_rls.sql"}
+{"event":"database.migration_applied","migration":"007_outbox_worker.sql"}
+{"event":"database.migration_applied","migration":"008_production_auth.sql"}
+{"event":"database.migration_applied","migration":"009_immutable_scope_keys.sql"}
+{"event":"database.migrated","migrations":9}
+CREATE ROLE
+CREATE ROLE
+CREATE ROLE
+GRANT ROLE
+GRANT ROLE
+GRANT ROLE
+
+> talde-hemendik-backend@0.1.0 typecheck
+> tsc --noEmit
+
+
+> talde-hemendik-backend@0.1.0 build
+> tsc -p tsconfig.build.json
+
+
+> talde-hemendik-backend@0.1.0 test:all
+> npm test && npm run test:security
+
+
+> talde-hemendik-backend@0.1.0 pretest
+> npm run migrate
+
+
+> talde-hemendik-backend@0.1.0 migrate
+> tsx src/db/migrate.ts
+
+{"event":"database.migrated","migrations":9}
+
+> talde-hemendik-backend@0.1.0 test
+> npm run test:vs01 && npm run test:vs02 && npm run test:vs03
+
+
+> talde-hemendik-backend@0.1.0 test:vs01
+> npm run seed && vitest run test/integration/invitation.test.ts test/integration/vertical-slice.test.ts --no-file-parallelism
+
+
+> talde-hemendik-backend@0.1.0 seed
+> tsx src/db/seed.ts
+
+{"event":"database.seeded","dataset":"vs02"}
+
+ RUN  v5.0.1 /home/zaq/projects/TaldeHemendik-private-production/backend
+
+
+ Test Files  2 passed (2)
+      Tests  10 passed (10)
+   Start at  16:45:27
+   Duration  5.28s (tests 53%, import 33%, transform 14%, worker 1%)
+
+    Isolate  2 workers spawned · ~287ms startup each (spawn + environment, per file)
+             at least ~287ms faster with isolate: false — reuses workers across files instead of one per file
+
+
+> talde-hemendik-backend@0.1.0 test:vs02
+> npm run seed && vitest run test/integration/events-vs02.test.ts test/integration/operations-vs02.test.ts test/integration/dev-reset-cors.test.ts --no-file-parallelism
+
+
+> talde-hemendik-backend@0.1.0 seed
+> tsx src/db/seed.ts
+
+{"event":"database.seeded","dataset":"vs02"}
+
+ RUN  v5.0.1 /home/zaq/projects/TaldeHemendik-private-production/backend
+
+
+ Test Files  3 passed (3)
+      Tests  14 passed (14)
+   Start at  16:45:35
+   Duration  9.69s (tests 73%, import 21%, transform 5%)
+
+
+> talde-hemendik-backend@0.1.0 test:vs03
+> npm run db:empty && vitest run test/integration/bootstrap-vs03.test.ts --no-file-parallelism
+
+
+> talde-hemendik-backend@0.1.0 db:empty
+> tsx src/db/empty.ts
+
+{"event":"database.emptied","scope":"application_data"}
+
+ RUN  v5.0.1 /home/zaq/projects/TaldeHemendik-private-production/backend
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  16:45:46
+   Duration  2.45s (tests 57%, import 26%, transform 17%)
+
+
+> talde-hemendik-backend@0.1.0 test:security
+> vitest run test/integration/auth-production.test.ts test/integration/rls-security.test.ts test/integration/outbox-worker.test.ts test/integration/smtp-production.test.ts --no-file-parallelism
+
+
+ RUN  v5.0.1 /home/zaq/projects/TaldeHemendik-private-production/backend
+
+
+ Test Files  4 passed (4)
+      Tests  51 passed (51)
+   Start at  16:45:49
+   Duration  5.29s (tests 78%, import 14%, transform 7%, worker 1%)
+
+    Isolate  4 workers spawned · ~175ms startup each (spawn + environment, per file)
+             at least ~524ms faster with isolate: false — reuses workers across files instead of one per file
+
+found 0 vulnerabilities
+PASS: isolated PostgreSQL, migrations, restricted-logins API/auth/worker integration and security proof.

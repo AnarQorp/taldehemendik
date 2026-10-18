@@ -1,4 +1,5 @@
-import { pool } from "./pool.js";
+if (process.env.NODE_ENV === "production") throw new Error("Development dataset commands forbidden in production");
+import { rawPool as pool } from "./pool.js";
 import type pg from "pg";
 
 export async function emptyDatabase(db: pg.PoolClient | pg.Pool = pool) {

@@ -1,6 +1,6 @@
 import { buildApp } from "../src/app.js";
 import { DevelopmentAuthAdapter } from "../src/auth/development-adapter.js";
-import { pool } from "../src/db/pool.js";
+import { rawPool as pool } from "../src/db/pool.js";
 
 const auth=new DevelopmentAuthAdapter(true);const app=await buildApp({authAdapter:auth});const evidence:Array<Record<string,unknown>>=[];
 const bearer=(token:string,key?:string)=>({authorization:`Bearer ${token}`,...(key?{"idempotency-key":key}:{})});

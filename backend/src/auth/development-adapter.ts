@@ -14,7 +14,9 @@ type Challenge = { email: string; otp: string; expiresAt: number; attempts: numb
  */
 export class DevelopmentAuthAdapter implements AuthAdapter {
   private challenges = new Map<string, Challenge>();
-  constructor(private readonly exposeOtp = config.exposeOtp) {}
+  constructor(private readonly exposeOtp = config.exposeOtp) {
+    if (config.isProduction) throw new Error("Development authentication is forbidden in production");
+  }
 
   async requestOtp(email: string) {
     const challengeId = randomUUID();
@@ -31,7 +33,7 @@ export class DevelopmentAuthAdapter implements AuthAdapter {
       throw new DomainError("AUTH_INVALID", 401, "Invalid or expired OTP challenge");
     }
     challenge.attempts += 1;
-    const matches = timingSafeEqual(Buffer.from(challenge.otp), Buffer.from(otp.padStart(6, "0")));
+    const matches = /^\d{6}$/.test(otp) && timingSafeEqual(Buffer.from(challenge.otp), Buffer.from(otp));
     if (!matches) throw new DomainError("AUTH_INVALID", 401, "Invalid or expired OTP challenge");
     this.challenges.delete(challengeId);
     return { subject: `dev-email:${email.toLowerCase()}`, email: email.toLowerCase() };
@@ -44,11 +46,14 @@ export class DevelopmentAuthAdapter implements AuthAdapter {
   }
 
   verifyAccessToken(token: string): { userId: string } {
-    const [payload, signature] = token.split(".");
-    if (!payload || !signature) throw new DomainError("AUTH_INVALID", 401, "Invalid access token");
+    const parts = token.split(".");
+    const [payload, signature] = parts;
+    if (parts.length !== 2 || !payload || !signature || token.length > 2048) throw new DomainError("AUTH_INVALID", 401, "Invalid access token");
     const expected = createHmac("sha256", config.authSecret).update(payload).digest("base64url");
-    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new DomainError("AUTH_INVALID", 401, "Invalid access token");
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString()) as { userId: string; exp: number };
+    if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new DomainError("AUTH_INVALID", 401, "Invalid access token");
+    let parsed: { userId: string; exp: number };
+    try { parsed = JSON.parse(Buffer.from(payload, "base64url").toString()); } catch { throw new DomainError("AUTH_INVALID", 401, "Invalid access token"); }
+    if (!parsed || typeof parsed.userId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.userId) || !Number.isFinite(parsed.exp)) throw new DomainError("AUTH_INVALID", 401, "Invalid access token");
     if (parsed.exp < Date.now()) throw new DomainError("AUTH_INVALID", 401, "Expired access token");
     return { userId: parsed.userId };
   }

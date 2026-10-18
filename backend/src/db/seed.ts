@@ -1,4 +1,5 @@
-import { pool } from "./pool.js";
+if (process.env.NODE_ENV === "production") throw new Error("Development dataset commands forbidden in production");
+import { rawPool as pool } from "./pool.js";
 import { ids } from "./ids.js";
 
 const roster = [
@@ -33,9 +34,9 @@ try {
   await pool.query(`INSERT INTO players (id, team_id, first_name, last_name) VALUES ($1, $2, 'Otro', 'Jugador')`, [ids.otherPlayer, ids.otherTeam]);
   await pool.query(`INSERT INTO roster_entries (player_id, team_season_id, shirt_number) VALUES ($1, $2, 7)`, [ids.otherPlayer, ids.otherSeason]);
   await pool.query(`INSERT INTO events (id, team_season_id, title, type, starts_at, availability_enabled, availability_deadline, callup_enabled, status, created_by_user_id)
-    VALUES ($1, $2, 'Torneo Indautxu', 'TOURNAMENT', '2026-10-10T08:00:00Z', true, '2026-10-08T20:00:00Z', true, 'ACTIVE', $3)`, [ids.event, ids.season, ids.coach]);
+    VALUES ($1, $2, 'Torneo Indautxu', 'TOURNAMENT', now()+interval '7 days', true, now()+interval '5 days', true, 'ACTIVE', $3)`, [ids.event, ids.season, ids.coach]);
   await pool.query(`INSERT INTO events (id, team_season_id, title, type, starts_at, availability_enabled, availability_deadline, callup_enabled, status, created_by_user_id)
-    VALUES ($1, $2, 'Evento Equipo B', 'TRAINING', '2026-10-10T08:00:00Z', true, '2026-10-08T20:00:00Z', false, 'ACTIVE', $3)`, [ids.otherEvent, ids.otherSeason, ids.otherCoach]);
+    VALUES ($1, $2, 'Evento Equipo B', 'TRAINING', now()+interval '7 days', true, now()+interval '5 days', false, 'ACTIVE', $3)`, [ids.otherEvent, ids.otherSeason, ids.otherCoach]);
   await pool.query(`INSERT INTO invitations(team_season_id,player_id,purpose,token_hash,expires_at,created_by_user_id)
     VALUES($1,$2,'GUARDIAN_LINK',encode(digest('public-token-seeded-for-local-tests','sha256'),'hex'),now()+interval '7 days',$3)`, [ids.season, ids.ibai, ids.coach]);
   await pool.query("COMMIT");

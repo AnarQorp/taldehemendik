@@ -1,4 +1,5 @@
-import { pool } from "./pool.js";
+if (process.env.NODE_ENV === "production") throw new Error("Development dataset commands forbidden in production");
+import { rawPool as pool } from "./pool.js";
 import { ids } from "./ids.js";
 
 export const elenaUserId = "00000000-0000-4000-8000-000000000003";

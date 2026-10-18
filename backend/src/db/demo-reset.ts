@@ -29,16 +29,16 @@ export async function resetDemoDatabase(db:pg.PoolClient){
   for(const [id,first,last,number] of roster){await db.query(`INSERT INTO players(id,team_id,first_name,last_name) VALUES($1,$2,$3,$4)`,[id,demo.team,first,last]);await db.query(`INSERT INTO roster_entries(player_id,team_season_id,shirt_number,status) VALUES($1,$2,$3,'ACTIVE')`,[id,demo.season,number]);}
   await db.query(`INSERT INTO guardian_links(guardian_user_id,player_id,status) VALUES($1,$2,'ACTIVE'),('70000000-0000-4000-8000-000000000004',$2,'ACTIVE')`,[demo.guardian,demo.ibai]);
   for (let i = 1; i < 12; i++) {
-    await db.query(`INSERT INTO guardian_links(guardian_user_id, player_id, status) VALUES($1, $2, 'ACTIVE') ON CONFLICT DO NOTHING`, [demo.guardian, roster[i][0]]);
+    await db.query(`INSERT INTO guardian_links(guardian_user_id, player_id, status) VALUES($1, $2, 'ACTIVE') ON CONFLICT DO NOTHING`, [demo.guardian, roster[i]![0]]);
   }
   await db.query(`INSERT INTO invitations(team_season_id,player_id,purpose,token_hash,expires_at,created_by_user_id) VALUES($1,NULL,'GUARDIAN_LINK',$2,now()+interval '1 year',$3)`,[demo.season,createHash("sha256").update("INDA16").digest("hex"),demo.coach]);
   await db.query(`INSERT INTO events(id,team_season_id,title,type,starts_at,arrival_at,location,availability_enabled,availability_deadline,callup_enabled,status,created_by_user_id) VALUES($1,$2,'Torneo Indautxu','TOURNAMENT','2026-10-10T08:00:00Z','2026-10-10T07:30:00Z','Polideportivo Municipal Indautxu',true,'2026-10-08T20:00:00Z',true,'ACTIVE',$3)`,[demo.event,demo.season,demo.coach]);
   await db.query(`INSERT INTO events(id,team_season_id,title,type,starts_at,arrival_at,location,availability_enabled,callup_enabled,status,created_by_user_id) VALUES('74000000-0000-4000-8000-000000000002',$1,'Entrenamiento semanal','TRAINING','2026-10-09T18:00:00Z','2026-10-09T17:45:00Z','Campo 2 · Césped Artificial',true,false,'ACTIVE',$2) ON CONFLICT DO NOTHING`, [demo.season, demo.coach]);
   for (let i = 0; i < 14; i++) {
-    await db.query(`INSERT INTO availability_responses(event_id, player_id, status, source, actor_user_id, version, updated_at) VALUES($1, $2, 'CAN_ATTEND', 'STAFF_RECORDED', $3, 1, now())`, [demo.event, roster[i][0], demo.coach]);
+    await db.query(`INSERT INTO availability_responses(event_id, player_id, status, source, actor_user_id, version, updated_at) VALUES($1, $2, 'CAN_ATTEND', 'STAFF_RECORDED', $3, 1, now())`, [demo.event, roster[i]![0], demo.coach]);
   }
   for (let i = 14; i < 16; i++) {
-    await db.query(`INSERT INTO availability_responses(event_id, player_id, status, source, actor_user_id, version, updated_at) VALUES($1, $2, 'CANNOT_ATTEND', 'STAFF_RECORDED', $3, 1, now())`, [demo.event, roster[i][0], demo.coach]);
+    await db.query(`INSERT INTO availability_responses(event_id, player_id, status, source, actor_user_id, version, updated_at) VALUES($1, $2, 'CANNOT_ATTEND', 'STAFF_RECORDED', $3, 1, now())`, [demo.event, roster[i]![0], demo.coach]);
   }
   await db.query(`INSERT INTO action_items(id,team_season_id,event_id,player_id,type,status,created_at) VALUES('80000000-0000-4000-8000-000000000001',$1,$2,$3,'CALLED_PLAYER_UNAVAILABLE','OPEN',now()) ON CONFLICT DO NOTHING`, [demo.season, demo.event, demo.ibai]);
   return {mode:"DEMO",team:{id:demo.team,name:"S. D. Indautxu"},teamSeason:{id:demo.season,displayLabel:"Infantil A",seasonLabel:"2026/27"},players:roster.length,joinCode:"INDA16"};

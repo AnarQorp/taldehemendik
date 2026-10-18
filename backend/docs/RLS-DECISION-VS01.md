@@ -1,3 +1,5 @@
+> Historical VS01 decision, superseded for the private-production candidate by migrations 006–009 and [the candidate contract](PRIVATE-PRODUCTION-CANDIDATE.md). RLS is now mandatory; backend authorization complements rather than replaces it.
+
 # VS01 RLS decision
 
 RLS is deferred to the next persistence-hardening slice. Primary authorization is implemented in the backend Policy layer and every exposed resource path has real PostgreSQL cross-team integration tests.

@@ -5,14 +5,12 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { z } from "zod";
-import { pool, inTransaction } from "./db/pool.js";
-import { DevelopmentAuthAdapter } from "./auth/development-adapter.js";
+import { requestPool as pool, inTransaction, withDbContext, resolveAuthUser, type DbContext } from "./db/pool.js";
+import { createAuthAdapter, assertProductionAuthAdapter } from "./auth/production.js";
 import type { AuthAdapter } from "./auth/adapter.js";
 import { config } from "./config.js";
 import { DomainError } from "./domain/errors.js";
 import { requireGuardianPlayerAccess, requirePlayerInSeason, requireRole } from "./policy/authorization.js";
-import { resetDemoDatabase } from "./db/demo-reset.js";
-import { emptyDatabase } from "./db/empty.js";
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 const emailSchema = z.string().email().max(254).transform((v) => v.toLowerCase());
@@ -22,13 +20,68 @@ const availability = z.enum(["CAN_ATTEND", "CANNOT_ATTEND", "UNSURE"]);
 type BuildOptions = { authAdapter?: AuthAdapter; enableDevReset?: boolean };
 
 export async function buildApp(options: BuildOptions = {}) {
-  const auth = options.authAdapter ?? new DevelopmentAuthAdapter();
+  const auth = options.authAdapter ?? createAuthAdapter();
+  assertProductionAuthAdapter(auth);
+  if (config.isProduction && options.enableDevReset) throw new Error("Development endpoints forbidden in production");
   const app = Fastify({ logger: false });
+  // AsyncLocalStorage carries verified identity and the selected tenant/capability.
+  // Each SQL read/write enters its OWN bounded transaction; replies are sent only
+  // after COMMIT, never from inside a whole-request transaction.
+  app.addHook("onRoute", (route) => {
+    if (!route.url.startsWith("/v1/")) return;
+    const original = route.handler;
+    route.handler = async function(request, reply) {
+      const params = (request.params ?? {}) as Record<string, unknown>;
+      const context: DbContext = { mode: "deny" };
+      if (route.url.startsWith("/v1/dev/")) {
+        return withDbContext({ maintenance: true }, async () => original.call(this,request,reply));
+      }
+      const authorization = request.headers.authorization;
+      if (authorization !== undefined) {
+        if (!authorization.startsWith("Bearer ")) throw new DomainError("AUTH_INVALID",401,"Bearer token required");
+        context.actorId = auth.verifyAccessToken(authorization.slice(7)).userId;
+      }
+      if (route.url === "/v1/teams/bootstrap") context.mode = "bootstrap";
+      else if (route.url === "/v1/me/memberships") context.mode = "discovery";
+      else if (route.url.startsWith("/v1/invitations/") || route.url.startsWith("/v1/team-join/")) {
+        const capability = typeof params.token === "string" ? params.token : typeof params.code === "string" ? params.code.toUpperCase() : "";
+        context.mode = "invite"; context.invitationHash = tokenHash(capability);
+      } else if (uuid.safeParse(params.teamSeasonId).success) {
+        context.teamSeasonId = params.teamSeasonId as string; context.mode = "tenant";
+      }
+      return withDbContext(context, async () => {
+        if (context.mode === "invite") {
+          context.teamSeasonId = (await pool.query("SELECT public.app_cap_season() id")).rows[0].id ?? undefined;
+        } else if (context.actorId && context.mode === "deny") {
+          const targets = [["eventId","event"],["callupId","callup"],["requestId","request"],["actionItemId","action"]] as const;
+          const target = targets.find(([field]) => uuid.safeParse(params[field]).success);
+          if (target) {
+            context.mode = "resolve";
+            const result = await pool.query("SELECT public.app_resolve_tenant($1,$2) id", [target[1],params[target[0]]]);
+            context.teamSeasonId = result.rows[0].id ?? undefined;
+            context.mode = context.teamSeasonId ? "tenant" : "deny";
+            if (!context.teamSeasonId) throw new DomainError("ROLE_NOT_ALLOWED",403,"Resource is not accessible");
+            if (target[1] === "request" && /\/(approve|reject)$/.test(route.url)) {
+              await requireRole(pool, context.actorId!, context.teamSeasonId, ["COACH"]);
+            }
+          }
+        }
+        if (context.actorId && context.teamSeasonId && uuid.safeParse(params.playerId).success && !route.url.includes("invitations")) {
+          const access = await pool.query("SELECT public.app_staff($1) staff,public.app_guardian($1,$2) guardian", [context.teamSeasonId,params.playerId]);
+          if (!access.rows[0].staff && !access.rows[0].guardian) throw new DomainError("GUARDIAN_LINK_REQUIRED",403,"Active guardian access required");
+        }
+        return original.call(this,request,reply);
+      });
+    };
+  });
+
   await app.register(rateLimit, { max: 300, timeWindow: "1 minute" });
   await app.register(swagger, { openapi: { info: { title: "Talde Hemendik Backend", version: "0.3.0" } } });
   await app.register(swaggerUi, { routePrefix: "/documentation" });
 
   if(options.enableDevReset??config.devResetEnabled){
+    const { resetDemoDatabase } = await import("./db/demo-reset.js");
+    const { emptyDatabase } = await import("./db/empty.js");
     app.post("/v1/dev/reset",async()=>inTransaction((db)=>resetDemoDatabase(db)));
     app.post("/v1/dev/empty",async()=>inTransaction((db)=>emptyDatabase(db)));
   }
@@ -38,7 +91,9 @@ export async function buildApp(options: BuildOptions = {}) {
     if (error instanceof z.ZodError) return reply.code(400).send({ error: { code: "VALIDATION_ERROR", issues: error.issues } });
     if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: { code: "LINK_REQUEST_ALREADY_EXISTS", message: "Resource already exists" } });
     if ((error as { statusCode?: number }).statusCode === 429) return reply.code(429).send({ error: { code: "RATE_LIMIT_EXCEEDED", message: (error as Error).message } });
-    console.error("Fastify error:", error);
+    if ((error as {code?:string}).code === "42501") return reply.code(403).send({error:{code:"RLS_DENIED",message:"Database access denied"}});
+    if (["23514","23503"].includes((error as {code?:string}).code ?? "")) return reply.code(422).send({error:{code:"INVALID_RELATION",message:"Invalid data relation"}});
+    console.error(JSON.stringify({event:"api.internal_error",code:(error as {code?:string}).code ?? "INTERNAL"}));
     return reply.code(500).send({ error: { code: "INTERNAL_ERROR", message: "Internal error" } });
   });
 
@@ -48,14 +103,7 @@ export async function buildApp(options: BuildOptions = {}) {
     return auth.verifyAccessToken(value.slice(7));
   }
 
-  const allowedOrigins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173"
-  ];
+  const allowedOrigins = config.allowedOrigins;
   await app.register(cors, {
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
@@ -84,12 +132,7 @@ export async function buildApp(options: BuildOptions = {}) {
   app.post("/v1/auth/otp/verify", { config: { rateLimit: { max: otpVerifyLimit, timeWindow: "5 minutes" } } }, async (request) => {
     const body = z.object({ email: emailSchema, challengeId: uuid, otp: z.string().regex(/^\d{6}$/), displayName: z.string().min(1).max(100).optional() }).parse(request.body);
     const identity = await auth.verifyOtp(body.email, body.challengeId, body.otp);
-    const result = await pool.query(
-      `INSERT INTO users (auth_subject,email,display_name) VALUES ($1,$2,$3)
-       ON CONFLICT (auth_subject) DO UPDATE SET email=EXCLUDED.email
-       RETURNING id,email,display_name`,
-      [identity.subject, identity.email, body.displayName ?? identity.email.split("@")[0]]
-    );
+    const result = await resolveAuthUser(identity.subject, identity.email, body.displayName ?? identity.email.split("@")[0]!);
     return { accessToken: auth.issueAccessToken(result.rows[0].id), user: result.rows[0] };
   });
 
@@ -109,7 +152,7 @@ export async function buildApp(options: BuildOptions = {}) {
         if(row.team_name!==body.team.name||row.sport!==body.team.sport||row.season_label!==body.teamSeason.seasonLabel||row.category!==body.teamSeason.category||row.display_label!==body.teamSeason.displayLabel) throw new DomainError("BOOTSTRAP_IDEMPOTENCY_CONFLICT",409,"Idempotency key was used with a different bootstrap payload");
         return {team:{id:row.team_id,name:row.team_name,sport:row.sport},teamSeason:row,membership:{id:row.membership_id,role:row.role,status:row.status},joinCode:row.join_code,idempotentReplay:true};
       }
-      const team=(await db.query(`INSERT INTO teams(name,sport) VALUES($1,$2) RETURNING *`,[body.team.name,body.team.sport])).rows[0];
+      const team=(await db.query(`INSERT INTO teams(name,sport,created_by_user_id) VALUES($1,$2,$3) RETURNING *`,[body.team.name,body.team.sport,userId])).rows[0];
       const joinCode=body.createGeneralJoinCode?randomBytes(4).toString("hex").toUpperCase():null;
       const season=(await db.query(`INSERT INTO team_seasons(team_id,season_label,category,display_label,status,created_by_user_id,bootstrap_idempotency_key,join_code) VALUES($1,$2,$3,$4,'ACTIVE',$5,$6,$7) RETURNING *`,[team.id,body.teamSeason.seasonLabel,body.teamSeason.category,body.teamSeason.displayLabel,userId,key,joinCode])).rows[0];
       const membership=(await db.query(`INSERT INTO memberships(user_id,team_season_id,role,status) VALUES($1,$2,'COACH','ACTIVE') RETURNING *`,[userId,season.id])).rows[0];
@@ -343,6 +386,11 @@ export async function buildApp(options: BuildOptions = {}) {
 
   async function setAvailability(args: { eventId: string; playerId: string; userId: string; status: string; expectedVersion: number; source: string; note?: string; idempotencyKey?: string }) {
     return inTransaction(async (db) => {
+      // A missing response has no row to SELECT FOR UPDATE. Serialize the logical
+      // event/player resource before reading version or idempotency state. This
+      // transaction-scoped lock is shared across API processes and auto-released
+      // on COMMIT/ROLLBACK; hash collisions only serialize unrelated resources.
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`availability:${args.eventId}:${args.playerId}`]);
       const event = await eventContext(args.eventId, args.playerId, db);
       if (event.status !== "ACTIVE" || !event.availability_enabled || event.availability_closed_at || (event.availability_deadline && new Date(event.availability_deadline) <= new Date())) throw new DomainError("AVAILABILITY_CLOSED", 409, "Availability is closed");
       const duplicate = args.idempotencyKey ? await db.query(`SELECT ar.* FROM availability_history h JOIN availability_responses ar ON ar.id=h.response_id WHERE h.actor_user_id=$1 AND h.idempotency_key=$2`, [args.userId, args.idempotencyKey]) : { rowCount: 0, rows: [] };

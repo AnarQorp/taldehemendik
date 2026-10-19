@@ -2384,22 +2384,27 @@ export class TeamAppState {
       callupEnabled: type !== "TRAINING"
     };
 
+    const scope = this.createScope();
     try {
       await this.ensureAuth("coach");
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       const res = await api.events.createEvent(activeTeamSeasonId, payload);
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       this.showToast(`✓ Evento "${res.title}" creado con éxito.`);
       if (titleInput) titleInput.value = "";
       if (locationInput) locationInput.value = "";
       if (notesInput) notesInput.value = "";
 
       await this.syncCoachHome();
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       await this.goToScreen("v2_01_coach_home", "inicio");
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       console.error("Error creating event:", err);
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       this.showToast(`Error al crear evento: ${mapDomainError(err)}`);
     }
   }
@@ -4361,7 +4366,7 @@ export class TeamAppState {
   }
 
   async executeCoachBootstrap({ teamName, displayLabel, category, coachEmail, coachName }) {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     const btn = document.getElementById("coach-bootstrap-btn");
     if (btn) {
       btn.disabled = true;
@@ -4374,6 +4379,9 @@ export class TeamAppState {
       // 2. Client Idempotency-Key
       const idemKey = idempotencyManager.getOrCreateKey(`bootstrap-${coachEmail}-${teamName}-${displayLabel}`);
 
+      // Verify scope before dispatching remote write
+      if (!this.isScopeActive(scope)) return;
+
       // 3. POST /v1/teams/bootstrap
       const res = await api.teams.bootstrap({
         team: { name: teamName, sport: "FOOTBALL" },
@@ -4385,7 +4393,7 @@ export class TeamAppState {
         createGeneralJoinCode: true
       }, idemKey);
 
-      if (reqGen !== this.contextGeneration) {
+      if (!this.isScopeActive(scope)) {
         console.warn("executeCoachBootstrap: Stale bootstrap discarded due to context switch.");
         return;
       }
@@ -4419,7 +4427,7 @@ export class TeamAppState {
       this.showToast(`✓ Equipo ${res.team.name} registrado con éxito (Código: ${res.joinCode}).`);
       this.renderBetaPlayersList();
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       console.error("Bootstrap error:", err);
       if (err?.status === 401 && err.wasAuthenticated) {
         this.handleSessionExpired(err);
@@ -4427,7 +4435,7 @@ export class TeamAppState {
       }
       this.showToast(`Error al crear equipo: ${mapDomainError(err)}`);
     } finally {
-      if (reqGen === this.contextGeneration && btn) {
+      if (this.isScopeActive(scope) && btn) {
         btn.disabled = false;
         btn.innerHTML = `<span class="material-symbols-outlined text-[20px]" data-icon="check_circle">check_circle</span><span>Equipo creado correctamente</span>`;
       }
@@ -4435,7 +4443,7 @@ export class TeamAppState {
   }
 
   async submitAddPlayer() {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     if (!this.beta.teamSeasonId) {
       this.showToast("Primero debes crear el equipo para poder añadir jugadores.");
       return;
@@ -4454,6 +4462,7 @@ export class TeamAppState {
     const idemKey = idempotencyManager.getOrCreateKey(`add-player-${this.beta.teamSeasonId}-${firstName}-${lastName}`);
 
     try {
+      if (!this.isScopeActive(scope)) return;
       const res = await api.teams.addPlayer(this.beta.teamSeasonId, {
         firstName,
         lastName,
@@ -4462,7 +4471,7 @@ export class TeamAppState {
         position
       }, idemKey);
 
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
 
       this.beta.players.push({
         id: res.player.id,
@@ -4483,7 +4492,7 @@ export class TeamAppState {
       if (fnInput) fnInput.value = "";
       if (lnInput) lnInput.value = "";
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       console.error("Add player error:", err);
       if (err?.status === 401 && err.wasAuthenticated) {
         this.handleSessionExpired(err);
@@ -4514,7 +4523,7 @@ export class TeamAppState {
   }
 
   async saveNewPlayerFromRoster() {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     if (!this.beta.teamSeasonId) {
       this.showToast("⚠️ No hay temporada activa para añadir jugadores.");
       return;
@@ -4540,7 +4549,7 @@ export class TeamAppState {
 
     try {
       await this.ensureAuth("coach");
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       await api.teams.addPlayer(this.beta.teamSeasonId, {
         firstName,
         lastName,
@@ -4549,13 +4558,14 @@ export class TeamAppState {
         position
       }, idemKey);
 
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       this.closeAddPlayerModal();
       this.showToast(`✓ ${firstName} ${lastName} añadido a la plantilla.`);
 
       // Refrescar lista de jugadores y UI de roster
+      if (!this.isScopeActive(scope)) return;
       const playersRes = await api.teams.getPlayers(this.beta.teamSeasonId);
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       this.beta.players = (playersRes?.items || []).map(p => ({
         id: p.id,
         firstName: p.first_name,
@@ -4565,7 +4575,7 @@ export class TeamAppState {
       }));
       await this.syncCoachRoster();
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       console.error("Error adding player from roster:", err);
       if (err?.status === 401 && err.wasAuthenticated) {
         this.handleSessionExpired(err);
@@ -4573,7 +4583,7 @@ export class TeamAppState {
       }
       this.showToast(`Error al añadir deportista: ${mapDomainError(err)}`);
     } finally {
-      if (reqGen === this.contextGeneration && saveBtn) {
+      if (this.isScopeActive(scope) && saveBtn) {
         saveBtn.disabled = false;
         saveBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">save</span><span>Guardar deportista</span>`;
       }
@@ -4863,7 +4873,7 @@ export class TeamAppState {
   }
 
   async executeParentJoin({ tutorEmail, tutorName, isIndividual, claimName, claimNumber }) {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     const btn = document.getElementById("btn-submit");
     if (btn) {
       btn.disabled = true;
@@ -4877,8 +4887,9 @@ export class TeamAppState {
         if (!token) {
           throw new Error("Falta el token de invitación individual.");
         }
+        if (!this.isScopeActive(scope)) return;
         res = await api.invitations.requestIndividualLink(token);
-        if (reqGen !== this.contextGeneration) {
+        if (!this.isScopeActive(scope)) {
           console.warn("executeParentJoin: Stale individual link response discarded due to context switch.");
           return;
         }
@@ -4887,11 +4898,12 @@ export class TeamAppState {
           localStorage.setItem("talde_linked_player_id", res.player_id);
         }
       } else {
+        if (!this.isScopeActive(scope)) return;
         res = await api.invitations.requestGeneralLink(this.beta.verifiedInvitation.code, {
           claimedPlayerName: claimName,
           claimedShirtNumber: claimNumber
         });
-        if (reqGen !== this.contextGeneration) {
+        if (!this.isScopeActive(scope)) {
           console.warn("executeParentJoin: Stale general link response discarded due to context switch.");
           return;
         }
@@ -4919,7 +4931,7 @@ export class TeamAppState {
         `;
       }
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       console.error("Parent join error:", err);
       if (err?.status === 401 && err.wasAuthenticated) {
         this.handleSessionExpired(err);
@@ -4927,7 +4939,7 @@ export class TeamAppState {
       }
       this.showToast(`Error al enviar solicitud: ${mapDomainError(err)}`);
     } finally {
-      if (reqGen === this.contextGeneration && btn) {
+      if (this.isScopeActive(scope) && btn) {
         btn.disabled = false;
         btn.innerHTML = `<span>Solicitud registrada (Pendiente de aprobación)</span>`;
       }
@@ -4935,7 +4947,7 @@ export class TeamAppState {
   }
 
   async approveBetaGuardianRequest(requestId, selectElementId) {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     let playerId = null;
     if (selectElementId) {
       const sel = document.getElementById(selectElementId);
@@ -4958,8 +4970,9 @@ export class TeamAppState {
         }
       }
 
+      if (!this.isScopeActive(scope)) return;
       const res = await api.teams.approveGuardianRequest(requestId, playerId);
-      if (reqGen !== this.contextGeneration) {
+      if (!this.isScopeActive(scope)) {
         console.warn("approveBetaGuardianRequest: Stale approval response discarded due to context switch.");
         return;
       }
@@ -4976,7 +4989,7 @@ export class TeamAppState {
 
       await this.syncCoachHome();
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       console.error("Approve error:", err);
       if (err?.status === 401 && err.wasAuthenticated) {
         this.handleSessionExpired(err);
@@ -4987,7 +5000,7 @@ export class TeamAppState {
   }
 
   async rejectBetaGuardianRequest(requestId) {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     try {
       // CRITICAL: Guarantee coach session token is active before calling coach endpoint
       if (this.tokens.coach) {
@@ -5000,15 +5013,16 @@ export class TeamAppState {
         }
       }
 
+      if (!this.isScopeActive(scope)) return;
       await api.teams.rejectGuardianRequest(requestId);
-      if (reqGen !== this.contextGeneration) {
+      if (!this.isScopeActive(scope)) {
         console.warn("rejectBetaGuardianRequest: Stale rejection response discarded due to context switch.");
         return;
       }
       this.showToast("Solicitud rechazada en PostgreSQL.");
       await this.syncCoachHome();
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       console.error("Reject error:", err);
       if (err?.status === 401 && err.wasAuthenticated) {
         this.handleSessionExpired(err);

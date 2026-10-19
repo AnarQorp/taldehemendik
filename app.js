@@ -375,6 +375,7 @@ export class TeamAppState {
     if (this.appMode === "DEMO") return false;
     if (this._isCheckingApproval) return false;
 
+    const reqGen = this.contextGeneration;
     const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
     if (!parentToken) return false;
 
@@ -385,6 +386,7 @@ export class TeamAppState {
       this.tokens.parent = parentToken;
 
       const res = await api.teams.getMyMemberships();
+      if (reqGen !== this.contextGeneration || this.currentRole !== "parent") return false;
       const items = res?.items || [];
 
       // Requirement 1 & 2: MUST have guardian_players.length > 0 to consolidate
@@ -398,6 +400,7 @@ export class TeamAppState {
       }
 
       if (guardianMem) {
+        if (reqGen !== this.contextGeneration || this.currentRole !== "parent") return false;
         this.currentRole = "parent";
         this.tokens.parent = parentToken;
         this.beta.teamSeasonId = guardianMem.team_season_id;
@@ -435,6 +438,7 @@ export class TeamAppState {
 
   async loadUserContext() {
     if (this.appMode === "DEMO") return false;
+    const reqGen = this.contextGeneration;
     try {
       const activeRole = localStorage.getItem("talde_active_role") || this.currentRole || "coach";
       const coachToken = this.tokens.coach || localStorage.getItem("talde_token_coach");
@@ -445,6 +449,7 @@ export class TeamAppState {
         api.client.setToken(parentToken);
         this.tokens.parent = parentToken;
         const res = await api.teams.getMyMemberships();
+        if (reqGen !== this.contextGeneration) return false;
         const items = res?.items || [];
 
         // Requirement 1: MUST have guardian_players.length > 0
@@ -458,6 +463,7 @@ export class TeamAppState {
         }
 
         if (guardianMem) {
+          if (reqGen !== this.contextGeneration) return false;
           this.currentRole = "parent";
           localStorage.setItem("talde_active_role", "parent");
           this.beta.teamSeasonId = guardianMem.team_season_id;
@@ -489,11 +495,13 @@ export class TeamAppState {
       if (!activeToken) return false;
       api.client.setToken(activeToken);
       const res = await api.teams.getMyMemberships();
+      if (reqGen !== this.contextGeneration) return false;
       const items = res?.items || [];
       if (!items.length) return false;
 
       const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
       if (coachMem) {
+        if (reqGen !== this.contextGeneration) return false;
         if (activeRole === "coach") this.currentRole = "coach";
         this.tokens.coach = coachToken || activeToken;
         this.beta.teamSeasonId = coachMem.team_season_id;
@@ -541,6 +549,7 @@ export class TeamAppState {
 
       const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0);
       if (guardianMem) {
+        if (reqGen !== this.contextGeneration) return false;
         this.currentRole = "parent";
         this.tokens.parent = activeToken;
         this.beta.teamSeasonId = guardianMem.team_season_id;
@@ -556,6 +565,7 @@ export class TeamAppState {
         return true;
       }
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return false;
       if (err?.wasAuthenticated && err?.status === 401) {
         this.handleSessionExpired(err);
       } else {
@@ -602,17 +612,23 @@ export class TeamAppState {
       if (el) el.value = "";
     }
 
+    const nameEl = document.getElementById("parent-home-player-name");
+    if (nameEl) nameEl.textContent = "";
+
     // Clear and hide dynamic containers rendering private information
     const containersToClear = [
       "coach-pending-approval-card",
       "coach-week-events-container",
       "coach-agenda-events-container",
+      "roster-players-list-container",
       "coach-roster-list",
       "coach-beta-players-list",
       "parent-commitments-list",
+      "player-detail-parent-container",
       "parent-player-detail-container",
       "injury-candidates-container",
-      "coach-recent-changes-container"
+      "coach-recent-changes-container",
+      "agenda-events-container"
     ];
     for (const id of containersToClear) {
       const el = document.getElementById(id);
@@ -624,11 +640,30 @@ export class TeamAppState {
 
     const codeDisplay = document.getElementById("coach-code-display");
     if (codeDisplay) codeDisplay.textContent = "------";
+
+    this.otpState = {
+      email: null,
+      challengeId: null,
+      role: null,
+      displayName: null,
+      isVerifying: false,
+      isRequesting: false,
+      onSuccess: null
+    };
   }
 
   handleSessionExpired(sourceError) {
     if (sourceError && !sourceError.wasAuthenticated && sourceError.code !== "AUTH_REQUIRED") {
       return;
+    }
+    this.contextGeneration++;
+    this.abortAllInFlight();
+    this.otpOpSeq++;
+    if (this.otpAbortController) {
+      try { this.otpAbortController.abort(); } catch {}
+    }
+    if (this.isOtpModalOpen()) {
+      this.closeOtpModal();
     }
     this.clearSessionData();
     this.purgePrivateFormsAndDom();
@@ -670,14 +705,15 @@ export class TeamAppState {
       guardianPlayers: []
     };
 
+    this.tokens = { coach: null, parent: null };
+    api.client.setToken(null);
+    localStorage.removeItem("talde_session_token");
+    localStorage.removeItem("talde_token_coach");
+    localStorage.removeItem("talde_token_parent");
+
     if (newMode === "DEMO") {
-      localStorage.removeItem("talde_session_token");
-      localStorage.removeItem("talde_token_coach");
-      localStorage.removeItem("talde_token_parent");
       localStorage.removeItem("talde_team_season_id");
       localStorage.removeItem("talde_active_role");
-      this.tokens = { coach: null, parent: null };
-      api.client.setToken(null);
       this.appMode = "DEMO";
       localStorage.setItem("talde_app_mode", "DEMO");
       const demoToolbar = document.getElementById("demo-toolbar");
@@ -694,6 +730,15 @@ export class TeamAppState {
   }
 
   clearSessionData() {
+    this.contextGeneration++;
+    this.abortAllInFlight();
+    this.otpOpSeq++;
+    if (this.otpAbortController) {
+      try { this.otpAbortController.abort(); } catch {}
+    }
+    if (this.isOtpModalOpen()) {
+      this.closeOtpModal();
+    }
     localStorage.removeItem("talde_session_token");
     localStorage.removeItem("talde_token_coach");
     localStorage.removeItem("talde_token_parent");
@@ -705,6 +750,15 @@ export class TeamAppState {
     localStorage.removeItem("talde_players");
     this.tokens = { coach: null, parent: null };
     api.client.setToken(null);
+    this.otpState = {
+      email: null,
+      challengeId: null,
+      role: null,
+      displayName: null,
+      isVerifying: false,
+      isRequesting: false,
+      onSuccess: null
+    };
     this.beta = {
       teamSeasonId: null,
       team: null,
@@ -729,6 +783,7 @@ export class TeamAppState {
       activeActionItem: null,
       unconfirmedWarnings: []
     };
+    this.purgePrivateFormsAndDom();
     const codeDisplay = document.getElementById("coach-code-display");
     if (codeDisplay) codeDisplay.textContent = "------";
     const coachCodeSection = document.getElementById("coach-code-section");
@@ -944,14 +999,18 @@ export class TeamAppState {
       // El token solo podrá almacenarse después de que el controlador confirme que la operación OTP
       // sigue vigente, el modal continúa activo y el contexto de aplicación no ha cambiado.
       // Una operación cancelada nunca debe crear una sesión.
-      if (opId !== this.otpOpSeq || !this.isOtpModalOpen() || contextGen !== this.contextGeneration || currentMode !== this.appMode) {
+      if (opId !== this.otpOpSeq || !this.isOtpModalOpen() || contextGen !== this.contextGeneration) {
         console.warn("OTP verification response discarded: modal closed, cancelled, or context shifted.");
         return;
       }
 
       // Store unified session token
       localStorage.setItem("talde_session_token", res.accessToken);
+      this.appMode = "BETA_NORMAL";
       localStorage.setItem("talde_app_mode", "BETA_NORMAL");
+      document.getElementById("demo-mode-badge")?.classList.add("hidden");
+      this.applyCleanUI();
+
       if (this.otpState.role === "coach") {
         this.tokens.coach = res.accessToken;
         localStorage.setItem("talde_token_coach", res.accessToken);
@@ -967,7 +1026,12 @@ export class TeamAppState {
       if (otpInput) otpInput.value = "";
 
       const successCb = this.otpState.onSuccess;
+      const scheduledGen = this.contextGeneration;
+      const scheduledOpId = this.otpOpSeq;
       setTimeout(() => {
+        if (scheduledGen !== this.contextGeneration || scheduledOpId !== this.otpOpSeq) {
+          return;
+        }
         this.closeOtpModal();
         if (typeof successCb === "function") {
           successCb(res);
@@ -1169,7 +1233,7 @@ export class TeamAppState {
   }
 
   async switchTeam(teamSeasonId) {
-    this.contextGeneration++;
+    const reqGen = ++this.contextGeneration;
     this.abortAllInFlight();
     this.live = {
       events: [],
@@ -1190,6 +1254,7 @@ export class TeamAppState {
     }
 
     const res = await api.teams.getMyMemberships();
+    if (reqGen !== this.contextGeneration) return;
     const items = res?.items || [];
     const targetMem = items.find(m => m.team_season_id === teamSeasonId && m.status === "ACTIVE");
     if (!targetMem) {
@@ -1212,17 +1277,19 @@ export class TeamAppState {
       this.currentRole = "coach";
       localStorage.setItem("talde_active_role", "coach");
       await this.goToScreen("v2_01_coach_home", "inicio");
+      if (reqGen !== this.contextGeneration) return;
     } else {
       this.currentRole = "parent";
       localStorage.setItem("talde_active_role", "parent");
       this.beta.guardianPlayers = targetMem.guardian_players || targetMem.guardianPlayers || [];
       this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
       await this.goToScreen("v2_07_parent_home", "inicio");
+      if (reqGen !== this.contextGeneration) return;
     }
   }
 
   async switchMembership(membershipId) {
-    this.contextGeneration++;
+    const reqGen = ++this.contextGeneration;
     this.abortAllInFlight();
     this.live = {
       events: [],
@@ -1251,19 +1318,23 @@ export class TeamAppState {
         this.currentRole = "coach";
         localStorage.setItem("talde_active_role", "coach");
         await this.ensureAuth("coach");
+        if (reqGen !== this.contextGeneration) return;
         const target = (this.currentScreen.startsWith("v2_07_") || this.currentScreen.startsWith("v2_08_") || this.currentScreen.startsWith("v2_00_"))
           ? "v2_01_coach_home"
           : this.currentScreen;
         await this.goToScreen(target, "inicio");
+        if (reqGen !== this.contextGeneration) return;
         this.showToast("Modo Entrenador: Mikel Zubeldia (Sesión autenticada)");
       } else if (membershipId === "indautxu_ale_b" || membershipId === "parent") {
         this.currentRole = "parent";
         localStorage.setItem("talde_active_role", "parent");
         await this.ensureAuth("parent");
+        if (reqGen !== this.contextGeneration) return;
         const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_03_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
           ? "v2_07_parent_home"
           : this.currentScreen;
         await this.goToScreen(target, "inicio");
+        if (reqGen !== this.contextGeneration) return;
         this.showToast("Modo Familia: Elena Gómez / Ibai #9 (Sesión autenticada)");
       }
       this.updateRoleUI();
@@ -1277,6 +1348,7 @@ export class TeamAppState {
       if (activeToken) api.client.setToken(activeToken);
 
       const memRes = await api.teams.getMyMemberships();
+      if (reqGen !== this.contextGeneration) return;
       const items = memRes?.items || [];
 
       if (membershipId === "coach" || membershipId === "indautxu_inf_a") {
@@ -1299,6 +1371,7 @@ export class TeamAppState {
         };
         this.beta.joinCode = coachMem.join_code;
         await this.goToScreen("v2_01_coach_home", "inicio");
+        if (reqGen !== this.contextGeneration) return;
         this.showToast("Modo Entrenador (Sesión BETA)");
       } else if (membershipId === "parent" || membershipId === "indautxu_ale_b") {
         const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
@@ -1320,14 +1393,17 @@ export class TeamAppState {
         this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
         this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
         await this.goToScreen("v2_07_parent_home", "inicio");
+        if (reqGen !== this.contextGeneration) return;
         this.showToast("Modo Familia (Sesión BETA)");
       } else {
         const specificMem = items.find(m => m.team_season_id === membershipId && m.status === "ACTIVE");
         if (specificMem) {
           await this.switchTeam(membershipId);
+          if (reqGen !== this.contextGeneration) return;
         }
       }
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       if (err?.wasAuthenticated && err?.status === 401) {
         this.handleSessionExpired(err);
         return;
@@ -1335,6 +1411,7 @@ export class TeamAppState {
       this.showToast(`Error al cambiar de membresía: ${mapDomainError(err)}`);
     }
 
+    if (reqGen !== this.contextGeneration) return;
     this.updateRoleUI();
     this.updateBottomNav();
   }
@@ -1677,6 +1754,7 @@ export class TeamAppState {
   }
 
   async syncCoachHome() {
+    const reqGen = this.contextGeneration;
     const isDemo = this.appMode === "DEMO";
     if (!this.beta.teamSeasonId && !isDemo) {
       this.beta.teamSeasonId = localStorage.getItem("talde_team_season_id");
@@ -1686,12 +1764,13 @@ export class TeamAppState {
     if (!activeTeamSeasonId) return;
 
     await this.ensureAuth("coach");
+    if (reqGen !== this.contextGeneration) return;
 
     if (!isDemo && (!this.beta.team || !this.beta.teamSeason)) {
       await this.loadUserContext();
+      if (reqGen !== this.contextGeneration) return;
     }
 
-    const reqGen = this.contextGeneration;
     try {
       // Concurrently fetch real data from PostgreSQL
       const [playersRes, eventsRes, pendingRes, pendingReqs] = await Promise.all([
@@ -1798,15 +1877,27 @@ export class TeamAppState {
             </div>
           ` : ''}
           <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
-            <button onclick="teamApp.rejectBetaGuardianRequest('${escapeHtml(req.id)}')" class="h-9 rounded-lg border border-outline-variant bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md font-medium flex items-center justify-center cursor-pointer active:scale-[0.98]">
+            <button id="btn-reject-guardian-request" data-request-id="${escapeHtml(req.id)}" class="btn-reject-guardian-request h-9 rounded-lg border border-outline-variant bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md font-medium flex items-center justify-center cursor-pointer active:scale-[0.98]">
               Rechazar
             </button>
-            <button onclick="teamApp.approveBetaGuardianRequest('${escapeHtml(req.id)}', ${isIndividual ? 'null' : `'coach-assign-player-${escapeHtml(req.id)}'`})" class="h-9 rounded-lg bg-secondary hover:bg-emerald-700 text-white font-label-md text-label-md font-bold flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-[0.98]">
+            <button id="btn-approve-guardian-request" data-request-id="${escapeHtml(req.id)}" data-select-id="${isIndividual ? '' : `coach-assign-player-${escapeHtml(req.id)}`}" class="btn-approve-guardian-request h-9 rounded-lg bg-secondary hover:bg-emerald-700 text-white font-label-md text-label-md font-bold flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-[0.98]">
               <span class="material-symbols-outlined text-[16px]">check</span>
               Aceptar y Vincular
             </button>
           </div>
         `;
+        const rejectBtn = reqCard.querySelector(".btn-reject-guardian-request");
+        if (rejectBtn) {
+          rejectBtn.addEventListener("click", () => {
+            this.rejectBetaGuardianRequest(rejectBtn.dataset.requestId);
+          });
+        }
+        const approveBtn = reqCard.querySelector(".btn-approve-guardian-request");
+        if (approveBtn) {
+          approveBtn.addEventListener("click", () => {
+            this.approveBetaGuardianRequest(approveBtn.dataset.requestId, approveBtn.dataset.selectId || null);
+          });
+        }
       } else if (reqCard) {
         reqCard.classList.add("hidden");
       }
@@ -2128,6 +2219,7 @@ export class TeamAppState {
   }
 
   async submitCreateEvent() {
+    const reqGen = this.contextGeneration;
     const isDemo = this.appMode === "DEMO";
     const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : this.beta.teamSeasonId;
     if (!activeTeamSeasonId) {
@@ -2182,21 +2274,26 @@ export class TeamAppState {
 
     try {
       await this.ensureAuth("coach");
+      if (reqGen !== this.contextGeneration) return;
       const res = await api.events.createEvent(activeTeamSeasonId, payload);
+      if (reqGen !== this.contextGeneration) return;
       this.showToast(`✓ Evento "${res.title}" creado con éxito.`);
       if (titleInput) titleInput.value = "";
       if (locationInput) locationInput.value = "";
       if (notesInput) notesInput.value = "";
 
       await this.syncCoachHome();
+      if (reqGen !== this.contextGeneration) return;
       await this.goToScreen("v2_01_coach_home", "inicio");
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Error creating event:", err);
       this.showToast(`Error al crear evento: ${mapDomainError(err)}`);
     }
   }
 
   async syncCoachAgenda() {
+    const reqGen = this.contextGeneration;
     const isDemo = this.appMode === "DEMO";
     const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : this.beta.teamSeasonId;
 
@@ -2252,9 +2349,9 @@ export class TeamAppState {
       return;
     }
 
-    const reqGen = this.contextGeneration;
     try {
       await this.ensureAuth(isGuardian ? "parent" : "coach");
+      if (reqGen !== this.contextGeneration) return;
       const eventsRes = await api.events.getEvents(activeTeamSeasonId);
       if (reqGen !== this.contextGeneration) {
         console.warn("syncCoachAgenda: Stale response discarded due to context switch.");
@@ -2313,7 +2410,7 @@ export class TeamAppState {
                         <span class="material-symbols-outlined text-[13px] text-amber-700">hourglass_top</span>
                         <span>Convocatoria pendiente</span>
                       </span>
-                      <button id="coach-agenda-publish-btn-${escapeHtml(ev.id)}" onclick="teamApp.prepareAndPublishCallup('${escapeHtml(ev.id)}')" class="h-8 px-3 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-sm text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition-all">
+                      <button id="coach-agenda-publish-btn-${escapeHtml(ev.id)}" data-event-id="${escapeHtml(ev.id)}" class="btn-publish-callup-action h-8 px-3 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-sm text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition-all">
                         <span class="material-symbols-outlined text-[14px]">send</span>
                         <span>Publicar convocatoria</span>
                       </button>
@@ -2375,9 +2472,22 @@ export class TeamAppState {
               </div>
             `;
           }).join('');
+
+          if (typeof eventsContainer.querySelectorAll === "function") {
+            eventsContainer.querySelectorAll(".btn-publish-callup-action").forEach(btn => {
+              btn.addEventListener("click", () => {
+                this.prepareAndPublishCallup(btn.dataset.eventId);
+              });
+            });
+          }
         }
       }
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
+      if (err?.status === 401 && err?.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       console.warn("Error syncing agenda:", err);
     }
   }
@@ -2431,6 +2541,7 @@ export class TeamAppState {
   }
 
   async syncCoachRoster() {
+    const reqGen = this.contextGeneration;
     const isDemo = this.appMode === "DEMO";
     const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : this.beta.teamSeasonId;
 
@@ -2504,9 +2615,9 @@ export class TeamAppState {
       return;
     }
 
-    const reqGen = this.contextGeneration;
     try {
       await this.ensureAuth("coach");
+      if (reqGen !== this.contextGeneration) return;
       const playersRes = await api.teams.getPlayers(activeTeamSeasonId);
       if (reqGen !== this.contextGeneration) {
         console.warn("syncCoachRoster: Stale response discarded due to context switch.");
@@ -2553,7 +2664,7 @@ export class TeamAppState {
                   </div>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
-                  <button id="btn-invite-family-${escapeHtml(p.id)}" onclick="teamApp.openPlayerInviteModal('${escapeHtml(p.id)}', '${safeName.replace(/'/g, "\\'")}')" class="px-2.5 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-primary font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer">
+                  <button id="btn-invite-family-${escapeHtml(p.id)}" data-player-id="${escapeHtml(p.id)}" class="btn-invite-family-action px-2.5 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-primary font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer">
                     <span class="material-symbols-outlined text-[16px]">share</span>
                     <span>Invitar familia</span>
                   </button>
@@ -2561,9 +2672,29 @@ export class TeamAppState {
               </article>
             `;
           }).join('');
+
+          if (typeof listContainer.querySelectorAll === "function") {
+            const buttons = listContainer.querySelectorAll(".btn-invite-family-action");
+            if (buttons && buttons.forEach) {
+              buttons.forEach(btn => {
+                const pId = btn.getAttribute("data-player-id") || btn.dataset?.playerId;
+                const playerObj = players.find(p => String(p.id) === String(pId));
+                const pName = playerObj ? `${playerObj.first_name || ''} ${playerObj.last_name || ''}`.trim() : "";
+                if (btn.dataset) btn.dataset.playerName = pName;
+                btn.addEventListener("click", () => {
+                  this.openPlayerInviteModal(pId, pName);
+                });
+              });
+            }
+          }
         }
       }
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
+      if (err?.status === 401 && err?.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       console.warn("Error syncing roster:", err);
     }
   }
@@ -2594,9 +2725,10 @@ export class TeamAppState {
   }
 
   async syncEventHubNormal() {
-    await this.ensureAuth("coach");
-
     const reqGen = this.contextGeneration;
+    await this.ensureAuth("coach");
+    if (reqGen !== this.contextGeneration) return;
+
     const isDemo = this.appMode === "DEMO";
     const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : (this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id"));
 
@@ -2987,13 +3119,17 @@ export class TeamAppState {
   }
 
   async syncParentHome() {
+    const reqGen = this.contextGeneration;
     if (this.appMode === "DEMO") {
       await this.ensureAuth("parent");
+      if (reqGen !== this.contextGeneration) return;
       try {
         const statusRes = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+        if (reqGen !== this.contextGeneration) return;
         this.live.parentCallupStatus = statusRes;
 
         const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
+        if (reqGen !== this.contextGeneration) return;
         this.live.parentAvailability = availRes.current;
 
         const badge = document.getElementById("parent-ibai-callup-badge");
@@ -3020,6 +3156,7 @@ export class TeamAppState {
     try {
       if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
         await this.loadUserContext();
+        if (reqGen !== this.contextGeneration) return;
       }
       const activePlayer = this.beta.guardianPlayer || (this.beta.guardianPlayers && this.beta.guardianPlayers[0]);
       const pName = activePlayer ? `${activePlayer.firstName || activePlayer.first_name} ${activePlayer.lastName || activePlayer.last_name}` : "Deportista";
@@ -3054,7 +3191,6 @@ export class TeamAppState {
       const summaryEl = document.getElementById("parent-home-pending-summary");
 
       if (this.beta.teamSeasonId) {
-        const reqGen = this.contextGeneration;
         const eventsRes = await api.events.getEvents(this.beta.teamSeasonId);
         if (reqGen !== this.contextGeneration) {
           console.warn("syncParentHome: Stale response discarded due to context switch.");
@@ -3084,6 +3220,7 @@ export class TeamAppState {
           if (urgentSection) urgentSection.classList.add("hidden");
           if (commitmentsList) {
             const eventCards = await Promise.all(events.map(async ev => {
+              if (reqGen !== this.contextGeneration) return '';
               const d = new Date(ev.starts_at);
               const dateFormatted = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
               const timeFormatted = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -3103,6 +3240,7 @@ export class TeamAppState {
                 } else {
                   try {
                     const status = await api.callup.getPlayerCallupStatus(ev.id, activePlayer.id || activePlayer.playerId);
+                    if (reqGen !== this.contextGeneration) return '';
                     if (status.called) {
                       callupBadge = `
                         <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
@@ -3150,11 +3288,17 @@ export class TeamAppState {
                 </article>
               `;
             }));
+            if (reqGen !== this.contextGeneration) return;
             commitmentsList.innerHTML = eventCards.join('');
           }
         }
       }
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
+      if (err?.status === 401 && err?.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       console.warn("Parent clean home sync error:", err);
     }
   }
@@ -3180,6 +3324,7 @@ export class TeamAppState {
   }
 
   async syncPlayerDetail() {
+    const reqGen = this.contextGeneration;
     const isDemo = this.appMode === "DEMO";
     const demoContainer = document.getElementById("player-detail-demo-container");
     const parentContainer = document.getElementById("player-detail-parent-container");
@@ -3240,8 +3385,10 @@ export class TeamAppState {
 
     // BETA_NORMAL mode
     await this.ensureAuth("parent");
+    if (reqGen !== this.contextGeneration) return;
     if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
       await this.loadUserContext();
+      if (reqGen !== this.contextGeneration) return;
     }
 
     const players = this.beta.guardianPlayers || [];
@@ -3252,6 +3399,7 @@ export class TeamAppState {
     }
 
     if (!activePlayer) {
+      if (reqGen !== this.contextGeneration) return;
       parentContainer.innerHTML = `
         <div class="p-6 bg-surface-container-lowest rounded-2xl border border-dashed border-outline-variant text-center space-y-2">
           <p class="font-label-lg font-bold text-on-surface">No hay deportista vinculado a este perfil familiar</p>
@@ -3280,7 +3428,7 @@ export class TeamAppState {
             const pName = p.first_name || p.firstName;
             const pNum = p.shirt_number ?? p.shirtNumber ?? '-';
             return `
-              <button onclick="teamApp.selectGuardianChild('${escapeHtml(pId)}')" class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${isSel ? 'bg-secondary text-white shadow-xs' : 'text-on-surface-variant hover:bg-surface-container'}">
+              <button data-child-id="${escapeHtml(pId)}" class="btn-select-guardian-child flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${isSel ? 'bg-secondary text-white shadow-xs' : 'text-on-surface-variant hover:bg-surface-container'}">
                 ${escapeHtml(pName)} (#${escapeHtml(pNum)})
               </button>
             `;
@@ -3291,7 +3439,6 @@ export class TeamAppState {
 
     // Upcoming events and callup status for this child
     let eventsHtml = "";
-    const reqGen = this.contextGeneration;
     try {
       if (this.beta.teamSeasonId) {
         const eventsRes = await api.events.getEvents(this.beta.teamSeasonId);
@@ -3302,6 +3449,7 @@ export class TeamAppState {
         const events = eventsRes?.items || [];
         if (events.length > 0) {
           const cards = await Promise.all(events.map(async ev => {
+            if (reqGen !== this.contextGeneration) return '';
             const d = new Date(ev.starts_at);
             const dateFormatted = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
             const timeFormatted = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -3329,6 +3477,7 @@ export class TeamAppState {
               } else {
                 try {
                   const status = await api.callup.getPlayerCallupStatus(ev.id, activePlayer.id || activePlayer.playerId);
+                  if (reqGen !== this.contextGeneration) return '';
                   if (status.called) {
                     callupBadgeHtml = `
                       <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-extrabold">
@@ -3373,13 +3522,20 @@ export class TeamAppState {
               </div>
             `;
           }));
+          if (reqGen !== this.contextGeneration) return;
           eventsHtml = cards.join('');
         }
       }
     } catch (e) {
+      if (reqGen !== this.contextGeneration) return;
+      if (e?.status === 401 && e?.wasAuthenticated) {
+        this.handleSessionExpired(e);
+        return;
+      }
       console.warn("Error loading child events:", e);
     }
 
+    if (reqGen !== this.contextGeneration) return;
     parentContainer.innerHTML = `
       ${switcherHtml}
       <!-- Hero Card del Menor Vinculado -->
@@ -3438,6 +3594,14 @@ export class TeamAppState {
         `}
       </section>
     `;
+
+    if (typeof parentContainer.querySelectorAll === "function") {
+      parentContainer.querySelectorAll(".btn-select-guardian-child").forEach(btn => {
+        btn.addEventListener("click", () => {
+          this.selectGuardianChild(btn.dataset.childId);
+        });
+      });
+    }
   }
 
   async syncParentRsvp() {
@@ -3480,15 +3644,28 @@ export class TeamAppState {
   }
 
   async syncEventHubInjury() {
-    await this.ensureAuth("coach");
-    const pendingData = await api.pending.getPending(DEMO_CONFIG.TEAM_SEASON_ID);
-    const bajaItem = (pendingData.actionItems || []).find(item => item.type === "CALLED_PLAYER_UNAVAILABLE" && item.status === "OPEN");
-    this.live.activeActionItem = bajaItem;
+    const reqGen = this.contextGeneration;
+    try {
+      await this.ensureAuth("coach");
+      if (reqGen !== this.contextGeneration) return;
 
-    if (bajaItem) {
-      const candidatesRes = await api.pending.getReplacementCandidates(bajaItem.id);
-      this.live.candidates = candidatesRes.items || [];
-      this.renderCandidates(this.live.candidates);
+      const pendingData = await api.pending.getPending(DEMO_CONFIG.TEAM_SEASON_ID);
+      if (reqGen !== this.contextGeneration) return;
+
+      const bajaItem = (pendingData.actionItems || []).find(item => item.type === "CALLED_PLAYER_UNAVAILABLE" && item.status === "OPEN");
+      this.live.activeActionItem = bajaItem;
+
+      if (bajaItem) {
+        const candidatesRes = await api.pending.getReplacementCandidates(bajaItem.id);
+        if (reqGen !== this.contextGeneration) return;
+        this.live.candidates = candidatesRes.items || [];
+        this.renderCandidates(this.live.candidates);
+      }
+    } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+      }
     }
   }
 
@@ -4014,6 +4191,7 @@ export class TeamAppState {
   }
 
   async executeCoachBootstrap({ teamName, displayLabel, category, coachEmail, coachName }) {
+    const reqGen = this.contextGeneration;
     const btn = document.getElementById("coach-bootstrap-btn");
     if (btn) {
       btn.disabled = true;
@@ -4036,6 +4214,11 @@ export class TeamAppState {
         },
         createGeneralJoinCode: true
       }, idemKey);
+
+      if (reqGen !== this.contextGeneration) {
+        console.warn("executeCoachBootstrap: Stale bootstrap discarded due to context switch.");
+        return;
+      }
 
       this.beta.teamSeasonId = res.teamSeason.id;
       this.beta.team = res.team;
@@ -4066,10 +4249,15 @@ export class TeamAppState {
       this.showToast(`✓ Equipo ${res.team.name} registrado con éxito (Código: ${res.joinCode}).`);
       this.renderBetaPlayersList();
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Bootstrap error:", err);
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       this.showToast(`Error al crear equipo: ${mapDomainError(err)}`);
     } finally {
-      if (btn) {
+      if (reqGen === this.contextGeneration && btn) {
         btn.disabled = false;
         btn.innerHTML = `<span class="material-symbols-outlined text-[20px]" data-icon="check_circle">check_circle</span><span>Equipo creado correctamente</span>`;
       }
@@ -4077,6 +4265,7 @@ export class TeamAppState {
   }
 
   async submitAddPlayer() {
+    const reqGen = this.contextGeneration;
     if (!this.beta.teamSeasonId) {
       this.showToast("Primero debes crear el equipo para poder añadir jugadores.");
       return;
@@ -4103,6 +4292,8 @@ export class TeamAppState {
         position
       }, idemKey);
 
+      if (reqGen !== this.contextGeneration) return;
+
       this.beta.players.push({
         id: res.player.id,
         player: res.player,
@@ -4122,7 +4313,12 @@ export class TeamAppState {
       if (fnInput) fnInput.value = "";
       if (lnInput) lnInput.value = "";
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Add player error:", err);
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       this.showToast(`Error al añadir jugador: ${mapDomainError(err)}`);
     }
   }
@@ -4148,6 +4344,7 @@ export class TeamAppState {
   }
 
   async saveNewPlayerFromRoster() {
+    const reqGen = this.contextGeneration;
     if (!this.beta.teamSeasonId) {
       this.showToast("⚠️ No hay temporada activa para añadir jugadores.");
       return;
@@ -4173,6 +4370,7 @@ export class TeamAppState {
 
     try {
       await this.ensureAuth("coach");
+      if (reqGen !== this.contextGeneration) return;
       await api.teams.addPlayer(this.beta.teamSeasonId, {
         firstName,
         lastName,
@@ -4181,11 +4379,13 @@ export class TeamAppState {
         position
       }, idemKey);
 
+      if (reqGen !== this.contextGeneration) return;
       this.closeAddPlayerModal();
       this.showToast(`✓ ${firstName} ${lastName} añadido a la plantilla.`);
 
       // Refrescar lista de jugadores y UI de roster
       const playersRes = await api.teams.getPlayers(this.beta.teamSeasonId);
+      if (reqGen !== this.contextGeneration) return;
       this.beta.players = (playersRes?.items || []).map(p => ({
         id: p.id,
         firstName: p.first_name,
@@ -4195,10 +4395,15 @@ export class TeamAppState {
       }));
       await this.syncCoachRoster();
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Error adding player from roster:", err);
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       this.showToast(`Error al añadir deportista: ${mapDomainError(err)}`);
     } finally {
-      if (saveBtn) {
+      if (reqGen === this.contextGeneration && saveBtn) {
         saveBtn.disabled = false;
         saveBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">save</span><span>Guardar deportista</span>`;
       }
@@ -4206,10 +4411,13 @@ export class TeamAppState {
   }
 
   async openPlayerInviteModal(playerId, playerName = "") {
+    const reqGen = this.contextGeneration;
     if (!this.beta.teamSeasonId) return;
     try {
       await this.ensureAuth("coach");
+      if (reqGen !== this.contextGeneration) return;
       const res = await api.teams.createPlayerInvitation(this.beta.teamSeasonId, playerId);
+      if (reqGen !== this.contextGeneration) return;
       this.beta.lastInvitation = res;
 
       const origin = window.location.origin || "http://127.0.0.1:8000";
@@ -4228,7 +4436,12 @@ export class TeamAppState {
 
       this.showToast("✓ Invitación individual generada.");
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Invite generation error:", err);
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       this.showToast(`Error al generar invitación: ${mapDomainError(err)}`);
     }
   }
@@ -4268,7 +4481,9 @@ export class TeamAppState {
     }
 
     container.innerHTML = this.beta.players.map(p => {
-      const safeName = `${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}`;
+      const fullName = `${p.firstName || ''} ${p.lastName || ''}`.trim();
+      const safeName = escapeHtml(fullName);
+      const safeId = escapeHtml(p.id);
       return `
         <div class="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-xs flex flex-col gap-2">
           <div class="flex items-center justify-between">
@@ -4279,7 +4494,7 @@ export class TeamAppState {
                 <p class="text-[11px] text-on-surface-variant">${escapeHtml(p.position || 'Deportista')} · Activo</p>
               </div>
             </div>
-            <button id="btn-invite-${escapeHtml(p.id)}" onclick="teamApp.openPlayerInviteModal('${escapeHtml(p.id)}', '${safeName.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-bold text-[11px] shadow-xs cursor-pointer flex items-center gap-1">
+            <button id="btn-invite-${safeId}" class="btn-invite-player px-2.5 py-1 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-bold text-[11px] shadow-xs cursor-pointer flex items-center gap-1" data-player-id="${safeId}" data-player-name="${safeName}">
               <span class="material-symbols-outlined text-[14px]">share</span>
               <span>Invitar familia</span>
             </button>
@@ -4287,11 +4502,20 @@ export class TeamAppState {
         </div>
       `;
     }).join("");
+
+    container.querySelectorAll(".btn-invite-player").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const pid = btn.getAttribute("data-player-id");
+        const pname = btn.getAttribute("data-player-name") || "";
+        this.openPlayerInviteModal(pid, pname);
+      });
+    });
   }
 
   // --- Separación de Flujos de Vinculación de Tutor ---
 
   async setupIndividualInvite(token) {
+    const reqGen = this.contextGeneration;
     if (this.currentRole === "parent" && (this.beta.guardianPlayers || []).length > 0) {
       this.cleanInviteTokenFromUrl();
       this.goToScreen("v2_07_parent_home", "inicio");
@@ -4311,6 +4535,10 @@ export class TeamAppState {
 
     try {
       const res = await api.invitations.getInvitation(token);
+      if (reqGen !== this.contextGeneration) {
+        console.warn("setupIndividualInvite: Stale response discarded due to context switch.");
+        return;
+      }
       this.beta.verifiedInvitation = { type: "INDIVIDUAL", token: token, data: res };
 
       if (banner) {
@@ -4337,12 +4565,14 @@ export class TeamAppState {
       }
       this.showToast(`✓ Invitación individual válida para ${res.team.name}.`);
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Error verifying individual invitation:", err);
       this.showToast(`⚠️ ${mapDomainError(err)}`);
     }
   }
 
   async verifyGeneralJoinCode() {
+    const reqGen = this.contextGeneration;
     this.beta.joinFlowType = "GENERAL";
     this.beta.individualInviteToken = null;
 
@@ -4365,6 +4595,7 @@ export class TeamAppState {
 
     try {
       const res = await api.invitations.getTeamJoinInfo(code);
+      if (reqGen !== this.contextGeneration) return;
       this.beta.verifiedInvitation = { type: "GENERAL", code: code, data: res };
 
       if (teamTitle) teamTitle.textContent = `${res.team.name} · ${res.teamSeason.displayLabel}`;
@@ -4386,6 +4617,7 @@ export class TeamAppState {
       }
       this.showToast(`✓ Código de equipo válido: ${res.team.name}.`);
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("General join code error:", err);
       this.showToast(`⚠️ ${mapDomainError(err)}`);
       if (validBadge) validBadge.classList.add("hidden");
@@ -4461,6 +4693,7 @@ export class TeamAppState {
   }
 
   async executeParentJoin({ tutorEmail, tutorName, isIndividual, claimName, claimNumber }) {
+    const reqGen = this.contextGeneration;
     const btn = document.getElementById("btn-submit");
     if (btn) {
       btn.disabled = true;
@@ -4475,6 +4708,10 @@ export class TeamAppState {
           throw new Error("Falta el token de invitación individual.");
         }
         res = await api.invitations.requestIndividualLink(token);
+        if (reqGen !== this.contextGeneration) {
+          console.warn("executeParentJoin: Stale individual link response discarded due to context switch.");
+          return;
+        }
         if (res?.player_id) {
           this.beta.linkedPlayerId = res.player_id;
           localStorage.setItem("talde_linked_player_id", res.player_id);
@@ -4484,6 +4721,10 @@ export class TeamAppState {
           claimedPlayerName: claimName,
           claimedShirtNumber: claimNumber
         });
+        if (reqGen !== this.contextGeneration) {
+          console.warn("executeParentJoin: Stale general link response discarded due to context switch.");
+          return;
+        }
       }
 
       this.showToast(`✓ Solicitud enviada (ID: ${res.id.slice(0, 8)}...). Pendiente de validación por el entrenador.`);
@@ -4508,10 +4749,15 @@ export class TeamAppState {
         `;
       }
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Parent join error:", err);
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       this.showToast(`Error al enviar solicitud: ${mapDomainError(err)}`);
     } finally {
-      if (btn) {
+      if (reqGen === this.contextGeneration && btn) {
         btn.disabled = false;
         btn.innerHTML = `<span>Solicitud registrada (Pendiente de aprobación)</span>`;
       }
@@ -4519,6 +4765,7 @@ export class TeamAppState {
   }
 
   async approveBetaGuardianRequest(requestId, selectElementId) {
+    const reqGen = this.contextGeneration;
     let playerId = null;
     if (selectElementId) {
       const sel = document.getElementById(selectElementId);
@@ -4542,6 +4789,10 @@ export class TeamAppState {
       }
 
       const res = await api.teams.approveGuardianRequest(requestId, playerId);
+      if (reqGen !== this.contextGeneration) {
+        console.warn("approveBetaGuardianRequest: Stale approval response discarded due to context switch.");
+        return;
+      }
       this.showToast("✓ Solicitud de vinculación aprobada en PostgreSQL.");
 
       const successBadge = document.getElementById("coach-approval-success-badge");
@@ -4555,12 +4806,18 @@ export class TeamAppState {
 
       await this.syncCoachHome();
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Approve error:", err);
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       this.showToast(`Error al aprobar: ${mapDomainError(err)}`);
     }
   }
 
   async rejectBetaGuardianRequest(requestId) {
+    const reqGen = this.contextGeneration;
     try {
       // CRITICAL: Guarantee coach session token is active before calling coach endpoint
       if (this.tokens.coach) {
@@ -4574,10 +4831,19 @@ export class TeamAppState {
       }
 
       await api.teams.rejectGuardianRequest(requestId);
+      if (reqGen !== this.contextGeneration) {
+        console.warn("rejectBetaGuardianRequest: Stale rejection response discarded due to context switch.");
+        return;
+      }
       this.showToast("Solicitud rechazada en PostgreSQL.");
       await this.syncCoachHome();
     } catch (err) {
+      if (reqGen !== this.contextGeneration) return;
       console.error("Reject error:", err);
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       this.showToast(`Error al rechazar: ${mapDomainError(err)}`);
     }
   }

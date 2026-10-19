@@ -254,6 +254,17 @@ export class TeamAppState {
     this.managedTimers.clear();
   }
 
+  async safeFetch(promise, fallback = null) {
+    try {
+      return await promise;
+    } catch (err) {
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+      }
+      return fallback;
+    }
+  }
+
   async init() {
     const params = new URLSearchParams(window.location.search);
     const screenParam = params.get("screen") || window.location.hash.replace("#", "");
@@ -365,32 +376,43 @@ export class TeamAppState {
 
     this.bindGlobalEvents();
 
+    const scope = this.createScope();
     let contextLoaded = false;
     try {
       if (this.currentRole !== "onboard" && this.appMode === "DEMO") {
         await this.ensureAuth(this.currentRole);
       }
+      if (!this.isScopeActive(scope)) return;
       contextLoaded = await this.loadUserContext();
+      if (!this.isScopeActive(scope)) return;
       await this.syncCurrentScreen();
     } catch (err) {
+      if (!this.isScopeActive(scope)) return;
+      if (err?.status === 401 && err?.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
       console.warn("Backend auth/sync deferred:", err);
     }
 
+    if (!this.isScopeActive(scope)) return;
     this.goToScreen(this.currentScreen);
     this.updateBottomNav();
     this.updateRoleUI();
     this.updateStepUI();
 
     if (inviteToken && this.beta.individualInviteToken !== null && !contextLoaded) {
-      setTimeout(() => {
+      this.registerManagedTimeout(() => {
+        if (!this.isScopeActive(scope)) return;
         this.setupIndividualInvite(inviteToken);
-      }, 150);
+      }, 150, scope);
     } else if (joinCode && !contextLoaded) {
-      setTimeout(() => {
+      this.registerManagedTimeout(() => {
+        if (!this.isScopeActive(scope)) return;
         const input = document.getElementById("parent-join-code-input");
         if (input) input.value = joinCode.toUpperCase();
         this.verifyGeneralJoinCode();
-      }, 150);
+      }, 150, scope);
     }
   }
 
@@ -428,7 +450,7 @@ export class TeamAppState {
     if (this.appMode === "DEMO") return false;
     if (this._isCheckingApproval) return false;
 
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
     if (!parentToken) return false;
 
@@ -439,7 +461,7 @@ export class TeamAppState {
       this.tokens.parent = parentToken;
 
       const res = await api.teams.getMyMemberships();
-      if (reqGen !== this.contextGeneration || this.currentRole !== "parent") return false;
+      if (!this.isScopeActive(scope)) return false;
       const items = res?.items || [];
 
       // Requirement 1 & 2: MUST have guardian_players.length > 0 to consolidate
@@ -453,7 +475,7 @@ export class TeamAppState {
       }
 
       if (guardianMem) {
-        if (reqGen !== this.contextGeneration || this.currentRole !== "parent") return false;
+        if (!this.isScopeActive(scope)) return false;
         this.currentRole = "parent";
         this.tokens.parent = parentToken;
         this.beta.teamSeasonId = guardianMem.team_season_id;
@@ -480,6 +502,11 @@ export class TeamAppState {
         this.showToast("Solicitud aún pendiente de aprobación por el cuerpo técnico.");
       }
     } catch (err) {
+      if (!this.isScopeActive(scope)) return false;
+      if (err?.status === 401 && err?.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return false;
+      }
       if (!silent) {
         console.error("Error comprobando estado de aprobación:", err);
       }
@@ -491,7 +518,7 @@ export class TeamAppState {
 
   async loadUserContext() {
     if (this.appMode === "DEMO") return false;
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     try {
       const activeRole = localStorage.getItem("talde_active_role") || this.currentRole || "coach";
       const coachToken = this.tokens.coach || localStorage.getItem("talde_token_coach");
@@ -502,7 +529,7 @@ export class TeamAppState {
         api.client.setToken(parentToken);
         this.tokens.parent = parentToken;
         const res = await api.teams.getMyMemberships();
-        if (reqGen !== this.contextGeneration) return false;
+        if (!this.isScopeActive(scope)) return false;
         const items = res?.items || [];
 
         // Requirement 1: MUST have guardian_players.length > 0
@@ -516,7 +543,7 @@ export class TeamAppState {
         }
 
         if (guardianMem) {
-          if (reqGen !== this.contextGeneration) return false;
+          if (!this.isScopeActive(scope)) return false;
           this.currentRole = "parent";
           localStorage.setItem("talde_active_role", "parent");
           this.beta.teamSeasonId = guardianMem.team_season_id;
@@ -548,13 +575,13 @@ export class TeamAppState {
       if (!activeToken) return false;
       api.client.setToken(activeToken);
       const res = await api.teams.getMyMemberships();
-      if (reqGen !== this.contextGeneration) return false;
+      if (!this.isScopeActive(scope)) return false;
       const items = res?.items || [];
       if (!items.length) return false;
 
       const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
       if (coachMem) {
-        if (reqGen !== this.contextGeneration) return false;
+        if (!this.isScopeActive(scope)) return false;
         if (activeRole === "coach") this.currentRole = "coach";
         this.tokens.coach = coachToken || activeToken;
         this.beta.teamSeasonId = coachMem.team_season_id;
@@ -602,7 +629,7 @@ export class TeamAppState {
 
       const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0);
       if (guardianMem) {
-        if (reqGen !== this.contextGeneration) return false;
+        if (!this.isScopeActive(scope)) return false;
         this.currentRole = "parent";
         this.tokens.parent = activeToken;
         this.beta.teamSeasonId = guardianMem.team_season_id;
@@ -618,7 +645,7 @@ export class TeamAppState {
         return true;
       }
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return false;
+      if (!this.isScopeActive(scope)) return false;
       if (err?.wasAuthenticated && err?.status === 401) {
         this.handleSessionExpired(err);
       } else {
@@ -641,6 +668,13 @@ export class TeamAppState {
   }
 
   purgePrivateFormsAndDom() {
+    if (this.isOtpModalOpen()) {
+      this.closeOtpModal();
+    }
+    this.closePlayerInviteModal();
+    this.closeAddPlayerModal();
+    this.cancelResetBeta();
+
     // Clear sensitive form inputs
     const idsToClear = [
       "modal-otp-input",
@@ -719,7 +753,7 @@ export class TeamAppState {
   }
 
   handleSessionExpired(sourceError) {
-    if (sourceError && !sourceError.wasAuthenticated && sourceError.code !== "AUTH_REQUIRED") {
+    if (sourceError && (!sourceError.wasAuthenticated || sourceError.path?.includes("/auth/otp/")) && sourceError.code !== "AUTH_REQUIRED") {
       return;
     }
     this.contextGeneration++;
@@ -743,6 +777,7 @@ export class TeamAppState {
     this.abortAllInFlight();
     this.clearAllManagedTimers();
     this.contextGeneration++;
+    this.currentSessionId = null;
     if (this.isOtpModalOpen()) {
       this.closeOtpModal();
     }
@@ -782,6 +817,7 @@ export class TeamAppState {
     localStorage.removeItem("talde_active_event_id");
     this.selectedCandidateId = null;
     this.selectedSubstitute = null;
+    this.purgePrivateFormsAndDom();
 
     if (newMode === "DEMO") {
       localStorage.removeItem("talde_team_season_id");
@@ -1319,7 +1355,8 @@ export class TeamAppState {
   }
 
   async switchTeam(teamSeasonId) {
-    const reqGen = ++this.contextGeneration;
+    this.contextGeneration++;
+    const scope = this.createScope({ teamSeasonId });
     this.abortAllInFlight();
     this.clearAllManagedTimers();
     this.live = {
@@ -1352,38 +1389,47 @@ export class TeamAppState {
       return;
     }
 
-    const res = await api.teams.getMyMemberships();
-    if (reqGen !== this.contextGeneration) return;
-    const items = res?.items || [];
-    const targetMem = items.find(m => m.team_season_id === teamSeasonId && m.status === "ACTIVE");
-    if (!targetMem) {
-      throw new Error("No tienes membresía activa en este equipo.");
-    }
+    try {
+      const res = await api.teams.getMyMemberships();
+      if (!this.isScopeActive(scope)) return;
+      const items = res?.items || [];
+      const targetMem = items.find(m => m.team_season_id === teamSeasonId && m.status === "ACTIVE");
+      if (!targetMem) {
+        throw new Error("No tienes membresía activa en este equipo.");
+      }
 
-    this.beta.teamSeasonId = targetMem.team_season_id;
-    localStorage.setItem("talde_team_season_id", targetMem.team_season_id);
-    this.beta.team = { id: targetMem.team_id, name: targetMem.team_name, sport: targetMem.sport };
-    this.beta.teamSeason = {
-      id: targetMem.team_season_id,
-      display_label: targetMem.display_label,
-      season_label: targetMem.season_label,
-      category: targetMem.category,
-      join_code: targetMem.join_code
-    };
-    this.beta.joinCode = targetMem.join_code;
+      this.beta.teamSeasonId = targetMem.team_season_id;
+      localStorage.setItem("talde_team_season_id", targetMem.team_season_id);
+      this.beta.team = { id: targetMem.team_id, name: targetMem.team_name, sport: targetMem.sport };
+      this.beta.teamSeason = {
+        id: targetMem.team_season_id,
+        display_label: targetMem.display_label,
+        season_label: targetMem.season_label,
+        category: targetMem.category,
+        join_code: targetMem.join_code
+      };
+      this.beta.joinCode = targetMem.join_code;
 
-    if (targetMem.role === "COACH") {
-      this.currentRole = "coach";
-      localStorage.setItem("talde_active_role", "coach");
-      await this.goToScreen("v2_01_coach_home", "inicio");
-      if (reqGen !== this.contextGeneration) return;
-    } else {
-      this.currentRole = "parent";
-      localStorage.setItem("talde_active_role", "parent");
-      this.beta.guardianPlayers = targetMem.guardian_players || targetMem.guardianPlayers || [];
-      this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
-      await this.goToScreen("v2_07_parent_home", "inicio");
-      if (reqGen !== this.contextGeneration) return;
+      if (targetMem.role === "COACH") {
+        this.currentRole = "coach";
+        localStorage.setItem("talde_active_role", "coach");
+        await this.goToScreen("v2_01_coach_home", "inicio");
+        if (!this.isScopeActive(scope)) return;
+      } else {
+        this.currentRole = "parent";
+        localStorage.setItem("talde_active_role", "parent");
+        this.beta.guardianPlayers = targetMem.guardian_players || targetMem.guardianPlayers || [];
+        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+        await this.goToScreen("v2_07_parent_home", "inicio");
+        if (!this.isScopeActive(scope)) return;
+      }
+    } catch (err) {
+      if (!this.isScopeActive(scope)) return;
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err);
+        return;
+      }
+      throw err;
     }
   }
 
@@ -1600,6 +1646,17 @@ export class TeamAppState {
       const select = document.getElementById("demo-screen-select");
       if (select) select.value = this.currentScreen;
       return;
+    }
+
+    if (coachOnlyScreens.includes(screenId) && (this.tokens.coach || this.appMode === "DEMO")) {
+      this.currentRole = "coach";
+    }
+    const parentOnlyScreens = [
+      "v2_07_parent_home",
+      "v2_08_parent_rsvp"
+    ];
+    if (parentOnlyScreens.includes(screenId) && (this.tokens.parent || this.appMode === "DEMO")) {
+      this.currentRole = "parent";
     }
 
     this.currentScreen = screenId;
@@ -1866,7 +1923,10 @@ export class TeamAppState {
   }
 
   async syncCoachHome() {
-    const reqGen = this.contextGeneration;
+    if (this.tokens.coach || this.appMode === "DEMO") {
+      this.currentRole = "coach";
+    }
+    const scope = this.createScope({ role: "coach" });
     const isDemo = this.appMode === "DEMO";
     if (!this.beta.teamSeasonId && !isDemo) {
       this.beta.teamSeasonId = localStorage.getItem("talde_team_season_id");
@@ -1876,23 +1936,23 @@ export class TeamAppState {
     if (!activeTeamSeasonId) return;
 
     await this.ensureAuth("coach");
-    if (reqGen !== this.contextGeneration) return;
+    if (!this.isScopeActive(scope)) return;
 
     if (!isDemo && (!this.beta.team || !this.beta.teamSeason)) {
       await this.loadUserContext();
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
     }
 
     try {
       // Concurrently fetch real data from PostgreSQL
       const [playersRes, eventsRes, pendingRes, pendingReqs] = await Promise.all([
-        api.teams.getPlayers(activeTeamSeasonId).catch(() => ({ items: [] })),
-        api.events.getEvents(activeTeamSeasonId).catch(() => ({ items: [] })),
-        api.pending.getPending(activeTeamSeasonId).catch(() => ({ actionItems: [], indicators: [] })),
-        api.teams.getPendingRequests(activeTeamSeasonId).catch(() => ({ items: [] }))
+        this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] }),
+        this.safeFetch(api.events.getEvents(activeTeamSeasonId), { items: [] }),
+        this.safeFetch(api.pending.getPending(activeTeamSeasonId), { actionItems: [], indicators: [] }),
+        this.safeFetch(api.teams.getPendingRequests(activeTeamSeasonId), { items: [] })
       ]);
 
-      if (reqGen !== this.contextGeneration) {
+      if (!this.isScopeActive(scope)) {
         console.warn("syncCoachHome: Stale response discarded due to context switch.");
         return;
       }
@@ -2038,7 +2098,7 @@ export class TeamAppState {
               <div class="flex items-start justify-between">
                 <div>
                   <div class="flex items-center gap-2">
-                    <span class="font-headline-md text-headline-md text-on-surface font-extrabold">${todayEvent.title}</span>
+                    <span class="font-headline-md text-headline-md text-on-surface font-extrabold">${escapeHtml(todayEvent.title)}</span>
                     <span class="px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-bold">${timeStr} h</span>
                   </div>
                   <p class="font-body-sm text-body-sm text-on-surface-variant mt-1 flex items-center gap-1">
@@ -2053,7 +2113,7 @@ export class TeamAppState {
               <div class="bg-surface-container-low rounded-lg p-3 border border-outline-variant/30 flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <span class="material-symbols-outlined text-[20px] text-on-surface-variant">stadium</span>
-                  <span class="font-label-md text-label-md text-on-surface font-semibold">${todayEvent.location || 'Campo de entrenamiento'}</span>
+                  <span class="font-label-md text-label-md text-on-surface font-semibold">${escapeHtml(todayEvent.location || 'Campo de entrenamiento')}</span>
                 </div>
                 <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-lowest px-2 py-1 rounded border border-outline-variant/40">Fútbol</span>
               </div>
@@ -2110,7 +2170,7 @@ export class TeamAppState {
               <div>
                 <span class="font-headline-sm text-headline-sm text-on-surface font-extrabold block">Baja de última hora</span>
                 <p id="coach-item-baja-desc" class="font-body-sm text-body-sm text-tertiary font-medium mt-0.5">
-                  ${bajaItem.first_name || "Ibai"} (#9) ha comunicado que no puede asistir (nota: está enfermo).
+                  ${escapeHtml(bajaItem.first_name || "Ibai")} (#9) ha comunicado que no puede asistir (nota: está enfermo).
                 </p>
               </div>
               <span class="font-label-sm text-label-sm font-bold bg-tertiary-fixed text-on-tertiary-fixed px-2.5 py-1 rounded-full whitespace-nowrap border border-tertiary-fixed-dim">
@@ -2228,12 +2288,12 @@ export class TeamAppState {
                     <span class="font-headline-sm text-headline-sm font-extrabold text-on-surface leading-none">${dayNum}</span>
                   </div>
                   <div class="border-l border-outline-variant/50 pl-3">
-                    <span class="font-label-md text-label-md text-on-surface font-bold block">${e.title} · ${timeStr} h</span>
-                    <span class="font-body-sm text-body-sm text-on-surface-variant">${e.location || 'Campo de fútbol'}</span>
+                    <span class="font-label-md text-label-md text-on-surface font-bold block">${escapeHtml(e.title)} · ${timeStr} h</span>
+                    <span class="font-body-sm text-body-sm text-on-surface-variant">${escapeHtml(e.location || 'Campo de fútbol')}</span>
                   </div>
                 </div>
                 <span class="font-label-sm text-label-sm font-bold px-2 py-0.5 rounded bg-surface-container-high text-primary border border-outline-variant/40 whitespace-nowrap">
-                  ${e.type}
+                  ${escapeHtml(e.type)}
                 </span>
               </div>
             `;
@@ -2860,9 +2920,9 @@ export class TeamAppState {
   }
 
   async syncEventHubNormal() {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope({ role: "coach" });
     await this.ensureAuth("coach");
-    if (reqGen !== this.contextGeneration) return;
+    if (!this.isScopeActive(scope)) return;
 
     const isDemo = this.appMode === "DEMO";
     const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : (this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id"));
@@ -2872,14 +2932,14 @@ export class TeamAppState {
 
     if (activeTeamSeasonId || isDemo) {
       if (eventId) {
-        const evRes = await api.events.getEvent(eventId).catch(() => null);
-        if (reqGen !== this.contextGeneration) return;
+        const evRes = await this.safeFetch(api.events.getEvent(eventId), null);
+        if (!this.isScopeActive(scope)) return;
         activeEvent = (evRes && evRes.event) ? evRes.event : evRes;
       }
       if (!activeEvent && activeTeamSeasonId) {
-        const eventsRes = await api.events.getEvents(activeTeamSeasonId).catch(() => ({ items: [] }));
-        if (reqGen !== this.contextGeneration) return;
-        const events = eventsRes.items || [];
+        const eventsRes = await this.safeFetch(api.events.getEvents(activeTeamSeasonId), { items: [] });
+        if (!this.isScopeActive(scope)) return;
+        const events = eventsRes?.items || [];
         if (events.length > 0) {
           activeEvent = events[0];
           eventId = activeEvent.id;
@@ -2897,17 +2957,17 @@ export class TeamAppState {
     }
 
     // 1. Fetch Availability & Roster
-    const availRes = await api.availability.getEventAvailability(eventId).catch(() => ({ counts: {}, items: [] }));
-    if (reqGen !== this.contextGeneration) return;
+    const availRes = await this.safeFetch(api.availability.getEventAvailability(eventId), { counts: {}, items: [] });
+    if (!this.isScopeActive(scope)) return;
     this.live.availability = availRes;
 
     let players = [];
     if (!isDemo && activeTeamSeasonId) {
-      const playersRes = await api.teams.getPlayers(activeTeamSeasonId).catch(() => ({ items: [] }));
-      if (reqGen !== this.contextGeneration) return;
-      players = playersRes.items || [];
+      const playersRes = await this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] });
+      if (!this.isScopeActive(scope)) return;
+      players = playersRes?.items || [];
     } else {
-      players = (availRes.items || []);
+      players = (availRes?.items || []);
     }
 
     const totalSquad = players.length || (availRes.items || []).length || (isDemo ? 18 : 0);
@@ -3093,17 +3153,20 @@ export class TeamAppState {
   }
 
   async syncSquadPrep() {
+    const scope = this.createScope({ role: "coach", teamSeasonId: this.beta?.teamSeasonId });
     await this.ensureAuth("coach");
+    if (!this.isScopeActive(scope)) return;
     const eventId = this.beta.activeEventId || localStorage.getItem("talde_active_event_id");
     const activeTeamSeasonId = this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
 
     if (!eventId || !activeTeamSeasonId) return;
 
     const [playersRes, availRes, evRes] = await Promise.all([
-      api.teams.getPlayers(activeTeamSeasonId).catch(() => ({ items: [] })),
-      api.availability.getEventAvailability(eventId).catch(() => ({ counts: {}, items: [] })),
-      api.events.getEvent(eventId).catch(() => null)
+      this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] }),
+      this.safeFetch(api.availability.getEventAvailability(eventId), { counts: {}, items: [] }),
+      this.safeFetch(api.events.getEvent(eventId), null)
     ]);
+    if (!this.isScopeActive(scope)) return;
 
     const players = playersRes.items || [];
     const event = (evRes && evRes.event) ? evRes.event : evRes;
@@ -3273,17 +3336,20 @@ export class TeamAppState {
   }
 
   async syncParentHome() {
-    const reqGen = this.contextGeneration;
+    if (this.tokens.parent || this.appMode === "DEMO") {
+      this.currentRole = "parent";
+    }
+    const scope = this.createScope({ role: "parent" });
     if (this.appMode === "DEMO") {
       await this.ensureAuth("parent");
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       try {
         const statusRes = await api.callup.getPlayerCallupStatus(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
-        if (reqGen !== this.contextGeneration) return;
+        if (!this.isScopeActive(scope)) return;
         this.live.parentCallupStatus = statusRes;
 
         const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
-        if (reqGen !== this.contextGeneration) return;
+        if (!this.isScopeActive(scope)) return;
         this.live.parentAvailability = availRes.current;
 
         const badge = document.getElementById("parent-ibai-callup-badge");
@@ -3310,7 +3376,7 @@ export class TeamAppState {
     try {
       if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
         await this.loadUserContext();
-        if (reqGen !== this.contextGeneration) return;
+        if (!this.isScopeActive(scope)) return;
       }
       const activePlayer = this.beta.guardianPlayer || (this.beta.guardianPlayers && this.beta.guardianPlayers[0]);
       const pName = activePlayer ? `${activePlayer.firstName || activePlayer.first_name} ${activePlayer.lastName || activePlayer.last_name}` : "Deportista";
@@ -3345,8 +3411,8 @@ export class TeamAppState {
       const summaryEl = document.getElementById("parent-home-pending-summary");
 
       if (this.beta.teamSeasonId) {
-        const eventsRes = await api.events.getEvents(this.beta.teamSeasonId);
-        if (reqGen !== this.contextGeneration) {
+        const eventsRes = await this.safeFetch(api.events.getEvents(this.beta.teamSeasonId), { items: [] });
+        if (!this.isScopeActive(scope)) {
           console.warn("syncParentHome: Stale response discarded due to context switch.");
           return;
         }
@@ -3374,7 +3440,7 @@ export class TeamAppState {
           if (urgentSection) urgentSection.classList.add("hidden");
           if (commitmentsList) {
             const eventCards = await Promise.all(events.map(async ev => {
-              if (reqGen !== this.contextGeneration) return '';
+              if (!this.isScopeActive(scope)) return '';
               const d = new Date(ev.starts_at);
               const dateFormatted = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
               const timeFormatted = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -3393,8 +3459,8 @@ export class TeamAppState {
                   `;
                 } else {
                   try {
-                    const status = await api.callup.getPlayerCallupStatus(ev.id, activePlayer.id || activePlayer.playerId);
-                    if (reqGen !== this.contextGeneration) return '';
+                    const status = await this.safeFetch(api.callup.getPlayerCallupStatus(ev.id, activePlayer.id || activePlayer.playerId), null);
+                    if (!this.isScopeActive(scope) || !status) return '';
                     if (status.called) {
                       callupBadge = `
                         <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
@@ -3442,13 +3508,13 @@ export class TeamAppState {
                 </article>
               `;
             }));
-            if (reqGen !== this.contextGeneration) return;
+            if (!this.isScopeActive(scope)) return;
             commitmentsList.innerHTML = eventCards.join('');
           }
         }
       }
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       if (err?.status === 401 && err?.wasAuthenticated) {
         this.handleSessionExpired(err);
         return;
@@ -3460,6 +3526,8 @@ export class TeamAppState {
   cycleGuardianPlayer() {
     if (!this.beta.guardianPlayers || this.beta.guardianPlayers.length <= 1) return;
     this.contextGeneration++;
+    const parentContainer = document.getElementById("player-detail-parent-container");
+    if (parentContainer) parentContainer.innerHTML = "";
     const currentId = this.beta.guardianPlayer?.playerId || this.beta.guardianPlayer?.id;
     const currentIndex = this.beta.guardianPlayers.findIndex(p => (p.playerId || p.id) === currentId);
     const nextIndex = (currentIndex + 1) % this.beta.guardianPlayers.length;
@@ -3473,6 +3541,8 @@ export class TeamAppState {
     const found = this.beta.guardianPlayers.find(p => (p.id || p.playerId) === playerId);
     if (found) {
       this.contextGeneration++;
+      const parentContainer = document.getElementById("player-detail-parent-container");
+      if (parentContainer) parentContainer.innerHTML = "";
       this.beta.guardianPlayer = found;
       this.showToast(`Mostrando ficha de: ${found.first_name || found.firstName}`);
       this.syncCurrentScreen();
@@ -3480,7 +3550,7 @@ export class TeamAppState {
   }
 
   async syncPlayerDetail() {
-    const reqGen = this.contextGeneration;
+    let scope = this.createScope({ role: this.currentRole });
     const isDemo = this.appMode === "DEMO";
     const demoContainer = document.getElementById("player-detail-demo-container");
     const parentContainer = document.getElementById("player-detail-parent-container");
@@ -3541,15 +3611,15 @@ export class TeamAppState {
 
     // BETA_NORMAL mode
     await this.ensureAuth("parent");
-    if (reqGen !== this.contextGeneration) return;
+    if (!this.isScopeActive(scope)) return;
     if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
       await this.loadUserContext();
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
     }
 
     const players = this.beta.guardianPlayers || [];
     const activePlayer = this.beta.guardianPlayer || players[0];
-    const scope = this.createScope({ role: "parent", childId: activePlayer ? (activePlayer.id || activePlayer.playerId) : null });
+    scope = this.createScope({ role: "parent", childId: activePlayer ? (activePlayer.id || activePlayer.playerId) : null });
 
     if (categoryBadge) {
       categoryBadge.textContent = this.beta.teamSeason?.display_label || this.beta.teamSeason?.category || "Equipo";
@@ -3976,6 +4046,11 @@ export class TeamAppState {
   }
 
   async executeResetBeta() {
+    this.contextGeneration++;
+    this.currentSessionId = null;
+    this.clearAllManagedTimers();
+    this.abortAllInFlight();
+    api.client.setToken(null);
     try {
       const modal = document.getElementById("reset-beta-modal");
       if (modal) modal.classList.add("hidden");
@@ -4021,8 +4096,11 @@ export class TeamAppState {
         pendingRequests: [],
         lastInvitation: null,
         verifiedInvitation: null,
-        guardianPlayer: null
+        guardianPlayer: null,
+        guardianPlayers: []
       };
+
+      this.purgePrivateFormsAndDom();
 
       this.appMode = null;
       this.currentRole = "onboard";
@@ -4256,12 +4334,15 @@ export class TeamAppState {
   }
 
   async triggerTestConflictVersion() {
+    const scope = this.createScope({ role: "coach" });
     await this.ensureAuth("coach");
+    if (!this.isScopeActive(scope)) return;
     try {
       const staleCallupId = this.live.callup?.id || "50000000-0000-4000-8000-000000000001";
       this.showToast("⚡ Enviando llamada con expectedVersion desactualizada (999)...");
       await api.callup.publishCallup(staleCallupId, { expectedVersion: 999, confirmWarnings: [] });
     } catch (err) {
+      if (!this.isScopeActive(scope)) return;
       const msg = mapDomainError(err);
       this.showToast(`⚠️ Conflicto detectado: ${msg}`);
       console.warn("Domain error caught as expected:", err);
@@ -4269,7 +4350,9 @@ export class TeamAppState {
   }
 
   async triggerTestConflictSubstitute() {
+    const scope = this.createScope({ role: "coach" });
     await this.ensureAuth("coach");
+    if (!this.isScopeActive(scope)) return;
     try {
       if (!this.live.activeActionItem) {
         this.showToast("Primero debes registrar la baja de Ibai para que haya una incidencia abierta.");
@@ -4282,6 +4365,7 @@ export class TeamAppState {
         expectedCallupRevision: 1
       });
     } catch (err) {
+      if (!this.isScopeActive(scope)) return;
       const msg = mapDomainError(err);
       this.showToast(`⚠️ Error controlado: ${msg}`);
       console.warn("Domain error caught as expected:", err);
@@ -4293,14 +4377,17 @@ export class TeamAppState {
   }
 
   async finishCoachSetup() {
+    const scope = this.createScope({ role: "coach" });
     if (this.appMode === "DEMO") {
       await this.switchMembership("indautxu_inf_a");
+      if (!this.isScopeActive(scope)) return;
       await this.goToScreen("v2_01_coach_home", "inicio");
       this.showToast("✓ Equipo S. D. Indautxu · Infantil A creado con éxito. Código INDA16.");
       return;
     }
 
     this.currentRole = "coach";
+    if (!this.isScopeActive(scope)) return;
     await this.goToScreen("v2_01_coach_home", "inicio");
     this.showToast(`✓ Mesa del entrenador activada para ${this.beta.team?.name || 'tu equipo'}.`);
   }
@@ -4591,13 +4678,13 @@ export class TeamAppState {
   }
 
   async openPlayerInviteModal(playerId, playerName = "") {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope({ role: "coach", teamSeasonId: this.beta?.teamSeasonId });
     if (!this.beta.teamSeasonId) return;
     try {
       await this.ensureAuth("coach");
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       const res = await api.teams.createPlayerInvitation(this.beta.teamSeasonId, playerId);
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       this.beta.lastInvitation = res;
 
       const origin = window.location.origin || "http://127.0.0.1:8000";
@@ -4616,7 +4703,7 @@ export class TeamAppState {
 
       this.showToast("✓ Invitación individual generada.");
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       console.error("Invite generation error:", err);
       if (err?.status === 401 && err.wasAuthenticated) {
         this.handleSessionExpired(err);
@@ -4695,7 +4782,7 @@ export class TeamAppState {
   // --- Separación de Flujos de Vinculación de Tutor ---
 
   async setupIndividualInvite(token) {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     if (this.currentRole === "parent" && (this.beta.guardianPlayers || []).length > 0) {
       this.cleanInviteTokenFromUrl();
       this.goToScreen("v2_07_parent_home", "inicio");
@@ -4715,7 +4802,7 @@ export class TeamAppState {
 
     try {
       const res = await api.invitations.getInvitation(token);
-      if (reqGen !== this.contextGeneration) {
+      if (!this.isScopeActive(scope)) {
         console.warn("setupIndividualInvite: Stale response discarded due to context switch.");
         return;
       }
@@ -4745,14 +4832,15 @@ export class TeamAppState {
       }
       this.showToast(`✓ Invitación individual válida para ${res.team.name}.`);
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
+      this.beta.verifiedInvitation = null;
       console.error("Error verifying individual invitation:", err);
       this.showToast(`⚠️ ${mapDomainError(err)}`);
     }
   }
 
   async verifyGeneralJoinCode() {
-    const reqGen = this.contextGeneration;
+    const scope = this.createScope();
     this.beta.joinFlowType = "GENERAL";
     this.beta.individualInviteToken = null;
 
@@ -4775,7 +4863,7 @@ export class TeamAppState {
 
     try {
       const res = await api.invitations.getTeamJoinInfo(code);
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       this.beta.verifiedInvitation = { type: "GENERAL", code: code, data: res };
 
       if (teamTitle) teamTitle.textContent = `${res.team.name} · ${res.teamSeason.displayLabel}`;
@@ -4797,7 +4885,8 @@ export class TeamAppState {
       }
       this.showToast(`✓ Código de equipo válido: ${res.team.name}.`);
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
+      this.beta.verifiedInvitation = null;
       console.error("General join code error:", err);
       this.showToast(`⚠️ ${mapDomainError(err)}`);
       if (validBadge) validBadge.classList.add("hidden");
@@ -4817,15 +4906,18 @@ export class TeamAppState {
         btn.disabled = true;
         btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">progress_activity</span><span>Enviando al entrenador...</span>`;
       }
-      setTimeout(async () => {
+      const scope = this.createScope();
+      this.registerManagedTimeout(async () => {
+        if (!this.isScopeActive(scope)) return;
         await this.switchMembership("indautxu_ale_b");
+        if (!this.isScopeActive(scope)) return;
         await this.goToScreen("v2_07_parent_home", "inicio");
         this.showToast("✓ Solicitud de vinculación registrada para Ibai #9.");
-        if (btn) {
+        if (btn && this.isScopeActive(scope)) {
           btn.disabled = false;
           btn.innerHTML = `<span>Enviar solicitud de vinculación</span><span class="material-symbols-outlined text-[20px]" data-icon="send">send</span>`;
         }
-      }, 600);
+      }, 600, scope);
       return;
     }
 

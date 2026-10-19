@@ -75,7 +75,8 @@ export class ApiClient {
       const message = errPayload.message || (typeof data === "string" ? data : response.statusText);
       const details = errPayload.issues || data;
       const err = new DomainError(code, message, response.status, details);
-      err.wasAuthenticated = Boolean(headers["Authorization"]);
+      const isOtpAuthEndpoint = path.includes("/auth/otp/verify") || path.includes("/auth/otp/request") || path.includes("/auth/dev/login");
+      err.wasAuthenticated = !isOtpAuthEndpoint && Boolean(headers["Authorization"]);
       err.path = path;
       throw err;
     }

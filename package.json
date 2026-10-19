@@ -6,7 +6,7 @@
   "main": "index.html",
   "scripts": {
     "start": "python3 -m http.server 8000",
-    "test": "node --test test/auth-otp.test.mjs test/frontend-api.test.mjs test/security-regressions.test.mjs test/e2e-production-auth.test.mjs",
+    "test": "node --test test/auth-otp.test.mjs test/frontend-api.test.mjs test/security-regressions.test.mjs test/e2e-production-auth.test.mjs test/lifecycle-regressions-l01-l10.test.mjs test/csp-representative-server.test.mjs",
     "test:browser": "node test/verify-production-auth-browser.mjs"
   },
   "keywords": [

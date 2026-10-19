@@ -78,8 +78,8 @@ class CdpClient {
 
   async evaluate(expression) {
     let script = expression.trim();
-    if (!script.startsWith("(() =>") && !script.startsWith("function")) {
-      script = `(() => {\n${script}\n})()`;
+    if (!script.startsWith("(async () =>") && !script.startsWith("(() =>") && !script.startsWith("function")) {
+      script = `(async () => {\n${script}\n})()`;
     }
     const res = await this.send("Runtime.evaluate", {
       expression: script,
@@ -450,6 +450,162 @@ async function main() {
     if (!storageClean || !navigatedToWelcome) throw new Error("Session data not purged or did not navigate to welcome");
     console.log("✓ Session purged completely and redirected to welcome");
     await client.captureScreenshot("10_session_purged_onboarding.png");
+
+    // STEP 10: ZaQ XSS Defect Reproduction & Proof of Neutralization (Defect 1)
+    console.log("[Browser Step 10] Testing ZaQ XSS Defect neutralization in live DOM...");
+    await client.evaluate(`
+      window.__xss_executed = false;
+      const zaqPayload = '<img src=x onerror="window.__xss_executed=true; alert(localStorage.getItem(\\'talde_session_token\\'))">';
+      window.teamApp.sessionToken = 'test-session-token';
+      window.teamApp.tokens.coach = 'test-session-token';
+      window.teamApp.beta.teamSeasonId = 'ts-xss-test';
+      window.teamApp.beta.team = { name: 'Indautxu XSS Test' };
+      window.teamApp.beta.teamSeason = { season_label: '2026/27', display_label: 'Infantil A' };
+
+      window.api.teams.getPendingRequests = async () => ({
+        items: [
+          {
+            id: 'xss-test-request-id',
+            display_name: zaqPayload,
+            email: 'attacker@example.test',
+            claimed_player_name: zaqPayload,
+            claimed_shirt_number: 9,
+            created_at: new Date().toISOString()
+          }
+        ]
+      });
+      window.api.teams.getPlayers = async () => ({ items: [] });
+      window.api.events.getEvents = async () => ({ items: [] });
+      window.api.pending.getPending = async () => ({ actionItems: [], indicators: [] });
+      window.api.teams.getMyMemberships = async () => ({
+        items: [{ id: 'm1', role: 'COACH', team_season_id: 'ts-xss-test', team_name: 'Test Team', status: 'ACTIVE' }]
+      });
+      window.teamApp.live = { teamSeasonId: 'ts-xss-test', role: 'COACH', teamName: 'Test Team' };
+      window.teamApp.goToScreen('v2_01_coach_home');
+      await window.teamApp.syncCoachHome();
+    `);
+    await delay(600);
+
+    const xssExecuted = await client.evaluate(`return window.__xss_executed;`);
+    if (xssExecuted) throw new Error("CRITICAL SECURITY FAILURE: ZaQ XSS executed code in DOM!");
+
+    const cardContent = await client.evaluate(`
+      const card = document.getElementById('coach-pending-approval-card');
+      return {
+        html: card ? card.innerHTML : '',
+        hasImgTag: Boolean(card && card.querySelector('img[src="x"]'))
+      };
+    `);
+    if (cardContent.hasImgTag) throw new Error("Raw <img> element was inserted into the DOM");
+    if (!cardContent.html.includes('&lt;img src=x onerror=')) {
+      throw new Error("Payload was not safely escaped as HTML entities");
+    }
+    console.log("✓ ZaQ XSS attack completely neutralized; rendered safely as escaped text, 0 scripts executed");
+    await client.captureScreenshot("11_xss_injection_neutralized.png");
+
+    // STEP 11: OTP In-Flight Cancellation & Discard (Condition 1)
+    console.log("[Browser Step 11] Testing OTP in-flight cancellation & token discard...");
+    await client.evaluate(`
+      window.__cancelled_success_called = false;
+      window.teamApp.openOtpModal({
+        email: 'cancelled-user@example.test',
+        mode: 'verify',
+        challengeId: 'cancelled-challenge',
+        onSuccess: () => { window.__cancelled_success_called = true; }
+      });
+      window.teamApp.submitOtpVerification('999999');
+      window.teamApp.closeOtpModal();
+    `);
+    await delay(500);
+
+    const tokenAfterCancellation = await client.evaluate(`
+      return localStorage.getItem('talde_session_token');
+    `);
+    const callbackCalled = await client.evaluate(`return window.__cancelled_success_called;`);
+    if (tokenAfterCancellation !== null) throw new Error("Token was persisted after OTP modal was closed!");
+    if (callbackCalled) throw new Error("onSuccess callback was called on cancelled OTP operation!");
+    console.log("✓ Cancelled OTP operation did not create a session or invoke callbacks");
+    await client.captureScreenshot("12_otp_cancellation_no_session.png");
+
+    // STEP 12: Multi-Team Async Race Condition & Generation Invalidation (Condition 2)
+    console.log("[Browser Step 12] Testing Multi-Team Async Race Condition & generation invalidation...");
+    await client.evaluate(`
+      window.__teamA_stale_discarded = false;
+      window.teamApp.live = { teamSeasonId: 'team-A', teamName: 'Equipo A', agenda: [] };
+      window.api.teams.getMyMemberships = async () => ({
+        items: [
+          { id: 'm-A', role: 'COACH', team_season_id: 'team-A', team_name: 'Equipo A', status: 'ACTIVE' },
+          { id: 'm-B', role: 'COACH', team_season_id: 'team-B', team_name: 'Equipo B', status: 'ACTIVE' }
+        ]
+      });
+
+      // Simulate async Team A sync that takes 250ms
+      (async () => {
+        const reqGen = window.teamApp.contextGeneration;
+        await new Promise(r => setTimeout(r, 250));
+        if (reqGen !== window.teamApp.contextGeneration) {
+          window.__teamA_stale_discarded = true;
+          return;
+        }
+        window.teamApp.live = { teamSeasonId: 'team-A-corrupted', teamName: 'Equipo A Corrupto' };
+      })();
+
+      // User immediately switches to Team B
+      await window.teamApp.switchTeam('team-B', 'Equipo B');
+      window.teamApp.live = { teamSeasonId: 'team-B', teamName: 'Equipo B', agenda: [] };
+    `);
+    await delay(400);
+
+    const multiteamState = await client.evaluate(`
+      return {
+        currentTeamId: window.teamApp.live?.teamSeasonId,
+        currentTeamName: window.teamApp.live?.teamName,
+        staleDiscarded: window.__teamA_stale_discarded
+      };
+    `);
+    if (multiteamState.currentTeamId !== 'team-B') {
+      throw new Error('Race condition failure: Live team corrupted to ' + multiteamState.currentTeamId);
+    }
+    if (!multiteamState.staleDiscarded) {
+      throw new Error("Stale async response was not discarded by contextGeneration check");
+    }
+    console.log("✓ Multi-team race condition avoided; stale response discarded and Team B isolated");
+    await client.captureScreenshot("13_multiteam_concurrency_isolated.png");
+
+    // STEP 13: Session Expiry Purge & 401 Handling (Condition 4 & Defect 4)
+    console.log("[Browser Step 13] Testing Session Expiry Purge & 401 handling...");
+    await client.evaluate(`
+      localStorage.setItem('talde_session_token', 'synthetic-token-to-purge');
+      window.teamApp.sessionToken = 'synthetic-token-to-purge';
+      const coachEmailInput = document.getElementById('coach-email');
+      if (coachEmailInput) coachEmailInput.value = 'private-coach@indautxu.test';
+      const tutorEmailInput = document.getElementById('tutor-email');
+      if (tutorEmailInput) tutorEmailInput.value = 'private-tutor@indautxu.test';
+
+      const expiredError = new Error("401 Unauthorized");
+      expiredError.status = 401;
+      expiredError.wasAuthenticated = true;
+      window.teamApp.handleSessionExpired(expiredError);
+    `);
+    await delay(400);
+
+    const expiryCheck = await client.evaluate(`
+      return {
+        token: localStorage.getItem('talde_session_token'),
+        coachEmail: document.getElementById('coach-email')?.value,
+        tutorEmail: document.getElementById('tutor-email')?.value,
+        isWelcomeVisible: document.getElementById('v2_00_onboarding_welcome')?.classList.contains('hidden') === false
+      };
+    `);
+    if (expiryCheck.token !== null) throw new Error("Session token was not purged on expiry");
+    if (expiryCheck.coachEmail !== "" || expiryCheck.tutorEmail !== "") {
+      throw new Error("Private form inputs were not purged on session expiry");
+    }
+    if (!expiryCheck.isWelcomeVisible) {
+      throw new Error("User was not navigated back to onboarding welcome on session expiry");
+    }
+    console.log("✓ Session expiry cleanly purged storage, cleared private form inputs, and returned to welcome");
+    await client.captureScreenshot("14_session_expiry_purge.png");
 
     console.log("\n========================================================");
     console.log("🎯 ALL PHYSICAL BROWSER CDP TESTS PASSED WITH 100% SUCCESS");

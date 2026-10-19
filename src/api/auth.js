@@ -3,12 +3,12 @@ export class AuthService {
     this.client = client;
   }
 
-  async requestOtp(email) {
+  async requestOtp(email, options = {}) {
     const normalizedEmail = String(email || "").trim().toLowerCase();
-    return this.client.post("/auth/otp/request", { email: normalizedEmail });
+    return this.client.post("/auth/otp/request", { email: normalizedEmail }, options);
   }
 
-  async verifyOtp(email, challengeId, otp, displayName) {
+  async verifyOtp(email, challengeId, otp, displayName, options = {}) {
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const cleanOtp = String(otp || "").trim();
     const res = await this.client.post("/auth/otp/verify", {
@@ -16,10 +16,7 @@ export class AuthService {
       challengeId,
       otp: cleanOtp,
       displayName: displayName ? String(displayName).trim() : undefined
-    });
-    if (res?.accessToken) {
-      this.client.setToken(res.accessToken);
-    }
+    }, options);
     return res;
   }
 
@@ -30,6 +27,9 @@ export class AuthService {
     }
     const challengeId = reqRes.challengeId;
     const authRes = await this.verifyOtp(email, challengeId, reqRes.developmentOtp, displayName);
+    if (authRes?.accessToken) {
+      this.client.setToken(authRes.accessToken);
+    }
     return authRes;
   }
 }

@@ -46,11 +46,14 @@ export function mapDomainError(err) {
     if (err.status === 503) {
       return "El servicio de envío de correos no está disponible temporalmente. Inténtalo más tarde.";
     }
-    if (err.status === 401) {
-      return ERROR_MESSAGES.AUTH_INVALID;
+    if (err.wasAuthenticated && err.status === 401) {
+      return ERROR_MESSAGES.AUTH_REQUIRED;
     }
     if (ERROR_MESSAGES[err.code]) {
       return ERROR_MESSAGES[err.code];
+    }
+    if (err.status === 401) {
+      return ERROR_MESSAGES.AUTH_INVALID;
     }
     if (err.message && !err.message.startsWith("{") && !err.message.startsWith("[")) {
       return err.message;

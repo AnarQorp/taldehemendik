@@ -70,7 +70,7 @@ test("E2E Production Auth Lifecycle: Coach OTP -> Bootstrap -> Guardian OTP -> J
   const coachAuthRes = successes[0].value;
   assert.ok(coachAuthRes.accessToken, "Must issue valid access token");
   assert.equal(coachAuthRes.user.email, coachEmail);
-  assert.equal(coachClient.getToken(), coachAuthRes.accessToken);
+  coachClient.setToken(coachAuthRes.accessToken);
 
   // 2. Coach bootstraps a new team
   const bootstrapIdemKey = `idem-${randomUUID()}`;
@@ -123,7 +123,7 @@ test("E2E Production Auth Lifecycle: Coach OTP -> Bootstrap -> Guardian OTP -> J
     guardianDisplayName
   );
   assert.ok(guardianAuthRes.accessToken);
-  assert.equal(guardianClient.getToken(), guardianAuthRes.accessToken);
+  guardianClient.setToken(guardianAuthRes.accessToken);
 
   // 4. Guardian requests general join with claimed player name
   const joinReqRes = await guardianInvitations.requestGeneralLink(joinCode, {

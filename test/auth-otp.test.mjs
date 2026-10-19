@@ -21,7 +21,7 @@ test("AuthService.requestOtp normalizes email before posting", async () => {
   assert.equal(res.challengeId, "test-challenge-1234");
 });
 
-test("AuthService.verifyOtp trims inputs and sets accessToken on client", async () => {
+test("AuthService.verifyOtp trims inputs and decouples token persistence from client", async () => {
   let verifyPayload = null;
   let tokenSetOnClient = null;
   const mockClient = {
@@ -48,7 +48,7 @@ test("AuthService.verifyOtp trims inputs and sets accessToken on client", async 
   assert.equal(verifyPayload.body.challengeId, "challenge-uuid");
   assert.equal(verifyPayload.body.otp, "839102");
   assert.equal(verifyPayload.body.displayName, "Mikel Entrenador");
-  assert.equal(tokenSetOnClient, "header.payload.sig");
+  assert.equal(tokenSetOnClient, null, "Client token must not be set automatically by verifyOtp");
   assert.equal(res.accessToken, "header.payload.sig");
 });
 

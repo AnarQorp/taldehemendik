@@ -8,7 +8,7 @@
  * - Persistencia íntegra en PostgreSQL
  */
 
-import { api, DEMO_CONFIG, mapDomainError, idempotencyManager } from "./src/api/index.js";
+import { api, DEMO_CONFIG, mapDomainError, idempotencyManager, escapeHtml } from "./src/api/index.js";
 
 // Dataset histórico de jugadores para pantallas visuales / no migradas
 const SQUAD_DATA = [
@@ -194,6 +194,12 @@ export class TeamAppState {
       activeActionItem: null,
       unconfirmedWarnings: []
     };
+
+    // Concurrency, cancellation and context generation trackers
+    this.otpOpSeq = 0;
+    this.otpAbortController = null;
+    this.contextGeneration = 0;
+    this.inFlightControllers = new Set();
   }
 
   async init() {
@@ -550,14 +556,141 @@ export class TeamAppState {
         return true;
       }
     } catch (err) {
-      if (err?.status === 401 || err?.code === "AUTH_INVALID" || err?.code === "AUTH_REQUIRED") {
-        this.clearSessionData();
-        this.showToast("Tu sesión ha caducado. Por favor, identifícate de nuevo.");
+      if (err?.wasAuthenticated && err?.status === 401) {
+        this.handleSessionExpired(err);
       } else {
         console.warn("loadUserContext deferred or network issue:", err);
       }
     }
     return false;
+  }
+
+  isOtpModalOpen() {
+    const modal = document.getElementById("modal-otp-auth");
+    return Boolean(modal && !modal.classList.contains("hidden"));
+  }
+
+  abortAllInFlight() {
+    for (const ctrl of this.inFlightControllers) {
+      try { ctrl.abort(); } catch {}
+    }
+    this.inFlightControllers.clear();
+  }
+
+  purgePrivateFormsAndDom() {
+    // Clear sensitive form inputs
+    const idsToClear = [
+      "modal-otp-input",
+      "modal-otp-email-input",
+      "coach-code-input",
+      "coach-email",
+      "coach-name",
+      "tutor-email",
+      "tutor-name",
+      "parent-claim-name",
+      "parent-claim-number",
+      "parent-join-code-input",
+      "parent-player-first-name",
+      "parent-player-last-name",
+      "pitch-location",
+      "team-name",
+      "club-name",
+      "category-select"
+    ];
+    for (const id of idsToClear) {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    }
+
+    // Clear and hide dynamic containers rendering private information
+    const containersToClear = [
+      "coach-pending-approval-card",
+      "coach-week-events-container",
+      "coach-agenda-events-container",
+      "coach-roster-list",
+      "coach-beta-players-list",
+      "parent-commitments-list",
+      "parent-player-detail-container",
+      "injury-candidates-container",
+      "coach-recent-changes-container"
+    ];
+    for (const id of containersToClear) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.innerHTML = "";
+        el.classList.add("hidden");
+      }
+    }
+
+    const codeDisplay = document.getElementById("coach-code-display");
+    if (codeDisplay) codeDisplay.textContent = "------";
+  }
+
+  handleSessionExpired(sourceError) {
+    if (sourceError && !sourceError.wasAuthenticated && sourceError.code !== "AUTH_REQUIRED") {
+      return;
+    }
+    this.clearSessionData();
+    this.purgePrivateFormsAndDom();
+    this.showToast("Tu sesión ha caducado. Por favor, identifícate de nuevo.");
+  }
+
+  setAppMode(newMode) {
+    if (this.appMode === newMode) return;
+    this.abortAllInFlight();
+    this.contextGeneration++;
+    if (this.isOtpModalOpen()) {
+      this.closeOtpModal();
+    }
+    this.otpOpSeq++;
+
+    // Invalidate state across modes
+    this.live = {
+      events: [],
+      activeEvent: null,
+      availability: null,
+      callup: null,
+      pending: null,
+      parentCallupStatus: null,
+      parentAvailability: null,
+      candidates: [],
+      activeActionItem: null,
+      unconfirmedWarnings: []
+    };
+    this.beta = {
+      teamSeasonId: null,
+      team: null,
+      teamSeason: null,
+      joinCode: null,
+      players: [],
+      pendingRequests: [],
+      lastInvitation: null,
+      verifiedInvitation: null,
+      guardianPlayer: null,
+      guardianPlayers: []
+    };
+
+    if (newMode === "DEMO") {
+      localStorage.removeItem("talde_session_token");
+      localStorage.removeItem("talde_token_coach");
+      localStorage.removeItem("talde_token_parent");
+      localStorage.removeItem("talde_team_season_id");
+      localStorage.removeItem("talde_active_role");
+      this.tokens = { coach: null, parent: null };
+      api.client.setToken(null);
+      this.appMode = "DEMO";
+      localStorage.setItem("talde_app_mode", "DEMO");
+      const demoToolbar = document.getElementById("demo-toolbar");
+      const demoStepCard = document.getElementById("demo-step-card");
+      if (demoToolbar) demoToolbar.classList.remove("hidden");
+      if (demoStepCard) demoStepCard.classList.remove("hidden");
+      document.getElementById("demo-mode-badge")?.classList.remove("hidden");
+    } else {
+      this.appMode = "BETA_NORMAL";
+      localStorage.setItem("talde_app_mode", "BETA_NORMAL");
+      document.getElementById("demo-mode-badge")?.classList.add("hidden");
+      this.applyCleanUI();
+    }
   }
 
   clearSessionData() {
@@ -612,6 +745,12 @@ export class TeamAppState {
   openOtpModal({ email = "", displayName = "", role = "coach", showEmailStep = false, onSuccess = null, onCancel = null } = {}) {
     const modal = document.getElementById("modal-otp-auth");
     if (!modal) return;
+
+    this.otpOpSeq++;
+    if (this.otpAbortController) {
+      this.otpAbortController.abort();
+      this.otpAbortController = null;
+    }
 
     if (this.otpState.countdownTimer) {
       clearInterval(this.otpState.countdownTimer);
@@ -692,13 +831,22 @@ export class TeamAppState {
     if (this.otpState.isRequesting) return;
     this.otpState.isRequesting = true;
 
+    const opId = ++this.otpOpSeq;
+    if (this.otpAbortController) {
+      this.otpAbortController.abort();
+    }
+    this.otpAbortController = new AbortController();
+
     const emailDisplay = document.getElementById("modal-otp-email-display");
     if (emailDisplay) emailDisplay.textContent = email;
 
     this.showOtpStatus("Solicitando código de verificación...", "info");
 
     try {
-      const res = await api.auth.requestOtp(email);
+      const res = await api.auth.requestOtp(email, { signal: this.otpAbortController.signal });
+      if (opId !== this.otpOpSeq || !this.isOtpModalOpen()) {
+        return;
+      }
       this.otpState.challengeId = res.challengeId;
       this.hideOtpStatus();
       this.startOtpCountdown(60);
@@ -708,6 +856,8 @@ export class TeamAppState {
         setTimeout(() => otpInput.focus(), 150);
       }
     } catch (err) {
+      if (err?.name === "AbortError") return;
+      if (opId !== this.otpOpSeq || !this.isOtpModalOpen()) return;
       const msg = mapDomainError(err);
       this.showOtpStatus(msg, "error");
       this.showToast(msg);
@@ -773,13 +923,31 @@ export class TeamAppState {
       submitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verificando...</span>`;
     }
 
+    const opId = ++this.otpOpSeq;
+    const contextGen = this.contextGeneration;
+    const currentMode = this.appMode;
+    if (this.otpAbortController) {
+      this.otpAbortController.abort();
+    }
+    this.otpAbortController = new AbortController();
+
     try {
       const res = await api.auth.verifyOtp(
         this.otpState.email,
         this.otpState.challengeId,
         otp,
-        this.otpState.displayName
+        this.otpState.displayName,
+        { signal: this.otpAbortController.signal }
       );
+
+      // MANDATORY TECHNICAL CONDITION 1:
+      // El token solo podrá almacenarse después de que el controlador confirme que la operación OTP
+      // sigue vigente, el modal continúa activo y el contexto de aplicación no ha cambiado.
+      // Una operación cancelada nunca debe crear una sesión.
+      if (opId !== this.otpOpSeq || !this.isOtpModalOpen() || contextGen !== this.contextGeneration || currentMode !== this.appMode) {
+        console.warn("OTP verification response discarded: modal closed, cancelled, or context shifted.");
+        return;
+      }
 
       // Store unified session token
       localStorage.setItem("talde_session_token", res.accessToken);
@@ -806,6 +974,13 @@ export class TeamAppState {
         }
       }, 350);
     } catch (err) {
+      if (err?.name === "AbortError") {
+        console.warn("OTP verification aborted.");
+        return;
+      }
+      if (opId !== this.otpOpSeq || !this.isOtpModalOpen()) {
+        return;
+      }
       this.otpState.isVerifying = false;
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -850,6 +1025,11 @@ export class TeamAppState {
   }
 
   closeOtpModal() {
+    this.otpOpSeq++;
+    if (this.otpAbortController) {
+      this.otpAbortController.abort();
+      this.otpAbortController = null;
+    }
     if (this.otpState.countdownTimer) {
       clearInterval(this.otpState.countdownTimer);
       this.otpState.countdownTimer = null;
@@ -988,30 +1168,173 @@ export class TeamAppState {
     }
   }
 
+  async switchTeam(teamSeasonId) {
+    this.contextGeneration++;
+    this.abortAllInFlight();
+    this.live = {
+      events: [],
+      activeEvent: null,
+      availability: null,
+      callup: null,
+      pending: null,
+      parentCallupStatus: null,
+      parentAvailability: null,
+      candidates: [],
+      activeActionItem: null,
+      unconfirmedWarnings: []
+    };
+
+    if (this.appMode === "DEMO") {
+      this.beta.teamSeasonId = teamSeasonId;
+      return;
+    }
+
+    const res = await api.teams.getMyMemberships();
+    const items = res?.items || [];
+    const targetMem = items.find(m => m.team_season_id === teamSeasonId && m.status === "ACTIVE");
+    if (!targetMem) {
+      throw new Error("No tienes membresía activa en este equipo.");
+    }
+
+    this.beta.teamSeasonId = targetMem.team_season_id;
+    localStorage.setItem("talde_team_season_id", targetMem.team_season_id);
+    this.beta.team = { id: targetMem.team_id, name: targetMem.team_name, sport: targetMem.sport };
+    this.beta.teamSeason = {
+      id: targetMem.team_season_id,
+      display_label: targetMem.display_label,
+      season_label: targetMem.season_label,
+      category: targetMem.category,
+      join_code: targetMem.join_code
+    };
+    this.beta.joinCode = targetMem.join_code;
+
+    if (targetMem.role === "COACH") {
+      this.currentRole = "coach";
+      localStorage.setItem("talde_active_role", "coach");
+      await this.goToScreen("v2_01_coach_home", "inicio");
+    } else {
+      this.currentRole = "parent";
+      localStorage.setItem("talde_active_role", "parent");
+      this.beta.guardianPlayers = targetMem.guardian_players || targetMem.guardianPlayers || [];
+      this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+      await this.goToScreen("v2_07_parent_home", "inicio");
+    }
+  }
+
   async switchMembership(membershipId) {
+    this.contextGeneration++;
+    this.abortAllInFlight();
+    this.live = {
+      events: [],
+      activeEvent: null,
+      availability: null,
+      callup: null,
+      pending: null,
+      parentCallupStatus: null,
+      parentAvailability: null,
+      candidates: [],
+      activeActionItem: null,
+      unconfirmedWarnings: []
+    };
+
     if (membershipId === "onboard") {
       this.currentRole = "onboard";
       this.goToScreen("v2_00_onboarding_welcome");
       this.showToast("Modo Acceso Inicial / Onboarding");
-    } else if (membershipId === "indautxu_inf_a" || membershipId === "coach") {
-      this.currentRole = "coach";
-      localStorage.setItem("talde_active_role", "coach");
-      await this.ensureAuth("coach");
-      const target = (this.currentScreen.startsWith("v2_07_") || this.currentScreen.startsWith("v2_08_") || this.currentScreen.startsWith("v2_00_"))
-        ? "v2_01_coach_home"
-        : this.currentScreen;
-      await this.goToScreen(target, "inicio");
-      this.showToast(this.appMode === "DEMO" ? "Modo Entrenador: Mikel Zubeldia (Sesión autenticada)" : "Modo Entrenador (Sesión BETA)");
-    } else if (membershipId === "indautxu_ale_b" || membershipId === "parent") {
-      this.currentRole = "parent";
-      localStorage.setItem("talde_active_role", "parent");
-      await this.ensureAuth("parent");
-      const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_03_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
-        ? "v2_07_parent_home"
-        : this.currentScreen;
-      await this.goToScreen(target, "inicio");
-      this.showToast(this.appMode === "DEMO" ? "Modo Familia: Elena Gómez / Ibai #9 (Sesión autenticada)" : "Modo Familia (Sesión BETA)");
+      this.updateRoleUI();
+      this.updateBottomNav();
+      return;
     }
+
+    if (this.appMode === "DEMO") {
+      if (membershipId === "indautxu_inf_a" || membershipId === "coach") {
+        this.currentRole = "coach";
+        localStorage.setItem("talde_active_role", "coach");
+        await this.ensureAuth("coach");
+        const target = (this.currentScreen.startsWith("v2_07_") || this.currentScreen.startsWith("v2_08_") || this.currentScreen.startsWith("v2_00_"))
+          ? "v2_01_coach_home"
+          : this.currentScreen;
+        await this.goToScreen(target, "inicio");
+        this.showToast("Modo Entrenador: Mikel Zubeldia (Sesión autenticada)");
+      } else if (membershipId === "indautxu_ale_b" || membershipId === "parent") {
+        this.currentRole = "parent";
+        localStorage.setItem("talde_active_role", "parent");
+        await this.ensureAuth("parent");
+        const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_03_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
+          ? "v2_07_parent_home"
+          : this.currentScreen;
+        await this.goToScreen(target, "inicio");
+        this.showToast("Modo Familia: Elena Gómez / Ibai #9 (Sesión autenticada)");
+      }
+      this.updateRoleUI();
+      this.updateBottomNav();
+      return;
+    }
+
+    // BETA_NORMAL mode: validate against backend memberships
+    try {
+      const activeToken = this.tokens.coach || this.tokens.parent || localStorage.getItem("talde_session_token");
+      if (activeToken) api.client.setToken(activeToken);
+
+      const memRes = await api.teams.getMyMemberships();
+      const items = memRes?.items || [];
+
+      if (membershipId === "coach" || membershipId === "indautxu_inf_a") {
+        const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
+        if (!coachMem) {
+          this.showToast("No tienes membresía activa como entrenador.");
+          return;
+        }
+        this.currentRole = "coach";
+        localStorage.setItem("talde_active_role", "coach");
+        this.beta.teamSeasonId = coachMem.team_season_id;
+        localStorage.setItem("talde_team_season_id", coachMem.team_season_id);
+        this.beta.team = { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport };
+        this.beta.teamSeason = {
+          id: coachMem.team_season_id,
+          display_label: coachMem.display_label,
+          season_label: coachMem.season_label,
+          category: coachMem.category,
+          join_code: coachMem.join_code
+        };
+        this.beta.joinCode = coachMem.join_code;
+        await this.goToScreen("v2_01_coach_home", "inicio");
+        this.showToast("Modo Entrenador (Sesión BETA)");
+      } else if (membershipId === "parent" || membershipId === "indautxu_ale_b") {
+        const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
+        if (!guardianMem) {
+          this.showToast("No tienes membresía activa como familiar.");
+          return;
+        }
+        this.currentRole = "parent";
+        localStorage.setItem("talde_active_role", "parent");
+        this.beta.teamSeasonId = guardianMem.team_season_id;
+        localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
+        this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
+        this.beta.teamSeason = {
+          id: guardianMem.team_season_id,
+          display_label: guardianMem.display_label,
+          season_label: guardianMem.season_label,
+          category: guardianMem.category
+        };
+        this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
+        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+        await this.goToScreen("v2_07_parent_home", "inicio");
+        this.showToast("Modo Familia (Sesión BETA)");
+      } else {
+        const specificMem = items.find(m => m.team_season_id === membershipId && m.status === "ACTIVE");
+        if (specificMem) {
+          await this.switchTeam(membershipId);
+        }
+      }
+    } catch (err) {
+      if (err?.wasAuthenticated && err?.status === 401) {
+        this.handleSessionExpired(err);
+        return;
+      }
+      this.showToast(`Error al cambiar de membresía: ${mapDomainError(err)}`);
+    }
+
     this.updateRoleUI();
     this.updateBottomNav();
   }
@@ -1368,6 +1691,7 @@ export class TeamAppState {
       await this.loadUserContext();
     }
 
+    const reqGen = this.contextGeneration;
     try {
       // Concurrently fetch real data from PostgreSQL
       const [playersRes, eventsRes, pendingRes, pendingReqs] = await Promise.all([
@@ -1376,6 +1700,11 @@ export class TeamAppState {
         api.pending.getPending(activeTeamSeasonId).catch(() => ({ actionItems: [], indicators: [] })),
         api.teams.getPendingRequests(activeTeamSeasonId).catch(() => ({ items: [] }))
       ]);
+
+      if (reqGen !== this.contextGeneration) {
+        console.warn("syncCoachHome: Stale response discarded due to context switch.");
+        return;
+      }
 
       const players = playersRes.items || [];
       const events = eventsRes.items || [];
@@ -1452,10 +1781,10 @@ export class TeamAppState {
                 <span class="text-[10px] text-slate-400">Reciente</span>
               </div>
               <p class="font-label-md text-label-md text-on-surface font-bold mt-0.5 leading-snug">
-                ${req.display_name || req.email} <span class="font-normal text-on-surface-variant text-xs">solicita vincularse ${
+                ${escapeHtml(req.display_name || req.email)} <span class="font-normal text-on-surface-variant text-xs">solicita vincularse ${
                   isIndividual
-                    ? `a su hijo/a <strong>${req.first_name} ${req.last_name}</strong>`
-                    : `y reclama al menor <strong>${req.claimed_player_name}</strong> (#${req.claimed_shirt_number || '-'})`
+                    ? `a su hijo/a <strong>${escapeHtml(req.first_name)} ${escapeHtml(req.last_name)}</strong>`
+                    : `y reclama al menor <strong>${escapeHtml(req.claimed_player_name)}</strong> (#${escapeHtml(req.claimed_shirt_number || '-')})`
                 }</span>
               </p>
             </div>
@@ -1463,16 +1792,16 @@ export class TeamAppState {
           ${!isIndividual ? `
             <div class="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs">
               <label class="block font-bold text-slate-700 mb-1">Asignar a jugador de la plantilla:</label>
-              <select id="coach-assign-player-${req.id}" class="w-full h-8 px-2 rounded border border-slate-300 bg-white text-xs">
-                ${players.map(p => `<option value="${p.id}">${p.first_name} ${p.last_name} (#${p.shirt_number || '-'})</option>`).join("")}
+              <select id="coach-assign-player-${escapeHtml(req.id)}" class="w-full h-8 px-2 rounded border border-slate-300 bg-white text-xs">
+                ${players.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)} (#${escapeHtml(p.shirt_number || '-')})</option>`).join("")}
               </select>
             </div>
           ` : ''}
           <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
-            <button onclick="teamApp.rejectBetaGuardianRequest('${req.id}')" class="h-9 rounded-lg border border-outline-variant bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md font-medium flex items-center justify-center cursor-pointer active:scale-[0.98]">
+            <button onclick="teamApp.rejectBetaGuardianRequest('${escapeHtml(req.id)}')" class="h-9 rounded-lg border border-outline-variant bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md font-medium flex items-center justify-center cursor-pointer active:scale-[0.98]">
               Rechazar
             </button>
-            <button onclick="teamApp.approveBetaGuardianRequest('${req.id}', ${isIndividual ? 'null' : `'coach-assign-player-${req.id}'`})" class="h-9 rounded-lg bg-secondary hover:bg-emerald-700 text-white font-label-md text-label-md font-bold flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-[0.98]">
+            <button onclick="teamApp.approveBetaGuardianRequest('${escapeHtml(req.id)}', ${isIndividual ? 'null' : `'coach-assign-player-${escapeHtml(req.id)}'`})" class="h-9 rounded-lg bg-secondary hover:bg-emerald-700 text-white font-label-md text-label-md font-bold flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-[0.98]">
               <span class="material-symbols-outlined text-[16px]">check</span>
               Aceptar y Vincular
             </button>
@@ -1923,9 +2252,14 @@ export class TeamAppState {
       return;
     }
 
+    const reqGen = this.contextGeneration;
     try {
       await this.ensureAuth(isGuardian ? "parent" : "coach");
       const eventsRes = await api.events.getEvents(activeTeamSeasonId);
+      if (reqGen !== this.contextGeneration) {
+        console.warn("syncCoachAgenda: Stale response discarded due to context switch.");
+        return;
+      }
       const events = eventsRes?.items || [];
       this.live.events = events;
 
@@ -1979,7 +2313,7 @@ export class TeamAppState {
                         <span class="material-symbols-outlined text-[13px] text-amber-700">hourglass_top</span>
                         <span>Convocatoria pendiente</span>
                       </span>
-                      <button id="coach-agenda-publish-btn-${ev.id}" onclick="teamApp.prepareAndPublishCallup('${ev.id}')" class="h-8 px-3 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-sm text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition-all">
+                      <button id="coach-agenda-publish-btn-${escapeHtml(ev.id)}" onclick="teamApp.prepareAndPublishCallup('${escapeHtml(ev.id)}')" class="h-8 px-3 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-sm text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition-all">
                         <span class="material-symbols-outlined text-[14px]">send</span>
                         <span>Publicar convocatoria</span>
                       </button>
@@ -2006,7 +2340,7 @@ export class TeamAppState {
                     <h2 class="font-label-lg text-label-lg text-on-surface tracking-wide uppercase capitalize">${dateFormatted}</h2>
                   </div>
                   <span class="font-label-sm text-label-sm bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-md font-bold">
-                    ${typeLabel}
+                    ${escapeHtml(typeLabel)}
                   </span>
                 </div>
                 <article class="bg-surface-container-lowest rounded-2xl border border-outline-variant/80 p-4 shadow-sm flex flex-col gap-3.5 transition-all">
@@ -2014,10 +2348,10 @@ export class TeamAppState {
                     <div>
                       <div class="flex items-center gap-2 mb-1">
                         <span class="font-label-sm text-label-sm bg-surface-container text-primary font-bold px-2 py-0.5 rounded">
-                          ${typeLabel}
+                          ${escapeHtml(typeLabel)}
                         </span>
                       </div>
-                      <h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">${ev.title}</h3>
+                      <h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">${escapeHtml(ev.title)}</h3>
                     </div>
                     <span class="material-symbols-outlined text-outline">fitness_center</span>
                   </div>
@@ -2028,12 +2362,12 @@ export class TeamAppState {
                     </div>
                     <div class="flex items-center gap-2.5">
                       <span class="material-symbols-outlined text-primary text-[18px]">location_on</span>
-                      <span class="text-on-surface-variant">${ev.location || 'Campo de juego'}</span>
+                      <span class="text-on-surface-variant">${escapeHtml(ev.location || 'Campo de juego')}</span>
                     </div>
                     ${ev.notes ? `
                     <div class="flex items-center gap-2.5 text-xs text-on-surface-variant italic">
                       <span class="material-symbols-outlined text-outline text-[16px]">notes</span>
-                      <span>${ev.notes}</span>
+                      <span>${escapeHtml(ev.notes)}</span>
                     </div>` : ''}
                   </div>
                   ${callupSectionHtml}
@@ -2170,9 +2504,14 @@ export class TeamAppState {
       return;
     }
 
+    const reqGen = this.contextGeneration;
     try {
       await this.ensureAuth("coach");
       const playersRes = await api.teams.getPlayers(activeTeamSeasonId);
+      if (reqGen !== this.contextGeneration) {
+        console.warn("syncCoachRoster: Stale response discarded due to context switch.");
+        return;
+      }
       const players = playersRes?.items || [];
       const total = players.length;
 
@@ -2195,17 +2534,18 @@ export class TeamAppState {
           listContainer.innerHTML = players.map(p => {
             const num = p.shirt_number !== null && p.shirt_number !== undefined ? `#${p.shirt_number}` : '-';
             const pos = p.position || 'Deportista';
+            const safeName = `${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}`;
             return `
               <article class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-3 shadow-sm flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3 min-w-0">
                   <div class="w-11 h-11 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-bold text-sm shrink-0">
-                    <span>${num}</span>
+                    <span>${escapeHtml(num)}</span>
                   </div>
                   <div class="truncate">
                     <div class="flex items-center gap-1.5">
-                      <span class="font-label-lg text-label-lg text-on-surface truncate font-bold">${p.first_name} ${p.last_name}</span>
+                      <span class="font-label-lg text-label-lg text-on-surface truncate font-bold">${safeName}</span>
                     </div>
-                    <p class="font-body-sm text-body-sm text-outline mb-1">${pos}</p>
+                    <p class="font-body-sm text-body-sm text-outline mb-1">${escapeHtml(pos)}</p>
                     <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                       <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                       <span class="font-label-sm text-label-sm font-bold">En regla</span>
@@ -2213,7 +2553,7 @@ export class TeamAppState {
                   </div>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
-                  <button id="btn-invite-family-${p.id}" onclick="teamApp.openPlayerInviteModal('${p.id}', '${p.first_name} ${p.last_name}')" class="px-2.5 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-primary font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer">
+                  <button id="btn-invite-family-${escapeHtml(p.id)}" onclick="teamApp.openPlayerInviteModal('${escapeHtml(p.id)}', '${safeName.replace(/'/g, "\\'")}')" class="px-2.5 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-primary font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer">
                     <span class="material-symbols-outlined text-[16px]">share</span>
                     <span>Invitar familia</span>
                   </button>
@@ -2256,6 +2596,7 @@ export class TeamAppState {
   async syncEventHubNormal() {
     await this.ensureAuth("coach");
 
+    const reqGen = this.contextGeneration;
     const isDemo = this.appMode === "DEMO";
     const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : (this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id"));
 
@@ -2265,10 +2606,12 @@ export class TeamAppState {
     if (activeTeamSeasonId || isDemo) {
       if (eventId) {
         const evRes = await api.events.getEvent(eventId).catch(() => null);
+        if (reqGen !== this.contextGeneration) return;
         activeEvent = (evRes && evRes.event) ? evRes.event : evRes;
       }
       if (!activeEvent && activeTeamSeasonId) {
         const eventsRes = await api.events.getEvents(activeTeamSeasonId).catch(() => ({ items: [] }));
+        if (reqGen !== this.contextGeneration) return;
         const events = eventsRes.items || [];
         if (events.length > 0) {
           activeEvent = events[0];
@@ -2288,11 +2631,13 @@ export class TeamAppState {
 
     // 1. Fetch Availability & Roster
     const availRes = await api.availability.getEventAvailability(eventId).catch(() => ({ counts: {}, items: [] }));
+    if (reqGen !== this.contextGeneration) return;
     this.live.availability = availRes;
 
     let players = [];
     if (!isDemo && activeTeamSeasonId) {
       const playersRes = await api.teams.getPlayers(activeTeamSeasonId).catch(() => ({ items: [] }));
+      if (reqGen !== this.contextGeneration) return;
       players = playersRes.items || [];
     } else {
       players = (availRes.items || []);
@@ -2389,7 +2734,12 @@ export class TeamAppState {
     const pendingItems = items.filter(p => p.status === "NO_RESPONSE" || p.status === "UNSURE");
 
     if (pendingItems.length > 0) {
-      const namesFormatted = pendingItems.map(p => `<strong class="text-on-surface">${p.first_name || p.firstName || ''} ${p.last_name || p.lastName || ''} (#${p.shirt_number || p.shirtNumber || '-'})</strong>`).join(" y ");
+      const namesFormatted = pendingItems.map(p => {
+        const fn = escapeHtml(p.first_name || p.firstName || '');
+        const ln = escapeHtml(p.last_name || p.lastName || '');
+        const sn = escapeHtml(p.shirt_number || p.shirtNumber || '-');
+        return `<strong class="text-on-surface">${fn} ${ln} (#${sn})</strong>`;
+      }).join(" y ");
       if (pendingNamesEl) pendingNamesEl.innerHTML = `${namesFormatted} aún no ${pendingItems.length === 1 ? 'ha' : 'han'} respondido al aviso.`;
       if (pendingAlertBanner) pendingAlertBanner.classList.remove("hidden");
     } else {
@@ -2433,7 +2783,7 @@ export class TeamAppState {
       }
       if (callupNotice) {
         callupNotice.innerHTML = `<p class="font-body-sm text-body-sm text-emerald-800 font-medium leading-relaxed">
-          <strong class="text-emerald-900 font-bold">Convocatoria oficial cerrada y comunicada.</strong> ${totalSquad} ${totalSquad === 1 ? 'jugador convocado' : 'jugadores convocados'} para ${isDemo ? 'el Torneo Indautxu' : (activeEvent?.title || 'el evento')}.
+          <strong class="text-emerald-900 font-bold">Convocatoria oficial cerrada y comunicada.</strong> ${totalSquad} ${totalSquad === 1 ? 'jugador convocado' : 'jugadores convocados'} para ${isDemo ? 'el Torneo Indautxu' : escapeHtml(activeEvent?.title || 'el evento')}.
         </p>`;
       }
       if (callupBtn) {
@@ -2704,7 +3054,12 @@ export class TeamAppState {
       const summaryEl = document.getElementById("parent-home-pending-summary");
 
       if (this.beta.teamSeasonId) {
+        const reqGen = this.contextGeneration;
         const eventsRes = await api.events.getEvents(this.beta.teamSeasonId);
+        if (reqGen !== this.contextGeneration) {
+          console.warn("syncParentHome: Stale response discarded due to context switch.");
+          return;
+        }
         const events = eventsRes?.items || [];
 
         if (events.length === 0) {
@@ -2781,14 +3136,14 @@ export class TeamAppState {
                       <span>${dateFormatted} · ${timeFormatted}</span>
                     </div>
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-[11px] font-bold">
-                      ${ev.type === 'MATCH' ? 'Partido' : (ev.type === 'TOURNAMENT' ? 'Torneo' : 'Entrenamiento')}
+                      ${escapeHtml(ev.type === 'MATCH' ? 'Partido' : (ev.type === 'TOURNAMENT' ? 'Torneo' : 'Entrenamiento'))}
                     </span>
                   </div>
                   <div class="flex flex-col">
-                    <h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">${ev.title}</h3>
+                    <h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">${escapeHtml(ev.title)}</h3>
                     <div class="flex items-center gap-1.5 text-on-surface-variant mt-1">
                       <span class="material-symbols-outlined text-[16px] text-outline">location_on</span>
-                      <span class="font-body-sm text-body-sm">${ev.location || 'Instalaciones del club'}</span>
+                      <span class="font-body-sm text-body-sm">${escapeHtml(ev.location || 'Instalaciones del club')}</span>
                     </div>
                   </div>
                   ${callupBadge}
@@ -2925,8 +3280,8 @@ export class TeamAppState {
             const pName = p.first_name || p.firstName;
             const pNum = p.shirt_number ?? p.shirtNumber ?? '-';
             return `
-              <button onclick="teamApp.selectGuardianChild('${pId}')" class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${isSel ? 'bg-secondary text-white shadow-xs' : 'text-on-surface-variant hover:bg-surface-container'}">
-                ${pName} (#${pNum})
+              <button onclick="teamApp.selectGuardianChild('${escapeHtml(pId)}')" class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${isSel ? 'bg-secondary text-white shadow-xs' : 'text-on-surface-variant hover:bg-surface-container'}">
+                ${escapeHtml(pName)} (#${escapeHtml(pNum)})
               </button>
             `;
           }).join('')}
@@ -2936,9 +3291,14 @@ export class TeamAppState {
 
     // Upcoming events and callup status for this child
     let eventsHtml = "";
+    const reqGen = this.contextGeneration;
     try {
       if (this.beta.teamSeasonId) {
         const eventsRes = await api.events.getEvents(this.beta.teamSeasonId);
+        if (reqGen !== this.contextGeneration) {
+          console.warn("syncPlayerDetail: Stale response discarded due to context switch.");
+          return;
+        }
         const events = eventsRes?.items || [];
         if (events.length > 0) {
           const cards = await Promise.all(events.map(async ev => {
@@ -2998,14 +3358,14 @@ export class TeamAppState {
                     ${dateFormatted} · ${timeFormatted}
                   </span>
                   <span class="px-2 py-0.5 rounded-full bg-surface-container font-label-sm text-[10px] font-bold text-on-surface-variant">
-                    ${ev.type === 'MATCH' ? 'Partido' : (ev.type === 'TOURNAMENT' ? 'Torneo' : 'Entrenamiento')}
+                    ${escapeHtml(ev.type === 'MATCH' ? 'Partido' : (ev.type === 'TOURNAMENT' ? 'Torneo' : 'Entrenamiento'))}
                   </span>
                 </div>
                 <div>
-                  <h4 class="font-headline-sm text-sm font-bold text-on-surface">${ev.title}</h4>
+                  <h4 class="font-headline-sm text-sm font-bold text-on-surface">${escapeHtml(ev.title)}</h4>
                   <p class="font-body-sm text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
                     <span class="material-symbols-outlined text-[13px]">location_on</span>
-                    ${ev.location || 'Campo de juego'} ${arrivalFormatted}
+                    ${escapeHtml(ev.location || 'Campo de juego')} ${arrivalFormatted}
                   </p>
                 </div>
                 ${callupBadgeHtml ? `<div class="pt-2 border-t border-outline-variant/30 flex items-center justify-between">${callupBadgeHtml}</div>` : ''}
@@ -3028,26 +3388,26 @@ export class TeamAppState {
         <div class="flex items-start gap-4">
           <div class="relative flex-shrink-0">
             <div class="w-16 h-16 rounded-full bg-surface-container-highest border-2 border-secondary flex items-center justify-center text-secondary font-headline-lg text-headline-lg font-extrabold shadow-sm">
-              ${initials}
+              ${escapeHtml(initials)}
             </div>
             <div class="absolute -bottom-1 -right-1 bg-secondary text-on-secondary font-headline-sm text-headline-sm font-black px-2 py-0.5 rounded-md border-2 border-surface-container-lowest shadow-sm">
-              #${shirtNum}
+              #${escapeHtml(shirtNum)}
             </div>
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between">
-              <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-secondary">${teamName}</span>
+              <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-secondary">${escapeHtml(teamName)}</span>
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                 Plantilla activa
               </span>
             </div>
             <h1 class="font-headline-lg text-headline-lg font-extrabold text-on-surface truncate leading-tight mt-0.5">
-              ${firstName} ${lastName}
+              ${escapeHtml(firstName)} ${escapeHtml(lastName)}
             </h1>
             <p class="font-label-md text-label-md font-semibold text-on-surface-variant flex items-center gap-1 mt-0.5">
               <span class="material-symbols-outlined text-[16px] text-secondary">sports_soccer</span>
-              ${position} · Dorsal #${shirtNum}
+              ${escapeHtml(position)} · Dorsal #${escapeHtml(shirtNum)}
             </p>
           </div>
         </div>
@@ -3056,11 +3416,11 @@ export class TeamAppState {
         <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-outline-variant/30">
           <div class="bg-surface-container-low rounded-xl p-2.5 text-center border border-outline-variant/30">
             <span class="block font-label-sm text-[10px] uppercase font-bold text-on-surface-variant">Equipo</span>
-            <span class="font-label-md text-label-md font-extrabold text-on-surface truncate block">${teamName}</span>
+            <span class="font-label-md text-label-md font-extrabold text-on-surface truncate block">${escapeHtml(teamName)}</span>
           </div>
           <div class="bg-surface-container-low rounded-xl p-2.5 text-center border border-outline-variant/30">
             <span class="block font-label-sm text-[10px] uppercase font-bold text-on-surface-variant">Temporada</span>
-            <span class="font-label-md text-label-md font-extrabold text-on-surface truncate block">${seasonLabel}</span>
+            <span class="font-label-md text-label-md font-extrabold text-on-surface truncate block">${escapeHtml(seasonLabel)}</span>
           </div>
         </div>
       </section>
@@ -3160,12 +3520,12 @@ export class TeamAppState {
           <div class="flex items-center gap-3">
             <div class="relative">
               <div class="w-10 h-10 rounded-full ${isSelected ? "bg-primary-fixed text-on-primary-fixed" : "bg-surface-container-low text-on-surface-variant border border-outline-variant"} flex items-center justify-center font-bold text-[14px]">
-                ${initials}
+                ${escapeHtml(initials)}
               </div>
-              <span class="absolute -bottom-1 -right-1 ${isSelected ? "bg-primary text-on-primary" : "bg-surface-container-highest text-on-surface"} font-label-sm text-[10px] px-1 rounded-full font-bold">#${num}</span>
+              <span class="absolute -bottom-1 -right-1 ${isSelected ? "bg-primary text-on-primary" : "bg-surface-container-highest text-on-surface"} font-label-sm text-[10px] px-1 rounded-full font-bold">#${escapeHtml(num)}</span>
             </div>
             <div>
-              <p class="font-label-lg text-label-lg text-on-surface font-bold">${c.first_name} ${c.last_name}</p>
+              <p class="font-label-lg text-label-lg text-on-surface font-bold">${escapeHtml(c.first_name)} ${escapeHtml(c.last_name)}</p>
               <p class="font-body-sm text-[12px] text-on-surface-variant">Reserva disponible · Criterio técnico</p>
             </div>
           </div>
@@ -3238,24 +3598,15 @@ export class TeamAppState {
   // --- Modo Beta y Escenario Demo ---
 
   startBetaClean() {
-    this.appMode = "BETA_NORMAL";
+    this.setAppMode("BETA_NORMAL");
     this.currentRole = "onboard";
-    localStorage.setItem("talde_app_mode", "BETA_NORMAL");
-    document.getElementById("demo-mode-badge")?.classList.add("hidden");
-    this.applyCleanUI();
     this.goToScreen("v2_00_onboarding_welcome", "onboard");
     this.showToast("✓ Modo BETA Limpio: Configuración desde cero.");
   }
 
   async startDemoMode() {
-    this.appMode = "DEMO";
+    this.setAppMode("DEMO");
     this.currentRole = "coach";
-    this.beta.activeEventId = null;
-    this.beta.teamSeasonId = null;
-    localStorage.removeItem("talde_active_event_id");
-    localStorage.removeItem("talde_team_season_id");
-    localStorage.setItem("talde_app_mode", "DEMO");
-    document.getElementById("demo-mode-badge")?.classList.remove("hidden");
     await this.resetBackendDataset(true);
     this.applyDemoUI();
     this.goToScreen("v2_00_onboarding_welcome", "onboard");
@@ -3916,23 +4267,26 @@ export class TeamAppState {
       return;
     }
 
-    container.innerHTML = this.beta.players.map(p => `
-      <div class="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-xs flex flex-col gap-2">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2.5">
-            <span class="w-8 h-8 rounded-full bg-primary-fixed text-primary font-bold text-xs flex items-center justify-center">#${p.shirtNumber || '-'}</span>
-            <div>
-              <p class="font-bold text-xs text-on-surface">${p.firstName} ${p.lastName}</p>
-              <p class="text-[11px] text-on-surface-variant">${p.position || 'Deportista'} · Activo</p>
+    container.innerHTML = this.beta.players.map(p => {
+      const safeName = `${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}`;
+      return `
+        <div class="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-xs flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-full bg-primary-fixed text-primary font-bold text-xs flex items-center justify-center">#${escapeHtml(p.shirtNumber || '-')}</span>
+              <div>
+                <p class="font-bold text-xs text-on-surface">${safeName}</p>
+                <p class="text-[11px] text-on-surface-variant">${escapeHtml(p.position || 'Deportista')} · Activo</p>
+              </div>
             </div>
+            <button id="btn-invite-${escapeHtml(p.id)}" onclick="teamApp.openPlayerInviteModal('${escapeHtml(p.id)}', '${safeName.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-bold text-[11px] shadow-xs cursor-pointer flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px]">share</span>
+              <span>Invitar familia</span>
+            </button>
           </div>
-          <button id="btn-invite-${p.id}" onclick="teamApp.openPlayerInviteModal('${p.id}', '${p.firstName} ${p.lastName}')" class="px-2.5 py-1 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-bold text-[11px] shadow-xs cursor-pointer flex items-center gap-1">
-            <span class="material-symbols-outlined text-[14px]">share</span>
-            <span>Invitar familia</span>
-          </button>
         </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
   }
 
   // --- Separación de Flujos de Vinculación de Tutor ---
@@ -3977,7 +4331,7 @@ export class TeamAppState {
             <span>Invitación individual verificada (Sin filtración de datos)</span>
           </div>
           <p class="text-xs text-emerald-900 mt-1">
-            Equipo localizado: <strong>${res.team.name}</strong> (${res.teamSeason.displayLabel}). La privacidad del menor está protegida; los datos de la ficha se activarán cuando el entrenador apruebe la vinculación.
+            Equipo localizado: <strong>${escapeHtml(res.team.name)}</strong> (${escapeHtml(res.teamSeason.displayLabel)}). La privacidad del menor está protegida; los datos de la ficha se activarán cuando el entrenador apruebe la vinculación.
           </p>
         `;
       }
@@ -4026,7 +4380,7 @@ export class TeamAppState {
             <span>Código de equipo verificado</span>
           </div>
           <p class="text-xs text-blue-900 mt-1">
-            Equipo localizado: <strong>${res.team.name}</strong>. Introduce abajo el nombre de tu hijo/a para que el entrenador valide su asignación en la plantilla.
+            Equipo localizado: <strong>${escapeHtml(res.team.name)}</strong>. Introduce abajo el nombre de tu hijo/a para que el entrenador valide su asignación en la plantilla.
           </p>
         `;
       }

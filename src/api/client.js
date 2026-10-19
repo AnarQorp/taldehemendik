@@ -36,13 +36,17 @@ export class ApiClient {
     const fetchOptions = {
       method: options.method || "GET",
       headers,
-      body: options.body ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body)) : undefined
+      body: options.body ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body)) : undefined,
+      signal: options.signal
     };
 
     let response;
     try {
       response = await fetch(url, fetchOptions);
     } catch (networkError) {
+      if (networkError.name === "AbortError" || options.signal?.aborted) {
+        throw networkError;
+      }
       throw new DomainError("NETWORK_ERROR", `No se pudo conectar con el servidor: ${networkError.message}`, 0);
     }
 
@@ -70,7 +74,10 @@ export class ApiClient {
       const code = errPayload.code || `HTTP_${response.status}`;
       const message = errPayload.message || (typeof data === "string" ? data : response.statusText);
       const details = errPayload.issues || data;
-      throw new DomainError(code, message, response.status, details);
+      const err = new DomainError(code, message, response.status, details);
+      err.wasAuthenticated = Boolean(headers["Authorization"]);
+      err.path = path;
+      throw err;
     }
 
     return data;

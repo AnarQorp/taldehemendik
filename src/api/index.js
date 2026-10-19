@@ -10,6 +10,7 @@ import { DevService } from "./dev.js";
 import { TeamsService } from "./teams.js";
 import { InvitationsService } from "./invitations.js";
 import { MASTER_DATASET, API_BASE_URL, resolveApiBaseUrl, setApiBaseUrl } from "./config.js";
+import { escapeHtml } from "../utils/sanitize.js";
 
 export const DEMO_CONFIG = {
   TEAM_SEASON_ID: "72000000-0000-4000-8000-000000000001",
@@ -68,6 +69,7 @@ export {
   PendingService,
   TeamsService,
   InvitationsService,
-  DevService
+  DevService,
+  escapeHtml
 };
 

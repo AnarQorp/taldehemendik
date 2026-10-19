@@ -230,6 +230,107 @@
     </div>
   </div>
 
+  <!-- Modal de Verificación OTP (Autenticación Real de Producción) -->
+  <div id="modal-otp-auth" class="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-otp-title">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-primary-container text-on-primary flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[20px]">mark_email_read</span>
+          </div>
+          <div>
+            <h3 id="modal-otp-title" class="text-base font-bold text-slate-900 leading-tight">Introduce el código</h3>
+            <span id="modal-otp-badge" class="text-[11px] font-bold text-primary bg-primary-fixed/40 px-2 py-0.5 rounded-full">Acceso seguro</span>
+          </div>
+        </div>
+        <button id="modal-otp-btn-close" type="button" onclick="teamApp.closeOtpModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Cerrar modal de autenticación">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <!-- Paso 1: Introducir email (si no viene del formulario) -->
+      <div id="modal-otp-email-step" class="hidden space-y-3">
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Introduce tu correo electrónico. Si tienes una cuenta o equipo, recibirás un código de acceso de 6 dígitos:
+        </p>
+        <div>
+          <label for="modal-otp-email-input" class="block text-xs font-bold text-slate-700 mb-1">Tu email</label>
+          <input
+            id="modal-otp-email-input"
+            type="email"
+            placeholder="usuario@ejemplo.com"
+            class="w-full h-11 px-3.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container"
+          />
+        </div>
+        <button id="modal-otp-request-btn" type="button" onclick="teamApp.submitEmailForOtp()" class="w-full h-11 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]">
+          <span class="material-symbols-outlined text-[18px]">send</span>
+          <span>Enviar código de acceso</span>
+        </button>
+      </div>
+
+      <!-- Paso 2: Introducir código OTP de 6 dígitos -->
+      <div id="modal-otp-code-step" class="space-y-4">
+        <div class="space-y-1.5">
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Si la dirección es válida, recibirás un código de 6 dígitos en tu buzón:
+          </p>
+          <div class="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+            <span id="modal-otp-email-display" class="font-mono text-xs font-bold text-slate-800 truncate select-all"></span>
+            <button type="button" onclick="teamApp.changeOtpEmail()" class="text-[11px] text-primary hover:underline font-bold shrink-0 ml-2 cursor-pointer">
+              Cambiar
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label for="modal-otp-input" class="block text-xs font-bold text-slate-700">
+            Código de 6 dígitos
+          </label>
+          <div class="relative">
+            <input
+              id="modal-otp-input"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="6"
+              autocomplete="one-time-code"
+              placeholder="000000"
+              class="w-full h-13 px-4 text-center font-mono text-2xl font-extrabold tracking-[0.35em] text-slate-900 bg-slate-50 border-2 border-slate-300 rounded-xl focus:border-primary-container focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-container/20 transition-all placeholder:text-slate-300"
+            />
+          </div>
+        </div>
+
+        <!-- Live Feedback Banner (aria-live) -->
+        <div id="modal-otp-status" class="hidden rounded-xl p-3 text-xs flex items-start gap-2" aria-live="polite">
+          <span id="modal-otp-status-icon" class="material-symbols-outlined text-[18px] shrink-0 mt-0.5">info</span>
+          <span id="modal-otp-status-text" class="flex-1 leading-snug"></span>
+        </div>
+
+        <!-- Resend timer & actions -->
+        <div class="space-y-2 pt-1">
+          <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+            <span id="modal-otp-resend-label">¿No lo has recibido?</span>
+            <span id="modal-otp-countdown" class="font-medium text-slate-700">Reenviar en 60s</span>
+            <button id="modal-otp-resend-btn" type="button" onclick="teamApp.resendOtp()" class="hidden text-primary font-bold hover:underline cursor-pointer">
+              Reenviar código
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5 pt-2">
+            <button type="button" onclick="teamApp.closeOtpModal()" class="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer">
+              Cancelar
+            </button>
+            <button id="modal-otp-submit-btn" type="button" onclick="teamApp.submitOtpVerification()" class="h-11 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]">
+              <span class="material-symbols-outlined text-[18px]">verified</span>
+              <span>Verificar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================================================== -->
   <!-- DEMO TOOLBAR & GUIDED TOUR (Ocultos por defecto, visibles con ?demo=1 o botón) -->
   <!-- ======================================================== -->
@@ -603,11 +704,17 @@
 </div>
 </section>
 <!-- Quick Action / Code Entry option -->
-<div class="pt-1">
-<button class="w-full h-[50px] bg-surface-container-lowest border-2 border-dashed border-outline-variant/70 rounded-xl flex items-center justify-center gap-2 text-primary font-label-md text-label-md hover:bg-surface-container active:scale-[0.98] transition-all" type="button">
+<div class="pt-1 space-y-2.5">
+<button onclick="teamApp.goToScreen('v2_00_parent_join_team')" class="w-full h-[50px] bg-surface-container-lowest border-2 border-dashed border-outline-variant/70 rounded-xl flex items-center justify-center gap-2 text-primary font-label-md text-label-md hover:bg-surface-container active:scale-[0.98] transition-all cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[19px]" data-icon="qr_code_scanner">qr_code_scanner</span>
 <span>¿Tienes un código de equipo o invitación?</span>
 </button>
+<div class="text-center pt-1">
+  <button id="welcome-login-btn" onclick="teamApp.promptEmailLogin()" class="text-xs font-bold text-primary hover:underline cursor-pointer inline-flex items-center gap-1.5 py-1" type="button">
+    <span class="material-symbols-outlined text-[16px]">login</span>
+    <span>¿Ya tienes cuenta? Iniciar sesión con email</span>
+  </button>
+</div>
 </div>
 </div>
 <!-- Bottom Utility Footer -->
@@ -758,11 +865,17 @@
 </section>
 
 <!-- Botón Registrar Equipo (POST /v1/teams/bootstrap en BETA) -->
-<div id="coach-bootstrap-action-container" class="pt-1">
+<div id="coach-bootstrap-action-container" class="pt-1 space-y-2">
   <button id="coach-bootstrap-btn" class="w-full h-[52px] bg-primary-container hover:bg-primary text-on-primary rounded-xl font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-all cursor-pointer" onclick="teamApp.submitCoachBootstrap()" type="button">
     <span class="material-symbols-outlined text-[20px]" data-icon="add_circle">add_circle</span>
     <span>Crear equipo y generar código</span>
   </button>
+  <div class="text-center pt-1">
+    <button id="coach-login-btn" onclick="teamApp.promptEmailLogin(document.getElementById('coach-email')?.value)" class="text-xs font-bold text-primary hover:underline cursor-pointer inline-flex items-center gap-1.5 py-1" type="button">
+      <span class="material-symbols-outlined text-[16px]">login</span>
+      <span>¿Ya registraste tu equipo? Iniciar sesión con email</span>
+    </button>
+  </div>
 </div>
 
 <!-- Plantilla precargada banner (DEMO) -->
@@ -1149,6 +1262,12 @@
 <p class="text-center font-label-sm text-label-sm text-on-surface-variant leading-tight">
           Recibirás una notificación en cuanto el cuerpo técnico acepte tu acceso.
         </p>
+<div class="text-center pt-1">
+  <button id="parent-login-btn" onclick="teamApp.promptEmailLogin(document.getElementById('tutor-email')?.value)" class="text-xs font-bold text-primary hover:underline cursor-pointer inline-flex items-center gap-1.5 py-1" type="button">
+    <span class="material-symbols-outlined text-[16px]">login</span>
+    <span>¿Ya solicitaste vinculación? Acceder con tu email</span>
+  </button>
+</div>
 </div>
 </div>
 </div>

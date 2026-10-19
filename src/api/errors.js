@@ -10,7 +10,9 @@ export class DomainError extends Error {
 
 export const ERROR_MESSAGES = {
   AUTH_REQUIRED: "Sesión no válida o expirada. Por favor, identifícate de nuevo.",
-  AUTH_INVALID: "Credenciales no válidas o código expirado.",
+  AUTH_INVALID: "Código no válido o caducado. Comprueba el código recibido o solicita uno nuevo.",
+  RATE_LIMIT_EXCEEDED: "Has solicitado varios códigos recientemente. Por favor, espera antes de solicitar uno nuevo.",
+  DEV_AUTH_UNAVAILABLE: "La autenticación de desarrollo no está disponible en producción.",
   ROLE_NOT_ALLOWED: "No tienes permisos suficientes para realizar esta acción.",
   GUARDIAN_LINK_REQUIRED: "No tienes vinculación activa con este jugador.",
   PLAYER_NOT_ACCESSIBLE: "El recurso o jugador solicitado no está disponible.",
@@ -38,6 +40,15 @@ export const ERROR_MESSAGES = {
 export function mapDomainError(err) {
   if (!err) return "Ha ocurrido un error inesperado.";
   if (err instanceof DomainError) {
+    if (err.status === 429) {
+      return ERROR_MESSAGES.RATE_LIMIT_EXCEEDED;
+    }
+    if (err.status === 503) {
+      return "El servicio de envío de correos no está disponible temporalmente. Inténtalo más tarde.";
+    }
+    if (err.status === 401) {
+      return ERROR_MESSAGES.AUTH_INVALID;
+    }
     if (ERROR_MESSAGES[err.code]) {
       return ERROR_MESSAGES[err.code];
     }

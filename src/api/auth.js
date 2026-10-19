@@ -4,15 +4,18 @@ export class AuthService {
   }
 
   async requestOtp(email) {
-    return this.client.post("/auth/otp/request", { email });
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    return this.client.post("/auth/otp/request", { email: normalizedEmail });
   }
 
   async verifyOtp(email, challengeId, otp, displayName) {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const cleanOtp = String(otp || "").trim();
     const res = await this.client.post("/auth/otp/verify", {
-      email,
+      email: normalizedEmail,
       challengeId,
-      otp,
-      displayName
+      otp: cleanOtp,
+      displayName: displayName ? String(displayName).trim() : undefined
     });
     if (res?.accessToken) {
       this.client.setToken(res.accessToken);
@@ -22,9 +25,12 @@ export class AuthService {
 
   async loginDev(email, displayName) {
     const reqRes = await this.requestOtp(email);
+    if (!reqRes?.developmentOtp) {
+      throw new Error("DEV_AUTH_UNAVAILABLE: La autenticación de desarrollo no está disponible en producción.");
+    }
     const challengeId = reqRes.challengeId;
-    const otp = reqRes.developmentOtp || "000000";
-    const authRes = await this.verifyOtp(email, challengeId, otp, displayName);
+    const authRes = await this.verifyOtp(email, challengeId, reqRes.developmentOtp, displayName);
     return authRes;
   }
 }
+

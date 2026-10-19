@@ -148,10 +148,24 @@ export class TeamAppState {
     this.linkedFamiliesCount = 12;
     this.pendingFamiliesCount = 6;
 
-    // Token cache
+    // Token cache (Unified session token in production, legacy role keys supported)
     this.tokens = {
       coach: null,
       parent: null
+    };
+
+    // OTP Production Authentication State
+    this.otpState = {
+      email: "",
+      challengeId: null,
+      role: "coach",
+      displayName: "",
+      countdownTimer: null,
+      countdownSeconds: 60,
+      onSuccess: null,
+      onCancel: null,
+      isVerifying: false,
+      isRequesting: false
     };
 
     // Beta Clean State (Vertical Slice 03)
@@ -205,15 +219,51 @@ export class TeamAppState {
       this.appMode = "DEMO";
     }
 
-    if (localStorage.getItem("talde_token_coach")) {
-      this.tokens.coach = localStorage.getItem("talde_token_coach");
-    }
-    if (localStorage.getItem("talde_token_parent")) {
-      this.tokens.parent = localStorage.getItem("talde_token_parent");
+    // Unified session token priority
+    const unifiedToken = localStorage.getItem("talde_session_token");
+    if (unifiedToken) {
+      this.tokens.coach = unifiedToken;
+      this.tokens.parent = unifiedToken;
+      api.client.setToken(unifiedToken);
+    } else {
+      if (localStorage.getItem("talde_token_coach")) {
+        this.tokens.coach = localStorage.getItem("talde_token_coach");
+      }
+      if (localStorage.getItem("talde_token_parent")) {
+        this.tokens.parent = localStorage.getItem("talde_token_parent");
+      }
     }
     if (localStorage.getItem("talde_team_season_id")) {
       this.beta.teamSeasonId = localStorage.getItem("talde_team_season_id");
     }
+
+    // Listeners for OTP modal
+    const otpInput = document.getElementById("modal-otp-input");
+    if (otpInput) {
+      otpInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this.submitOtpVerification();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          this.closeOtpModal();
+        }
+      });
+      otpInput.addEventListener("input", (e) => {
+        e.target.value = e.target.value.replace(/\D/g, "");
+        if (e.target.value.length === 6) {
+          this.submitOtpVerification();
+        }
+      });
+    }
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        const modal = document.getElementById("modal-otp-auth");
+        if (modal && !modal.classList.contains("hidden")) {
+          this.closeOtpModal();
+        }
+      }
+    });
 
     const savedRole = localStorage.getItem("talde_active_role");
 
@@ -500,9 +550,387 @@ export class TeamAppState {
         return true;
       }
     } catch (err) {
-      console.warn("loadUserContext deferred or no active session:", err);
+      if (err?.status === 401 || err?.code === "AUTH_INVALID" || err?.code === "AUTH_REQUIRED") {
+        this.clearSessionData();
+        this.showToast("Tu sesión ha caducado. Por favor, identifícate de nuevo.");
+      } else {
+        console.warn("loadUserContext deferred or network issue:", err);
+      }
     }
     return false;
+  }
+
+  clearSessionData() {
+    localStorage.removeItem("talde_session_token");
+    localStorage.removeItem("talde_token_coach");
+    localStorage.removeItem("talde_token_parent");
+    localStorage.removeItem("talde_team_season_id");
+    localStorage.removeItem("talde_active_role");
+    localStorage.removeItem("talde_last_screen");
+    localStorage.removeItem("talde_linked_player_id");
+    localStorage.removeItem("talde_join_code");
+    localStorage.removeItem("talde_players");
+    this.tokens = { coach: null, parent: null };
+    api.client.setToken(null);
+    this.beta = {
+      teamSeasonId: null,
+      team: null,
+      teamSeason: null,
+      joinCode: null,
+      players: [],
+      pendingRequests: [],
+      lastInvitation: null,
+      verifiedInvitation: null,
+      guardianPlayer: null,
+      guardianPlayers: []
+    };
+    this.live = {
+      events: [],
+      activeEvent: null,
+      availability: null,
+      callup: null,
+      pending: null,
+      parentCallupStatus: null,
+      parentAvailability: null,
+      candidates: [],
+      activeActionItem: null,
+      unconfirmedWarnings: []
+    };
+    const codeDisplay = document.getElementById("coach-code-display");
+    if (codeDisplay) codeDisplay.textContent = "------";
+    const coachCodeSection = document.getElementById("coach-code-section");
+    if (coachCodeSection) coachCodeSection.classList.add("hidden");
+    const rosterSection = document.getElementById("coach-roster-management-section");
+    if (rosterSection) rosterSection.classList.add("hidden");
+    const parentNotice = document.getElementById("parent-clean-backend-notice");
+    if (parentNotice) parentNotice.classList.add("hidden");
+    this.goToScreen("v2_00_onboarding_welcome", "onboard");
+  }
+
+  // --- Production Email OTP Authentication Methods ---
+
+  openOtpModal({ email = "", displayName = "", role = "coach", showEmailStep = false, onSuccess = null, onCancel = null } = {}) {
+    const modal = document.getElementById("modal-otp-auth");
+    if (!modal) return;
+
+    if (this.otpState.countdownTimer) {
+      clearInterval(this.otpState.countdownTimer);
+      this.otpState.countdownTimer = null;
+    }
+
+    this.otpState = {
+      email: email ? String(email).trim().toLowerCase() : "",
+      challengeId: null,
+      role,
+      displayName: displayName ? String(displayName).trim() : "",
+      countdownTimer: null,
+      countdownSeconds: 60,
+      onSuccess,
+      onCancel,
+      isVerifying: false,
+      isRequesting: false
+    };
+
+    const emailStep = document.getElementById("modal-otp-email-step");
+    const codeStep = document.getElementById("modal-otp-code-step");
+    const statusBanner = document.getElementById("modal-otp-status");
+    const otpInput = document.getElementById("modal-otp-input");
+    const submitBtn = document.getElementById("modal-otp-submit-btn");
+
+    if (statusBanner) statusBanner.classList.add("hidden");
+    if (otpInput) otpInput.value = "";
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">verified</span><span>Verificar</span>`;
+    }
+
+    if (showEmailStep || !this.otpState.email) {
+      if (emailStep) emailStep.classList.remove("hidden");
+      if (codeStep) codeStep.classList.add("hidden");
+      const emailInput = document.getElementById("modal-otp-email-input");
+      if (emailInput) {
+        emailInput.value = this.otpState.email;
+        setTimeout(() => emailInput.focus(), 100);
+      }
+      modal.classList.remove("hidden");
+    } else {
+      if (emailStep) emailStep.classList.add("hidden");
+      if (codeStep) codeStep.classList.remove("hidden");
+      modal.classList.remove("hidden");
+      this.requestOtpInternal(this.otpState.email);
+    }
+  }
+
+  async submitEmailForOtp() {
+    const emailInput = document.getElementById("modal-otp-email-input");
+    const email = emailInput?.value?.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.showToast("⚠️ Introduce un correo electrónico válido.");
+      return;
+    }
+    this.otpState.email = email;
+    const emailStep = document.getElementById("modal-otp-email-step");
+    const codeStep = document.getElementById("modal-otp-code-step");
+    if (emailStep) emailStep.classList.add("hidden");
+    if (codeStep) codeStep.classList.remove("hidden");
+    await this.requestOtpInternal(email);
+  }
+
+  changeOtpEmail() {
+    const emailStep = document.getElementById("modal-otp-email-step");
+    const codeStep = document.getElementById("modal-otp-code-step");
+    if (emailStep) emailStep.classList.remove("hidden");
+    if (codeStep) codeStep.classList.add("hidden");
+    const emailInput = document.getElementById("modal-otp-email-input");
+    if (emailInput) {
+      emailInput.value = this.otpState.email || "";
+      emailInput.focus();
+    }
+  }
+
+  async requestOtpInternal(email) {
+    if (this.otpState.isRequesting) return;
+    this.otpState.isRequesting = true;
+
+    const emailDisplay = document.getElementById("modal-otp-email-display");
+    if (emailDisplay) emailDisplay.textContent = email;
+
+    this.showOtpStatus("Solicitando código de verificación...", "info");
+
+    try {
+      const res = await api.auth.requestOtp(email);
+      this.otpState.challengeId = res.challengeId;
+      this.hideOtpStatus();
+      this.startOtpCountdown(60);
+      const otpInput = document.getElementById("modal-otp-input");
+      if (otpInput) {
+        otpInput.value = "";
+        setTimeout(() => otpInput.focus(), 150);
+      }
+    } catch (err) {
+      const msg = mapDomainError(err);
+      this.showOtpStatus(msg, "error");
+      this.showToast(msg);
+    } finally {
+      this.otpState.isRequesting = false;
+    }
+  }
+
+  startOtpCountdown(seconds = 60) {
+    if (this.otpState.countdownTimer) {
+      clearInterval(this.otpState.countdownTimer);
+    }
+    this.otpState.countdownSeconds = seconds;
+    const countdownEl = document.getElementById("modal-otp-countdown");
+    const resendBtn = document.getElementById("modal-otp-resend-btn");
+    const resendLabel = document.getElementById("modal-otp-resend-label");
+
+    if (countdownEl) {
+      countdownEl.classList.remove("hidden");
+      countdownEl.textContent = `Reenviar en ${this.otpState.countdownSeconds}s`;
+    }
+    if (resendBtn) resendBtn.classList.add("hidden");
+    if (resendLabel) resendLabel.textContent = "¿No lo has recibido?";
+
+    this.otpState.countdownTimer = setInterval(() => {
+      this.otpState.countdownSeconds--;
+      if (this.otpState.countdownSeconds <= 0) {
+        clearInterval(this.otpState.countdownTimer);
+        this.otpState.countdownTimer = null;
+        if (countdownEl) countdownEl.classList.add("hidden");
+        if (resendBtn) resendBtn.classList.remove("hidden");
+      } else {
+        if (countdownEl) countdownEl.textContent = `Reenviar en ${this.otpState.countdownSeconds}s`;
+      }
+    }, 1000);
+  }
+
+  async resendOtp() {
+    if (this.otpState.countdownSeconds > 0 || this.otpState.isRequesting) return;
+    await this.requestOtpInternal(this.otpState.email);
+  }
+
+  async submitOtpVerification() {
+    if (this.otpState.isVerifying) return;
+    const otpInput = document.getElementById("modal-otp-input");
+    const otp = otpInput?.value?.trim();
+
+    if (!otp || !/^\d{6}$/.test(otp)) {
+      this.showOtpStatus("Introduce el código de 6 dígitos completo.", "warning");
+      otpInput?.focus();
+      return;
+    }
+
+    if (!this.otpState.challengeId) {
+      this.showOtpStatus("No hay un reto activo. Solicita un nuevo código.", "error");
+      return;
+    }
+
+    this.otpState.isVerifying = true;
+    const submitBtn = document.getElementById("modal-otp-submit-btn");
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Verificando...</span>`;
+    }
+
+    try {
+      const res = await api.auth.verifyOtp(
+        this.otpState.email,
+        this.otpState.challengeId,
+        otp,
+        this.otpState.displayName
+      );
+
+      // Store unified session token
+      localStorage.setItem("talde_session_token", res.accessToken);
+      localStorage.setItem("talde_app_mode", "BETA_NORMAL");
+      if (this.otpState.role === "coach") {
+        this.tokens.coach = res.accessToken;
+        localStorage.setItem("talde_token_coach", res.accessToken);
+      } else {
+        this.tokens.parent = res.accessToken;
+        localStorage.setItem("talde_token_parent", res.accessToken);
+      }
+      api.client.setToken(res.accessToken);
+
+      this.showOtpStatus("✓ ¡Código verificado correctamente!", "success");
+
+      // Privacy: Clean input immediately, no OTP leaked
+      if (otpInput) otpInput.value = "";
+
+      const successCb = this.otpState.onSuccess;
+      setTimeout(() => {
+        this.closeOtpModal();
+        if (typeof successCb === "function") {
+          successCb(res);
+        }
+      }, 350);
+    } catch (err) {
+      this.otpState.isVerifying = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">verified</span><span>Verificar</span>`;
+      }
+      const msg = mapDomainError(err);
+      this.showOtpStatus(msg, "error");
+      if (otpInput) {
+        otpInput.value = "";
+        otpInput.focus();
+      }
+    }
+  }
+
+  showOtpStatus(message, type = "info") {
+    const banner = document.getElementById("modal-otp-status");
+    const text = document.getElementById("modal-otp-status-text");
+    const icon = document.getElementById("modal-otp-status-icon");
+    if (!banner || !text) return;
+
+    banner.className = "rounded-xl p-3 text-xs flex items-start gap-2 border";
+    if (type === "error") {
+      banner.classList.add("bg-red-50", "border-red-200", "text-red-700");
+      if (icon) { icon.textContent = "error"; icon.className = "material-symbols-outlined text-[18px] text-red-600 shrink-0 mt-0.5"; }
+    } else if (type === "warning") {
+      banner.classList.add("bg-amber-50", "border-amber-200", "text-amber-800");
+      if (icon) { icon.textContent = "warning"; icon.className = "material-symbols-outlined text-[18px] text-amber-600 shrink-0 mt-0.5"; }
+    } else if (type === "success") {
+      banner.classList.add("bg-emerald-50", "border-emerald-200", "text-emerald-800");
+      if (icon) { icon.textContent = "check_circle"; icon.className = "material-symbols-outlined text-[18px] text-emerald-600 shrink-0 mt-0.5"; }
+    } else {
+      banner.classList.add("bg-blue-50", "border-blue-200", "text-blue-800");
+      if (icon) { icon.textContent = "info"; icon.className = "material-symbols-outlined text-[18px] text-blue-600 shrink-0 mt-0.5"; }
+    }
+    text.textContent = message;
+    banner.classList.remove("hidden");
+  }
+
+  hideOtpStatus() {
+    const banner = document.getElementById("modal-otp-status");
+    if (banner) banner.classList.add("hidden");
+  }
+
+  closeOtpModal() {
+    if (this.otpState.countdownTimer) {
+      clearInterval(this.otpState.countdownTimer);
+      this.otpState.countdownTimer = null;
+    }
+    const otpInput = document.getElementById("modal-otp-input");
+    if (otpInput) otpInput.value = "";
+    const modal = document.getElementById("modal-otp-auth");
+    if (modal) modal.classList.add("hidden");
+    const onCancel = this.otpState.onCancel;
+    this.otpState.isVerifying = false;
+    this.otpState.isRequesting = false;
+    if (typeof onCancel === "function") {
+      onCancel();
+    }
+  }
+
+  async promptEmailLogin(prefillEmail = "") {
+    this.openOtpModal({
+      email: prefillEmail,
+      displayName: "",
+      role: "unknown",
+      showEmailStep: !prefillEmail,
+      onSuccess: async (authRes) => {
+        try {
+          const res = await api.teams.getMyMemberships();
+          const items = res?.items || [];
+          if (!items.length) {
+            this.showToast("✓ Sesión iniciada. No tienes equipos asociados todavía.");
+            await this.goToScreen("v2_00_onboarding_welcome", "onboard");
+            return;
+          }
+          const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
+          const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || []).length > 0);
+
+          if (coachMem) {
+            this.currentRole = "coach";
+            this.tokens.coach = authRes.accessToken;
+            this.beta.teamSeasonId = coachMem.team_season_id;
+            localStorage.setItem("talde_team_season_id", coachMem.team_season_id);
+            localStorage.setItem("talde_active_role", "coach");
+            this.beta.team = { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport };
+            this.beta.teamSeason = {
+              id: coachMem.team_season_id,
+              display_label: coachMem.display_label,
+              season_label: coachMem.season_label,
+              category: coachMem.category,
+              join_code: coachMem.join_code
+            };
+            this.beta.joinCode = coachMem.join_code;
+            this.showToast(`✓ Bienvenido, entrenador: ${coachMem.team_name}`);
+            await this.goToScreen("v2_01_coach_home", "inicio");
+          } else if (guardianMem) {
+            this.currentRole = "parent";
+            this.tokens.parent = authRes.accessToken;
+            this.beta.teamSeasonId = guardianMem.team_season_id;
+            localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
+            localStorage.setItem("talde_active_role", "parent");
+            this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
+            this.beta.teamSeason = {
+              id: guardianMem.team_season_id,
+              display_label: guardianMem.display_label,
+              season_label: guardianMem.season_label,
+              category: guardianMem.category,
+              join_code: guardianMem.join_code
+            };
+            this.beta.guardianPlayers = guardianMem.guardian_players || [];
+            this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+            this.showToast(`✓ Sesión familiar iniciada: ${this.beta.guardianPlayer?.firstName || 'Familia'}`);
+            await this.goToScreen("v2_07_parent_home", "inicio");
+          } else {
+            this.currentRole = "parent";
+            localStorage.setItem("talde_active_role", "parent");
+            this.showToast("✓ Sesión iniciada. Solicitud pendiente de validación.");
+            await this.goToScreen("v2_00_parent_join_team");
+          }
+        } catch (err) {
+          console.error("Error retrieving memberships after login:", err);
+          this.showToast("✓ Sesión iniciada.");
+        }
+      }
+    });
   }
 
   toggleDemoTools() {
@@ -522,28 +950,37 @@ export class TeamAppState {
     if (this.appMode === "DEMO") {
       if (role === "coach") {
         if (!this.tokens.coach) {
-          const res = await api.auth.loginDev(DEMO_CONFIG.COACH_EMAIL, "Mikel Zubeldia");
-          this.tokens.coach = res.accessToken;
+          try {
+            const res = await api.auth.loginDev(DEMO_CONFIG.COACH_EMAIL, "Mikel Zubeldia");
+            this.tokens.coach = res.accessToken;
+          } catch {
+            this.tokens.coach = "demo_token_coach";
+          }
         }
         api.client.setToken(this.tokens.coach);
       } else if (role === "parent") {
         if (!this.tokens.parent) {
-          const res = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez");
-          this.tokens.parent = res.accessToken;
+          try {
+            const res = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez");
+            this.tokens.parent = res.accessToken;
+          } catch {
+            this.tokens.parent = "demo_token_parent";
+          }
         }
         api.client.setToken(this.tokens.parent);
       }
       return;
     }
 
+    const unifiedToken = this.tokens.coach || this.tokens.parent || localStorage.getItem("talde_session_token");
     if (role === "coach") {
-      const token = this.tokens.coach || localStorage.getItem("talde_token_coach");
+      const token = this.tokens.coach || unifiedToken || localStorage.getItem("talde_token_coach");
       if (token) {
         this.tokens.coach = token;
         api.client.setToken(token);
       }
     } else if (role === "parent") {
-      const token = this.tokens.parent || localStorage.getItem("talde_token_parent");
+      const token = this.tokens.parent || unifiedToken || localStorage.getItem("talde_token_parent");
       if (token) {
         this.tokens.parent = token;
         api.client.setToken(token);
@@ -3198,9 +3635,34 @@ export class TeamAppState {
       return;
     }
 
+    if (!coachEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(coachEmail)) {
+      this.showToast("⚠️ Introduce un correo electrónico de entrenador válido.");
+      return;
+    }
+
     const teamName = clubNameInput || teamNameInput;
     const displayLabel = teamNameInput || "Infantil A";
 
+    // If coach already has an active session token, proceed directly
+    const currentToken = this.tokens.coach || localStorage.getItem("talde_session_token");
+    if (currentToken) {
+      api.client.setToken(currentToken);
+      await this.executeCoachBootstrap({ teamName, displayLabel, category, coachEmail, coachName });
+      return;
+    }
+
+    // Otherwise, initiate real OTP authentication
+    this.openOtpModal({
+      email: coachEmail,
+      displayName: coachName,
+      role: "coach",
+      onSuccess: async () => {
+        await this.executeCoachBootstrap({ teamName, displayLabel, category, coachEmail, coachName });
+      }
+    });
+  }
+
+  async executeCoachBootstrap({ teamName, displayLabel, category, coachEmail, coachName }) {
     const btn = document.getElementById("coach-bootstrap-btn");
     if (btn) {
       btn.disabled = true;
@@ -3208,12 +3670,6 @@ export class TeamAppState {
     }
 
     try {
-      // 1. Authenticate coach with OTP dev
-      const authRes = await api.auth.loginDev(coachEmail, coachName);
-      this.tokens.coach = authRes.accessToken;
-      api.client.setToken(this.tokens.coach);
-      localStorage.setItem("talde_token_coach", authRes.accessToken);
-      localStorage.setItem("talde_app_mode", "BETA_NORMAL");
       this.beta.coachName = coachName;
 
       // 2. Client Idempotency-Key
@@ -3610,6 +4066,11 @@ export class TeamAppState {
     const tutorName = document.getElementById("tutor-name")?.value?.trim() || "Tutor Familia";
     const tutorEmail = document.getElementById("tutor-email")?.value?.trim() || "tutor@beta.test";
 
+    if (!tutorEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tutorEmail)) {
+      this.showToast("⚠️ Introduce un correo electrónico de tutor válido.");
+      return;
+    }
+
     const isIndividual = this.beta.joinFlowType === "INDIVIDUAL" || this.beta.verifiedInvitation?.type === "INDIVIDUAL";
 
     if (!isIndividual && !this.beta.verifiedInvitation) {
@@ -3617,6 +4078,35 @@ export class TeamAppState {
       if (!this.beta.verifiedInvitation) return;
     }
 
+    const claimName = document.getElementById("parent-claim-name")?.value?.trim();
+    const claimNumberVal = document.getElementById("parent-claim-number")?.value;
+    const claimNumber = claimNumberVal ? parseInt(claimNumberVal, 10) : undefined;
+
+    if (!isIndividual && !claimName) {
+      this.showToast("⚠️ Para unirte con código general debes indicar el nombre del menor.");
+      return;
+    }
+
+    // If tutor already has an active session token, proceed directly
+    const currentToken = this.tokens.parent || localStorage.getItem("talde_session_token");
+    if (currentToken) {
+      api.client.setToken(currentToken);
+      await this.executeParentJoin({ tutorEmail, tutorName, isIndividual, claimName, claimNumber });
+      return;
+    }
+
+    // Otherwise, initiate real OTP authentication
+    this.openOtpModal({
+      email: tutorEmail,
+      displayName: tutorName,
+      role: "parent",
+      onSuccess: async () => {
+        await this.executeParentJoin({ tutorEmail, tutorName, isIndividual, claimName, claimNumber });
+      }
+    });
+  }
+
+  async executeParentJoin({ tutorEmail, tutorName, isIndividual, claimName, claimNumber }) {
     const btn = document.getElementById("btn-submit");
     if (btn) {
       btn.disabled = true;
@@ -3624,13 +4114,6 @@ export class TeamAppState {
     }
 
     try {
-      // 1. Authenticate tutor with OTP dev
-      const authRes = await api.auth.loginDev(tutorEmail, tutorName);
-      this.tokens.parent = authRes.accessToken;
-      api.client.setToken(this.tokens.parent);
-      localStorage.setItem("talde_token_parent", authRes.accessToken);
-      localStorage.setItem("talde_app_mode", "BETA_NORMAL");
-
       let res;
       if (isIndividual) {
         const token = this.beta.individualInviteToken || this.beta.verifiedInvitation?.token;
@@ -3643,18 +4126,6 @@ export class TeamAppState {
           localStorage.setItem("talde_linked_player_id", res.player_id);
         }
       } else {
-        const claimName = document.getElementById("parent-claim-name")?.value?.trim();
-        const claimNumberVal = document.getElementById("parent-claim-number")?.value;
-        const claimNumber = claimNumberVal ? parseInt(claimNumberVal, 10) : undefined;
-
-        if (!claimName) {
-          this.showToast("⚠️ Para unirte con código general debes indicar el nombre del menor.");
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = `<span>Enviar solicitud de vinculación</span><span class="material-symbols-outlined text-[20px]">send</span>`;
-          }
-          return;
-        }
         res = await api.invitations.requestGeneralLink(this.beta.verifiedInvitation.code, {
           claimedPlayerName: claimName,
           claimedShirtNumber: claimNumber

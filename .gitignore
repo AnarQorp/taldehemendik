@@ -7,3 +7,4 @@ coverage/
 backend/dist/
 backend/proof-artifacts/
 backend/.env.production
+*.bundle

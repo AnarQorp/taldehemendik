@@ -20,16 +20,17 @@ export class AuthService {
     return res;
   }
 
-  async loginDev(email, displayName) {
-    const reqRes = await this.requestOtp(email);
+  async loginDev(email, displayName, options = {}) {
+    const reqRes = await this.requestOtp(email, options);
+    if (options?.signal?.aborted) return null;
+    if (typeof options?.checkActive === "function" && !options.checkActive()) return null;
     if (!reqRes?.developmentOtp) {
       throw new Error("DEV_AUTH_UNAVAILABLE: La autenticación de desarrollo no está disponible en producción.");
     }
     const challengeId = reqRes.challengeId;
-    const authRes = await this.verifyOtp(email, challengeId, reqRes.developmentOtp, displayName);
-    if (authRes?.accessToken) {
-      this.client.setToken(authRes.accessToken);
-    }
+    if (options?.signal?.aborted) return null;
+    if (typeof options?.checkActive === "function" && !options.checkActive()) return null;
+    const authRes = await this.verifyOtp(email, challengeId, reqRes.developmentOtp, displayName, options);
     return authRes;
   }
 }

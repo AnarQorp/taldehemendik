@@ -209,9 +209,6 @@ export class TeamAppState {
       generation: this.contextGeneration,
       sessionId: this.currentSessionId,
       mode: this.appMode,
-      role: this.currentRole,
-      teamSeasonId: this.beta?.teamSeasonId || null,
-      childId: this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || null,
       ...extra
     };
   }
@@ -222,8 +219,6 @@ export class TeamAppState {
     if (scope.sessionId !== undefined && scope.sessionId !== this.currentSessionId) return false;
     if (scope.mode !== undefined && scope.mode !== this.appMode) return false;
     if (scope.role !== undefined && scope.role !== this.currentRole) return false;
-    if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== (this.beta?.teamSeasonId || null)) return false;
-    if (scope.childId !== undefined && scope.childId !== (this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || null)) return false;
     return true;
   }
 
@@ -254,12 +249,14 @@ export class TeamAppState {
     this.managedTimers.clear();
   }
 
-  async safeFetch(promise, fallback = null) {
+  async safeFetch(promise, fallback = null, scope = null) {
     try {
       return await promise;
     } catch (err) {
       if (err?.status === 401 && err.wasAuthenticated) {
-        this.handleSessionExpired(err);
+        if (!scope || this.isScopeActive(scope)) {
+          this.handleSessionExpired(err, scope);
+        }
       }
       return fallback;
     }
@@ -660,6 +657,13 @@ export class TeamAppState {
     return Boolean(modal && !modal.classList.contains("hidden"));
   }
 
+  createInFlightSignal() {
+    const ctrl = new AbortController();
+    this.inFlightControllers.add(ctrl);
+    ctrl.signal.addEventListener("abort", () => this.inFlightControllers.delete(ctrl), { once: true });
+    return ctrl.signal;
+  }
+
   abortAllInFlight() {
     for (const ctrl of this.inFlightControllers) {
       try { ctrl.abort(); } catch {}
@@ -752,7 +756,10 @@ export class TeamAppState {
     };
   }
 
-  handleSessionExpired(sourceError) {
+  handleSessionExpired(sourceError, scope = null) {
+    if (scope && !this.isScopeActive(scope)) {
+      return;
+    }
     if (sourceError && (!sourceError.wasAuthenticated || sourceError.path?.includes("/auth/otp/")) && sourceError.code !== "AUTH_REQUIRED") {
       return;
     }
@@ -1308,12 +1315,18 @@ export class TeamAppState {
   async ensureAuth(role) {
     const scope = this.createScope({ role, mode: this.appMode });
     if (this.appMode === "DEMO") {
+      const devOpts = {
+        signal: this.createInFlightSignal(),
+        checkActive: () => this.isScopeActive(scope) && this.appMode === "DEMO"
+      };
       if (role === "coach") {
         if (!this.tokens.coach) {
           try {
-            const res = await api.auth.loginDev(DEMO_CONFIG.COACH_EMAIL, "Mikel Zubeldia");
+            const res = await api.auth.loginDev(DEMO_CONFIG.COACH_EMAIL, "Mikel Zubeldia", devOpts);
             if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
-            this.tokens.coach = res.accessToken;
+            if (res?.accessToken) {
+              this.tokens.coach = res.accessToken;
+            }
           } catch {
             if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
             this.tokens.coach = "demo_token_coach";
@@ -1324,9 +1337,11 @@ export class TeamAppState {
       } else if (role === "parent") {
         if (!this.tokens.parent) {
           try {
-            const res = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez");
+            const res = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez", devOpts);
             if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
-            this.tokens.parent = res.accessToken;
+            if (res?.accessToken) {
+              this.tokens.parent = res.accessToken;
+            }
           } catch {
             if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
             this.tokens.parent = "demo_token_parent";
@@ -1356,7 +1371,7 @@ export class TeamAppState {
 
   async switchTeam(teamSeasonId) {
     this.contextGeneration++;
-    const scope = this.createScope({ teamSeasonId });
+    const scope = this.createScope();
     this.abortAllInFlight();
     this.clearAllManagedTimers();
     this.live = {
@@ -1426,7 +1441,7 @@ export class TeamAppState {
     } catch (err) {
       if (!this.isScopeActive(scope)) return;
       if (err?.status === 401 && err.wasAuthenticated) {
-        this.handleSessionExpired(err);
+        this.handleSessionExpired(err, scope);
         return;
       }
       throw err;
@@ -1588,12 +1603,14 @@ export class TeamAppState {
       return;
     }
 
+    const scope = this.createScope({ role: "parent" });
     const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
     if (parentToken) {
       api.client.setToken(parentToken);
       this.tokens.parent = parentToken;
       try {
         const res = await api.teams.getMyMemberships();
+        if (!this.isScopeActive(scope)) return;
         const items = res?.items || [];
         const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
         if (guardianMem) {
@@ -1609,14 +1626,21 @@ export class TeamAppState {
           };
           this.beta.guardianPlayers = guardianMem.guardian_players || [];
           this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+          if (!this.isScopeActive(scope)) return;
           await this.goToScreen("v2_07_parent_home", "inicio");
           this.showToast(`Sesión familiar recuperada: ${this.beta.guardianPlayer ? (this.beta.guardianPlayer.firstName || this.beta.guardianPlayer.first_name) : 'Hijo'}`);
           return;
         }
       } catch (e) {
+        if (!this.isScopeActive(scope)) return;
+        if (e?.status === 401 && e.wasAuthenticated) {
+          this.handleSessionExpired(e, scope);
+          return;
+        }
         console.warn("Error restoring parent session:", e);
       }
     }
+    if (!this.isScopeActive(scope)) return;
     await this.goToScreen("v2_00_parent_join_team");
   }
 
@@ -1946,10 +1970,10 @@ export class TeamAppState {
     try {
       // Concurrently fetch real data from PostgreSQL
       const [playersRes, eventsRes, pendingRes, pendingReqs] = await Promise.all([
-        this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] }),
-        this.safeFetch(api.events.getEvents(activeTeamSeasonId), { items: [] }),
-        this.safeFetch(api.pending.getPending(activeTeamSeasonId), { actionItems: [], indicators: [] }),
-        this.safeFetch(api.teams.getPendingRequests(activeTeamSeasonId), { items: [] })
+        this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] }, scope),
+        this.safeFetch(api.events.getEvents(activeTeamSeasonId), { items: [] }, scope),
+        this.safeFetch(api.pending.getPending(activeTeamSeasonId), { actionItems: [], indicators: [] }, scope),
+        this.safeFetch(api.teams.getPendingRequests(activeTeamSeasonId), { items: [] }, scope)
       ]);
 
       if (!this.isScopeActive(scope)) {
@@ -2574,7 +2598,7 @@ export class TeamAppState {
                     <div class="mt-2 pt-2 border-t border-outline-variant/30 flex items-center justify-between">
                       <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-bold">
                         <span class="material-symbols-outlined text-[13px] text-emerald-700">check_circle</span>
-                        <span>Convocatoria publicada (Rev. ${ev.callup_revision || 1})</span>
+                        <span>Convocatoria publicada (Rev. ${escapeHtml(ev.callup_revision || 1)})</span>
                       </span>
                     </div>
                   `;
@@ -2598,7 +2622,7 @@ export class TeamAppState {
                     <div class="mt-2 pt-2 border-t border-outline-variant/30 flex items-center justify-between">
                       <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-bold">
                         <span class="material-symbols-outlined text-[13px] text-emerald-700">check_circle</span>
-                        <span>✓ Convocatoria publicada (Rev. ${ev.callup_revision || 1})</span>
+                        <span>✓ Convocatoria publicada (Rev. ${escapeHtml(ev.callup_revision || 1)})</span>
                       </span>
                     </div>
                   `;
@@ -2792,7 +2816,7 @@ export class TeamAppState {
       seasonLabelEl.textContent = `Temporada ${this.beta.teamSeason?.season_label || '2026/27'}`;
     }
     if (crestEl) {
-      crestEl.innerHTML = `<span class="tracking-tight text-sm">${(this.beta.team?.name || 'EQ').slice(0, 2).toUpperCase()}</span>`;
+      crestEl.innerHTML = `<span class="tracking-tight text-sm">${escapeHtml((this.beta.team?.name || 'EQ').slice(0, 2).toUpperCase())}</span>`;
     }
     if (staffBar) {
       staffBar.classList.add("hidden");
@@ -2932,12 +2956,12 @@ export class TeamAppState {
 
     if (activeTeamSeasonId || isDemo) {
       if (eventId) {
-        const evRes = await this.safeFetch(api.events.getEvent(eventId), null);
+        const evRes = await this.safeFetch(api.events.getEvent(eventId), null, scope);
         if (!this.isScopeActive(scope)) return;
         activeEvent = (evRes && evRes.event) ? evRes.event : evRes;
       }
       if (!activeEvent && activeTeamSeasonId) {
-        const eventsRes = await this.safeFetch(api.events.getEvents(activeTeamSeasonId), { items: [] });
+        const eventsRes = await this.safeFetch(api.events.getEvents(activeTeamSeasonId), { items: [] }, scope);
         if (!this.isScopeActive(scope)) return;
         const events = eventsRes?.items || [];
         if (events.length > 0) {
@@ -2957,13 +2981,13 @@ export class TeamAppState {
     }
 
     // 1. Fetch Availability & Roster
-    const availRes = await this.safeFetch(api.availability.getEventAvailability(eventId), { counts: {}, items: [] });
+    const availRes = await this.safeFetch(api.availability.getEventAvailability(eventId), { counts: {}, items: [] }, scope);
     if (!this.isScopeActive(scope)) return;
     this.live.availability = availRes;
 
     let players = [];
     if (!isDemo && activeTeamSeasonId) {
-      const playersRes = await this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] });
+      const playersRes = await this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] }, scope);
       if (!this.isScopeActive(scope)) return;
       players = playersRes?.items || [];
     } else {
@@ -3140,11 +3164,14 @@ export class TeamAppState {
   }
 
   async handlePrepareCallup(eventId) {
+    const scope = this.createScope({ role: "coach" });
     await this.ensureAuth("coach");
+    if (!this.isScopeActive(scope)) return;
     if (eventId) {
       this.beta.activeEventId = eventId;
       try { localStorage.setItem("talde_active_event_id", eventId); } catch {}
     }
+    if (!this.isScopeActive(scope)) return;
     if (this.appMode === "DEMO") {
       await this.handlePublishCallup();
     } else {
@@ -3153,7 +3180,7 @@ export class TeamAppState {
   }
 
   async syncSquadPrep() {
-    const scope = this.createScope({ role: "coach", teamSeasonId: this.beta?.teamSeasonId });
+    const scope = this.createScope({ role: "coach" });
     await this.ensureAuth("coach");
     if (!this.isScopeActive(scope)) return;
     const eventId = this.beta.activeEventId || localStorage.getItem("talde_active_event_id");
@@ -3162,9 +3189,9 @@ export class TeamAppState {
     if (!eventId || !activeTeamSeasonId) return;
 
     const [playersRes, availRes, evRes] = await Promise.all([
-      this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] }),
-      this.safeFetch(api.availability.getEventAvailability(eventId), { counts: {}, items: [] }),
-      this.safeFetch(api.events.getEvent(eventId), null)
+      this.safeFetch(api.teams.getPlayers(activeTeamSeasonId), { items: [] }, scope),
+      this.safeFetch(api.availability.getEventAvailability(eventId), { counts: {}, items: [] }, scope),
+      this.safeFetch(api.events.getEvent(eventId), null, scope)
     ]);
     if (!this.isScopeActive(scope)) return;
 
@@ -3263,9 +3290,12 @@ export class TeamAppState {
   }
 
   async handlePublishCallup() {
+    const scope = this.createScope({ role: "coach" });
     await this.ensureAuth("coach");
+    if (!this.isScopeActive(scope)) return;
     try {
       const availRes = await api.availability.getEventAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID);
+      if (!this.isScopeActive(scope)) return;
       const items = availRes.items || [];
 
       // Las 3 reservas no convocadas que quedarán disponibles son Ane Mintegi, Irati Fernandez y Nahia Garcia
@@ -3279,8 +3309,11 @@ export class TeamAppState {
       // Crear o preparar draft
       let draft;
       try {
+        if (!this.isScopeActive(scope)) return;
         draft = await api.callup.createDraft(DEMO_CONFIG.EVENT_INDAUTXU_ID, selected12);
+        if (!this.isScopeActive(scope)) return;
       } catch (e) {
+        if (!this.isScopeActive(scope)) return;
         console.info("Draft already existing or created:", e.message);
       }
 
@@ -3291,17 +3324,20 @@ export class TeamAppState {
       const idemKey = idempotencyManager.getOrCreateKey(`publish-callup-${callupId}`);
 
       try {
+        if (!this.isScopeActive(scope)) return;
         // Intento 1 sin confirmación de advertencias
         const res = await api.callup.publishCallup(callupId, {
           expectedVersion,
           confirmWarnings: this.live.unconfirmedWarnings
         }, idemKey);
+        if (!this.isScopeActive(scope)) return;
 
         idempotencyManager.clearKey(`publish-callup-${callupId}`);
         this.live.callup = res;
         this.showToast("✓ Convocatoria oficial del Torneo Indautxu publicada en PostgreSQL (Revisión 1).");
         await this.syncEventHubNormal();
       } catch (err) {
+        if (!this.isScopeActive(scope)) return;
         if (err.code === "CALLUP_WARNINGS_UNCONFIRMED") {
           // El backend exige confirmación explícita para jugadores sin respuesta
           let missingWarnings = [];
@@ -3316,11 +3352,13 @@ export class TeamAppState {
 
           this.showToast("⚠️ Advertencia: Hay 2 jugadores sin confirmación (Iker Baroja, Peio Gómez). Reintentando con confirmación explícita...");
 
+          if (!this.isScopeActive(scope)) return;
           // Reintento con los warnings confirmados Y LA MISMA IDEMPOTENCY KEY
           const retryRes = await api.callup.publishCallup(callupId, {
             expectedVersion,
             confirmWarnings: confirmedKeys
           }, idemKey);
+          if (!this.isScopeActive(scope)) return;
 
           idempotencyManager.clearKey(`publish-callup-${callupId}`);
           this.live.callup = retryRes;
@@ -3331,6 +3369,11 @@ export class TeamAppState {
         }
       }
     } catch (err) {
+      if (!this.isScopeActive(scope)) return;
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err, scope);
+        return;
+      }
       this.showToast(`Error: ${mapDomainError(err)}`);
     }
   }
@@ -3359,7 +3402,7 @@ export class TeamAppState {
             badge.innerHTML = `<span class="material-symbols-outlined text-[14px] text-rose-700">cancel</span><span>No asistirá (Baja comunicada)</span>`;
           } else if (statusRes.called) {
             badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-extrabold";
-            badge.innerHTML = `<span class="material-symbols-outlined text-[14px] text-emerald-700">check_circle</span><span>✓ Convocado al partido (Rev. ${statusRes.revision || 1})</span>`;
+            badge.innerHTML = `<span class="material-symbols-outlined text-[14px] text-emerald-700">check_circle</span><span>✓ Convocado al partido (Rev. ${escapeHtml(statusRes.revision || 1)})</span>`;
           } else {
             badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-700 font-label-sm text-[11px] font-bold";
             badge.innerHTML = `<span class="material-symbols-outlined text-[14px]">remove_circle_outline</span><span>No convocado</span>`;
@@ -3411,7 +3454,7 @@ export class TeamAppState {
       const summaryEl = document.getElementById("parent-home-pending-summary");
 
       if (this.beta.teamSeasonId) {
-        const eventsRes = await this.safeFetch(api.events.getEvents(this.beta.teamSeasonId), { items: [] });
+        const eventsRes = await this.safeFetch(api.events.getEvents(this.beta.teamSeasonId), { items: [] }, scope);
         if (!this.isScopeActive(scope)) {
           console.warn("syncParentHome: Stale response discarded due to context switch.");
           return;
@@ -3459,14 +3502,14 @@ export class TeamAppState {
                   `;
                 } else {
                   try {
-                    const status = await this.safeFetch(api.callup.getPlayerCallupStatus(ev.id, activePlayer.id || activePlayer.playerId), null);
+                    const status = await this.safeFetch(api.callup.getPlayerCallupStatus(ev.id, activePlayer.id || activePlayer.playerId), null, scope);
                     if (!this.isScopeActive(scope) || !status) return '';
                     if (status.called) {
                       callupBadge = `
                         <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
                           <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-extrabold">
                             <span class="material-symbols-outlined text-[13px] text-emerald-700">check_circle</span>
-                            <span>✓ Convocado (Rev. ${status.revision || 1})</span>
+                            <span>✓ Convocado (Rev. ${escapeHtml(status.revision || 1)})</span>
                           </span>
                         </div>
                       `;
@@ -3475,7 +3518,7 @@ export class TeamAppState {
                         <div class="flex items-center justify-between pt-2 border-t border-outline-variant/30">
                           <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-300 text-slate-700 font-label-sm text-[11px] font-bold">
                             <span class="material-symbols-outlined text-[13px] text-slate-500">remove_circle_outline</span>
-                            <span>No convocado (Rev. ${status.revision || 1})</span>
+                            <span>No convocado (Rev. ${escapeHtml(status.revision || 1)})</span>
                           </span>
                         </div>
                       `;
@@ -3709,18 +3752,22 @@ export class TeamAppState {
                     callupBadgeHtml = `
                       <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 font-label-sm text-[11px] font-extrabold">
                         <span class="material-symbols-outlined text-[14px] text-emerald-700">check_circle</span>
-                        <span>✓ Convocado (Rev. ${status.revision || 1})</span>
+                        <span>✓ Convocado (Rev. ${escapeHtml(status.revision || 1)})</span>
                       </span>
                     `;
                   } else {
                     callupBadgeHtml = `
                       <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-700 font-label-sm text-[11px] font-bold">
                         <span class="material-symbols-outlined text-[14px] text-slate-500">remove_circle_outline</span>
-                        <span>No convocado (Rev. ${status.revision || 1})</span>
+                        <span>No convocado (Rev. ${escapeHtml(status.revision || 1)})</span>
                       </span>
                     `;
                   }
                 } catch (e) {
+                  if (e?.status === 401 && e?.wasAuthenticated && this.isScopeActive(scope)) {
+                    this.handleSessionExpired(e, scope);
+                    return '';
+                  }
                   console.warn("Could not check child callup status:", e);
                 }
               }
@@ -3756,7 +3803,7 @@ export class TeamAppState {
     } catch (e) {
       if (!this.isScopeActive(scope)) return;
       if (e?.status === 401 && e?.wasAuthenticated) {
-        this.handleSessionExpired(e);
+        this.handleSessionExpired(e, scope);
         return;
       }
       console.warn("Error loading child events:", e);
@@ -3832,9 +3879,25 @@ export class TeamAppState {
   }
 
   async syncParentRsvp() {
+    const scope = this.createScope({ role: "parent" });
     await this.ensureAuth("parent");
-    const availRes = await api.availability.getPlayerAvailability(DEMO_CONFIG.EVENT_INDAUTXU_ID, DEMO_CONFIG.IBAI_PLAYER_ID);
-    this.live.parentAvailability = availRes.current;
+    if (!this.isScopeActive(scope)) return;
+
+    const isDemo = this.appMode === "DEMO";
+    const eventId = isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : (this.beta.activeEventId || localStorage.getItem("talde_active_event_id"));
+    const playerId = isDemo ? DEMO_CONFIG.IBAI_PLAYER_ID : (this.beta.guardianPlayer?.id || this.beta.linkedPlayerId || localStorage.getItem("talde_linked_player_id"));
+
+    if (!eventId || !playerId) return;
+
+    try {
+      const availRes = await api.availability.getPlayerAvailability(eventId, playerId);
+      if (!this.isScopeActive(scope)) return;
+      this.live.parentAvailability = availRes?.current || availRes;
+    } catch (err) {
+      if (err?.status === 401 && err.wasAuthenticated && this.isScopeActive(scope)) {
+        this.handleSessionExpired(err, scope);
+      }
+    }
   }
 
   selectRsvpOption(choice) {
@@ -3846,20 +3909,26 @@ export class TeamAppState {
     await this.ensureAuth("parent");
     if (!this.isScopeActive(scope)) return;
     try {
+      const isDemo = this.appMode === "DEMO";
+      const eventId = isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : (this.beta.activeEventId || localStorage.getItem("talde_active_event_id"));
+      const playerId = isDemo ? DEMO_CONFIG.IBAI_PLAYER_ID : (this.beta.guardianPlayer?.id || this.beta.linkedPlayerId || localStorage.getItem("talde_linked_player_id"));
+
+      if (!eventId || !playerId) return;
+
       const expectedVersion = this.live.parentAvailability ? this.live.parentAvailability.version : 0;
       const status = this.parentRsvpChoice === "NO" ? "CANNOT_ATTEND" : (this.parentRsvpChoice === "SI" ? "CAN_ATTEND" : "UNSURE");
 
-      const idemKey = idempotencyManager.getOrCreateKey(`parent-rsvp-${DEMO_CONFIG.EVENT_INDAUTXU_ID}`);
+      const idemKey = idempotencyManager.getOrCreateKey(`parent-rsvp-${eventId}`);
 
       await api.availability.setGuardianAvailability(
-        DEMO_CONFIG.EVENT_INDAUTXU_ID,
-        DEMO_CONFIG.IBAI_PLAYER_ID,
+        eventId,
+        playerId,
         { status, expectedVersion },
         idemKey
       );
       if (!this.isScopeActive(scope)) return;
 
-      idempotencyManager.clearKey(`parent-rsvp-${DEMO_CONFIG.EVENT_INDAUTXU_ID}`);
+      idempotencyManager.clearKey(`parent-rsvp-${eventId}`);
 
       this.showToast(status === "CANNOT_ATTEND"
         ? "✓ Disponibilidad guardada en PostgreSQL: NO asistirá (Baja registrada)."
@@ -3872,7 +3941,7 @@ export class TeamAppState {
     } catch (err) {
       if (!this.isScopeActive(scope)) return;
       if (err?.status === 401 && err.wasAuthenticated) {
-        this.handleSessionExpired(err);
+        this.handleSessionExpired(err, scope);
         return;
       }
       this.showToast(`Error al guardar: ${mapDomainError(err)}`);

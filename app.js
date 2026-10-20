@@ -229,10 +229,28 @@ export class TeamAppState {
     if (sourceScope && !this.isScopeActive(sourceScope)) {
       return false;
     }
-    this.contextGeneration++;
-    this.otpOpSeq++;
-    this.abortAllInFlight();
-    this.clearAllManagedTimers();
+
+    const currentChildId = this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || null;
+    const targetChildId = transition.guardianPlayer !== undefined
+      ? (transition.guardianPlayer ? (transition.guardianPlayer.id || transition.guardianPlayer.playerId || null) : null)
+      : currentChildId;
+
+    const isIdentityChange = Boolean(
+      transition.forceTransition ||
+      (transition.appMode !== undefined && transition.appMode !== this.appMode) ||
+      (transition.currentSessionId !== undefined && transition.currentSessionId !== this.currentSessionId) ||
+      (transition.role !== undefined && transition.role !== this.currentRole) ||
+      (transition.teamSeasonId !== undefined && transition.teamSeasonId !== (this.beta?.teamSeasonId || null)) ||
+      (transition.guardianPlayer !== undefined && targetChildId !== currentChildId) ||
+      (transition.bearer !== undefined && transition.bearer !== api.client.getToken())
+    );
+
+    if (isIdentityChange) {
+      this.contextGeneration++;
+      this.otpOpSeq++;
+      this.abortAllInFlight();
+      this.clearAllManagedTimers();
+    }
 
     if (transition.appMode !== undefined) {
       this.appMode = transition.appMode;
@@ -563,7 +581,9 @@ export class TeamAppState {
 
       if (guardianMem) {
         const guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
-        const guardianPlayer = guardianPlayers[0] || null;
+        const currentChildId = this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || localStorage.getItem("talde_guardian_child_id") || localStorage.getItem("talde_linked_player_id");
+        const matchingChild = currentChildId ? guardianPlayers.find(p => (p.id || p.playerId) === currentChildId) : null;
+        const guardianPlayer = matchingChild || guardianPlayers[0] || null;
         const ok = this.applyContextTransition({
           role: "parent",
           teamSeasonId: guardianMem.team_season_id,
@@ -634,7 +654,9 @@ export class TeamAppState {
 
         if (guardianMem) {
           const guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
-          const guardianPlayer = guardianPlayers[0] || null;
+          const currentChildId = this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || localStorage.getItem("talde_guardian_child_id") || localStorage.getItem("talde_linked_player_id");
+          const matchingChild = currentChildId ? guardianPlayers.find(p => (p.id || p.playerId) === currentChildId) : null;
+          const guardianPlayer = matchingChild || guardianPlayers[0] || null;
           const ok = this.applyContextTransition({
             role: "parent",
             teamSeasonId: guardianMem.team_season_id,
@@ -1402,6 +1424,10 @@ export class TeamAppState {
         } catch (err) {
           if (!this.isScopeActive(scope)) return;
           console.error("Error retrieving memberships after login:", err);
+          if (err?.status === 401 && err.wasAuthenticated) {
+            this.handleSessionExpired(err, scope);
+            return;
+          }
           this.showToast("✓ Sesión iniciada.");
         }
       }
@@ -1479,6 +1505,8 @@ export class TeamAppState {
   }
 
   async switchTeam(teamSeasonId) {
+    this._teamSwitchSeq = (this._teamSwitchSeq || 0) + 1;
+    const mySeq = this._teamSwitchSeq;
     const scope = this.createScope();
     this.live = {
       events: [],
@@ -1512,6 +1540,7 @@ export class TeamAppState {
 
     try {
       const res = await api.teams.getMyMemberships();
+      if (mySeq !== this._teamSwitchSeq) return;
       if (!this.isScopeActive(scope)) return;
       const items = res?.items || [];
       const targetMem = items.find(m => m.team_season_id === teamSeasonId && m.status === "ACTIVE");
@@ -1556,6 +1585,8 @@ export class TeamAppState {
   }
 
   async switchMembership(membershipId) {
+    this._membershipSwitchSeq = (this._membershipSwitchSeq || 0) + 1;
+    const myMemSeq = this._membershipSwitchSeq;
     const scope = this.createScope();
     this.live = {
       events: [],
@@ -1594,23 +1625,25 @@ export class TeamAppState {
     if (this.appMode === "DEMO") {
       if (membershipId === "indautxu_inf_a" || membershipId === "coach") {
         this.applyContextTransition({ role: "coach" }, scope);
+        const newScope = this.createScope({ role: "coach", mode: "DEMO" });
         await this.ensureAuth("coach");
-        if (!this.isScopeActive(scope)) return;
+        if (!this.isScopeActive(newScope) || this.appMode !== "DEMO") return;
         const target = (this.currentScreen.startsWith("v2_07_") || this.currentScreen.startsWith("v2_08_") || this.currentScreen.startsWith("v2_00_"))
           ? "v2_01_coach_home"
           : this.currentScreen;
         await this.goToScreen(target, "inicio");
-        if (!this.isScopeActive(scope)) return;
+        if (!this.isScopeActive(newScope) || this.appMode !== "DEMO") return;
         this.showToast("Modo Entrenador: Mikel Zubeldia (Sesión autenticada)");
       } else if (membershipId === "indautxu_ale_b" || membershipId === "parent") {
         this.applyContextTransition({ role: "parent" }, scope);
+        const newScope = this.createScope({ role: "parent", mode: "DEMO" });
         await this.ensureAuth("parent");
-        if (!this.isScopeActive(scope)) return;
+        if (!this.isScopeActive(newScope) || this.appMode !== "DEMO") return;
         const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_03_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
           ? "v2_07_parent_home"
           : this.currentScreen;
         await this.goToScreen(target, "inicio");
-        if (!this.isScopeActive(scope)) return;
+        if (!this.isScopeActive(newScope) || this.appMode !== "DEMO") return;
         this.showToast("Modo Familia: Elena Gómez / Ibai #9 (Sesión autenticada)");
       }
       this.updateRoleUI();
@@ -1624,6 +1657,7 @@ export class TeamAppState {
       if (activeToken) api.client.setToken(activeToken);
 
       const memRes = await api.teams.getMyMemberships();
+      if (myMemSeq !== this._membershipSwitchSeq) return;
       if (!this.isScopeActive(scope)) return;
       const items = memRes?.items || [];
 
@@ -1710,7 +1744,7 @@ export class TeamAppState {
       return;
     }
 
-    const scope = this.createScope({ role: "parent" });
+    const scope = this.createScope();
     const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
     if (parentToken) {
       api.client.setToken(parentToken);
@@ -1722,7 +1756,9 @@ export class TeamAppState {
         const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
         if (guardianMem) {
           const guardianPlayers = guardianMem.guardian_players || [];
-          const guardianPlayer = guardianPlayers[0] || null;
+          const currentChildId = this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || localStorage.getItem("talde_guardian_child_id") || localStorage.getItem("talde_linked_player_id");
+          const matchingChild = currentChildId ? guardianPlayers.find(p => (p.id || p.playerId) === currentChildId) : null;
+          const guardianPlayer = matchingChild || guardianPlayers[0] || null;
           const ok = this.applyContextTransition({
             role: "parent",
             teamSeasonId: guardianMem.team_season_id,
@@ -1829,7 +1865,9 @@ export class TeamAppState {
     if (screenId === "v2_00_parent_join_team") {
       const parentToken = this.tokens.parent || localStorage.getItem("talde_token_parent");
       if (this.appMode === "DEMO") {
+        const scope = this.createScope({ mode: "DEMO" });
         await this.ensureAuth("parent");
+        if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
         this.currentRole = "parent";
         this.goToScreen("v2_07_parent_home", "inicio");
         return;
@@ -2835,18 +2873,22 @@ export class TeamAppState {
       } catch (err) {
         if (!this.isScopeActive(scope)) return;
         if (err?.status === 401 && err.wasAuthenticated) {
-          this.handleSessionExpired(err);
+          this.handleSessionExpired(err, scope);
           return;
         }
-        const ev = await api.events.getEvent(eventId);
-        if (!this.isScopeActive(scope)) return;
-        if (ev && ev.callup_id) {
-          const existingCallup = await api.callup.getCallup(ev.callup_id);
+        if (err?.status === 409 || err?.code === "CONFLICT") {
+          const ev = await api.events.getEvent(eventId);
           if (!this.isScopeActive(scope)) return;
-          draft = await api.callup.updateDraft(ev.callup_id, {
-            playerIds,
-            expectedVersion: existingCallup.version ?? 1
-          });
+          if (ev && ev.callup_id) {
+            const existingCallup = await api.callup.getCallup(ev.callup_id);
+            if (!this.isScopeActive(scope)) return;
+            draft = await api.callup.updateDraft(ev.callup_id, {
+              playerIds,
+              expectedVersion: existingCallup.version ?? 1
+            });
+          } else {
+            throw err;
+          }
         } else {
           throw err;
         }
@@ -3245,7 +3287,7 @@ export class TeamAppState {
     if (isPublished) {
       if (callupBadge) {
         callupBadge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-label-sm text-label-sm font-bold border border-emerald-300";
-        callupBadge.innerHTML = `<span class="material-symbols-outlined text-[13px]">check_circle</span> Convocatoria Publicada (Rev. ${callupRev})`;
+        callupBadge.innerHTML = `<span class="material-symbols-outlined text-[13px]">check_circle</span> Convocatoria Publicada (Rev. ${escapeHtml(callupRev)})`;
       }
       if (callupSubtitle) {
         callupSubtitle.textContent = `${totalSquad} ${totalSquad === 1 ? 'jugador convocado' : 'jugadores convocados'} de ${totalSquad} en plantilla`;
@@ -3342,7 +3384,17 @@ export class TeamAppState {
         return;
       }
 
-      const availRes = await api.availability.getEventAvailability(eventId).catch(() => ({ items: [] }));
+      let availRes;
+      try {
+        availRes = await api.availability.getEventAvailability(eventId);
+      } catch (err) {
+        if (!this.isScopeActive(scope)) return;
+        if (err?.status === 401 && err.wasAuthenticated) {
+          this.handleSessionExpired(err, scope);
+          return;
+        }
+        availRes = { items: [] };
+      }
       if (!this.isScopeActive(scope)) return;
       const availItems = availRes.items || [];
 
@@ -3361,19 +3413,23 @@ export class TeamAppState {
       } catch (err) {
         if (!this.isScopeActive(scope)) return;
         if (err?.status === 401 && err.wasAuthenticated) {
-          this.handleSessionExpired(err);
+          this.handleSessionExpired(err, scope);
           return;
         }
-        const evRes = await api.events.getEvent(eventId);
-        if (!this.isScopeActive(scope)) return;
-        const ev = (evRes && evRes.event) ? evRes.event : evRes;
-        if (ev && ev.callup_id) {
-          const existingCallup = await api.callup.getCallup(ev.callup_id);
+        if (err?.status === 409 || err?.code === "CONFLICT") {
+          const evRes = await api.events.getEvent(eventId);
           if (!this.isScopeActive(scope)) return;
-          draft = await api.callup.updateDraft(ev.callup_id, {
-            playerIds: selectedPlayerIds,
-            expectedVersion: existingCallup.version ?? 1
-          });
+          const ev = (evRes && evRes.event) ? evRes.event : evRes;
+          if (ev && ev.callup_id) {
+            const existingCallup = await api.callup.getCallup(ev.callup_id);
+            if (!this.isScopeActive(scope)) return;
+            draft = await api.callup.updateDraft(ev.callup_id, {
+              playerIds: selectedPlayerIds,
+              expectedVersion: existingCallup.version ?? 1
+            });
+          } else {
+            throw err;
+          }
         } else {
           throw err;
         }
@@ -3440,7 +3496,13 @@ export class TeamAppState {
           this.handleSessionExpired(e, scope);
           return;
         }
-        console.info("Draft already existing or created:", e.message);
+        if (e?.status === 409 || e?.code === "CONFLICT") {
+          console.info("Draft already existing or created:", e.message);
+        } else {
+          console.error("Error creating draft:", e);
+          this.showToast(`Error creando borrador: ${mapDomainError(e)}`);
+          return;
+        }
       }
 
       const callupId = draft?.id || this.live.callup?.id;
@@ -3539,6 +3601,11 @@ export class TeamAppState {
           }
         }
       } catch (err) {
+        if (!this.isScopeActive(scope)) return;
+        if (err?.status === 401 && err.wasAuthenticated) {
+          this.handleSessionExpired(err, scope);
+          return;
+        }
         console.warn("Parent home sync error:", err);
       }
       return;
@@ -3548,7 +3615,8 @@ export class TeamAppState {
     if (this.tokens.parent) api.client.setToken(this.tokens.parent);
     try {
       if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
-        await this.loadUserContext();
+        const ok = await this.loadUserContext();
+        if (!ok || this.currentRole !== "parent" || !this.beta.guardianPlayer) return;
         scope = this.createScope({ role: "parent" });
       }
       const activePlayer = this.beta.guardianPlayer || (this.beta.guardianPlayers && this.beta.guardianPlayers[0]);
@@ -3785,7 +3853,8 @@ export class TeamAppState {
     await this.ensureAuth("parent");
     if (!this.isScopeActive(scope)) return;
     if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
-      await this.loadUserContext();
+      const ok = await this.loadUserContext();
+      if (!ok || this.currentRole !== "parent" || !this.beta.guardianPlayer) return;
       scope = this.createScope({ role: "parent" });
     }
 
@@ -4233,8 +4302,20 @@ export class TeamAppState {
   // --- Modo Beta y Escenario Demo ---
 
   startBetaClean() {
+    this.tokens = { coach: null, parent: null };
+    this.currentSessionId = null;
+    localStorage.removeItem("talde_token_coach");
+    localStorage.removeItem("talde_token_parent");
+    localStorage.removeItem("talde_session_token");
+    localStorage.removeItem("talde_active_session");
+    localStorage.removeItem("talde_team_season_id");
+    localStorage.removeItem("talde_join_code");
+    localStorage.removeItem("talde_guardian_child_id");
+    localStorage.removeItem("talde_linked_player_id");
+    localStorage.removeItem("talde_active_event_id");
     this.setAppMode("BETA_NORMAL");
     this.applyContextTransition({
+      forceTransition: true,
       appMode: "BETA_NORMAL",
       role: "onboard",
       teamSeasonId: null,
@@ -4718,12 +4799,13 @@ export class TeamAppState {
         return;
       }
 
-      this.beta.teamSeasonId = res.teamSeason.id;
-      this.beta.team = res.team;
-      this.beta.teamSeason = res.teamSeason;
-      this.beta.joinCode = res.joinCode;
-      localStorage.setItem("talde_join_code", res.joinCode);
-      localStorage.setItem("talde_team_season_id", res.teamSeason.id);
+      this.applyContextTransition({
+        role: "coach",
+        teamSeasonId: res.teamSeason.id,
+        team: res.team,
+        teamSeason: res.teamSeason,
+        joinCode: res.joinCode
+      }, scope);
 
       // Update UI displays
       const codeDisplay = document.getElementById("coach-code-display");

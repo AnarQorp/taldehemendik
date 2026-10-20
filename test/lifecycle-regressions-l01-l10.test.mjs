@@ -310,6 +310,8 @@ test("L10: selectGuardianChild increments contextGeneration and invalidates in-f
 });
 
 test("C01: AuthService.verifyOtp does NOT install token in ApiClient (Positive Control)", async () => {
+  restoreAllPatches();
+  storage.clear();
   const c = new ApiClient("http://fixture.invalid");
   c.setToken("PREVIOUS");
   patch(globalThis, "fetch", async () => new Response(JSON.stringify({ accessToken: "NEW" }), {

@@ -209,6 +209,7 @@ export class TeamAppState {
       generation: this.contextGeneration,
       sessionId: this.currentSessionId,
       mode: this.appMode,
+      role: this.currentRole,
       ...extra
     };
   }
@@ -219,6 +220,96 @@ export class TeamAppState {
     if (scope.sessionId !== undefined && scope.sessionId !== this.currentSessionId) return false;
     if (scope.mode !== undefined && scope.mode !== this.appMode) return false;
     if (scope.role !== undefined && scope.role !== this.currentRole) return false;
+    if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== (this.beta?.teamSeasonId || null)) return false;
+    if (scope.childId !== undefined && scope.childId !== (this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || null)) return false;
+    return true;
+  }
+
+  applyContextTransition(transition = {}, sourceScope = null) {
+    if (sourceScope && !this.isScopeActive(sourceScope)) {
+      return false;
+    }
+    this.contextGeneration++;
+    this.otpOpSeq++;
+    this.abortAllInFlight();
+    this.clearAllManagedTimers();
+
+    if (transition.appMode !== undefined) {
+      this.appMode = transition.appMode;
+      try { localStorage.setItem("talde_app_mode", this.appMode); } catch {}
+    }
+    if (transition.currentSessionId !== undefined) {
+      this.currentSessionId = transition.currentSessionId;
+    }
+    if (transition.role !== undefined) {
+      this.currentRole = transition.role;
+      try {
+        localStorage.setItem("talde_current_role", this.currentRole);
+        localStorage.setItem("talde_active_role", this.currentRole);
+      } catch {}
+    }
+    if (transition.teamSeasonId !== undefined) {
+      this.beta.teamSeasonId = transition.teamSeasonId;
+      try {
+        if (transition.teamSeasonId) {
+          localStorage.setItem("talde_team_season_id", transition.teamSeasonId);
+        } else {
+          localStorage.removeItem("talde_team_season_id");
+        }
+      } catch {}
+    }
+    if (transition.team !== undefined) {
+      this.beta.team = transition.team;
+    }
+    if (transition.teamSeason !== undefined) {
+      this.beta.teamSeason = transition.teamSeason;
+    }
+    if (transition.joinCode !== undefined) {
+      this.beta.joinCode = transition.joinCode;
+      try {
+        if (transition.joinCode) localStorage.setItem("talde_join_code", transition.joinCode);
+        else localStorage.removeItem("talde_join_code");
+      } catch {}
+    }
+    if (transition.guardianPlayers !== undefined) {
+      this.beta.guardianPlayers = transition.guardianPlayers;
+    }
+    if (transition.guardianPlayer !== undefined) {
+      this.beta.guardianPlayer = transition.guardianPlayer;
+      try {
+        const cId = transition.guardianPlayer?.id || transition.guardianPlayer?.playerId;
+        if (cId) {
+          localStorage.setItem("talde_guardian_child_id", cId);
+          localStorage.setItem("talde_linked_player_id", cId);
+        } else {
+          localStorage.removeItem("talde_guardian_child_id");
+          localStorage.removeItem("talde_linked_player_id");
+        }
+      } catch {}
+    }
+    if (transition.tokens !== undefined) {
+      if (transition.tokens.coach !== undefined) {
+        this.tokens.coach = transition.tokens.coach;
+        try {
+          if (transition.tokens.coach) localStorage.setItem("talde_token_coach", transition.tokens.coach);
+          else localStorage.removeItem("talde_token_coach");
+        } catch {}
+      }
+      if (transition.tokens.parent !== undefined) {
+        this.tokens.parent = transition.tokens.parent;
+        try {
+          if (transition.tokens.parent) localStorage.setItem("talde_token_parent", transition.tokens.parent);
+          else localStorage.removeItem("talde_token_parent");
+        } catch {}
+      }
+    }
+    if (transition.bearer !== undefined) {
+      api.client.setToken(transition.bearer);
+      try {
+        if (transition.bearer) localStorage.setItem("talde_session_token", transition.bearer);
+        else localStorage.removeItem("talde_session_token");
+      } catch {}
+    }
     return true;
   }
 
@@ -256,6 +347,7 @@ export class TeamAppState {
       if (err?.status === 401 && err.wasAuthenticated) {
         if (!scope || this.isScopeActive(scope)) {
           this.handleSessionExpired(err, scope);
+          throw err;
         }
       }
       return fallback;
@@ -381,10 +473,8 @@ export class TeamAppState {
       }
       if (!this.isScopeActive(scope)) return;
       contextLoaded = await this.loadUserContext();
-      if (!this.isScopeActive(scope)) return;
       await this.syncCurrentScreen();
     } catch (err) {
-      if (!this.isScopeActive(scope)) return;
       if (err?.status === 401 && err?.wasAuthenticated) {
         this.handleSessionExpired(err);
         return;
@@ -392,7 +482,7 @@ export class TeamAppState {
       console.warn("Backend auth/sync deferred:", err);
     }
 
-    if (!this.isScopeActive(scope)) return;
+    const postInitScope = this.createScope();
     this.goToScreen(this.currentScreen);
     this.updateBottomNav();
     this.updateRoleUI();
@@ -400,16 +490,16 @@ export class TeamAppState {
 
     if (inviteToken && this.beta.individualInviteToken !== null && !contextLoaded) {
       this.registerManagedTimeout(() => {
-        if (!this.isScopeActive(scope)) return;
+        if (!this.isScopeActive(postInitScope)) return;
         this.setupIndividualInvite(inviteToken);
-      }, 150, scope);
+      }, 150, postInitScope);
     } else if (joinCode && !contextLoaded) {
       this.registerManagedTimeout(() => {
-        if (!this.isScopeActive(scope)) return;
+        if (!this.isScopeActive(postInitScope)) return;
         const input = document.getElementById("parent-join-code-input");
         if (input) input.value = joinCode.toUpperCase();
         this.verifyGeneralJoinCode();
-      }, 150, scope);
+      }, 150, postInitScope);
     }
   }
 
@@ -472,22 +562,25 @@ export class TeamAppState {
       }
 
       if (guardianMem) {
-        if (!this.isScopeActive(scope)) return false;
-        this.currentRole = "parent";
-        this.tokens.parent = parentToken;
-        this.beta.teamSeasonId = guardianMem.team_season_id;
-        localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
-        localStorage.setItem("talde_active_role", "parent");
-        this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
-        this.beta.teamSeason = {
-          id: guardianMem.team_season_id,
-          display_label: guardianMem.display_label,
-          season_label: guardianMem.season_label,
-          category: guardianMem.category,
-          join_code: guardianMem.join_code
-        };
-        this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
-        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+        const guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
+        const guardianPlayer = guardianPlayers[0] || null;
+        const ok = this.applyContextTransition({
+          role: "parent",
+          teamSeasonId: guardianMem.team_season_id,
+          team: { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport },
+          teamSeason: {
+            id: guardianMem.team_season_id,
+            display_label: guardianMem.display_label,
+            season_label: guardianMem.season_label,
+            category: guardianMem.category,
+            join_code: guardianMem.join_code
+          },
+          joinCode: guardianMem.join_code,
+          guardianPlayers,
+          guardianPlayer,
+          tokens: { parent: parentToken }
+        }, scope);
+        if (!ok) return false;
 
         this.cleanInviteTokenFromUrl();
         if (!silent) {
@@ -501,7 +594,7 @@ export class TeamAppState {
     } catch (err) {
       if (!this.isScopeActive(scope)) return false;
       if (err?.status === 401 && err?.wasAuthenticated) {
-        this.handleSessionExpired(err);
+        this.handleSessionExpired(err, scope);
         return false;
       }
       if (!silent) {
@@ -540,21 +633,25 @@ export class TeamAppState {
         }
 
         if (guardianMem) {
-          if (!this.isScopeActive(scope)) return false;
-          this.currentRole = "parent";
-          localStorage.setItem("talde_active_role", "parent");
-          this.beta.teamSeasonId = guardianMem.team_season_id;
-          localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
-          this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
-          this.beta.teamSeason = {
-            id: guardianMem.team_season_id,
-            display_label: guardianMem.display_label,
-            season_label: guardianMem.season_label,
-            category: guardianMem.category,
-            join_code: guardianMem.join_code
-          };
-          this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
-          this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+          const guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
+          const guardianPlayer = guardianPlayers[0] || null;
+          const ok = this.applyContextTransition({
+            role: "parent",
+            teamSeasonId: guardianMem.team_season_id,
+            team: { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport },
+            teamSeason: {
+              id: guardianMem.team_season_id,
+              display_label: guardianMem.display_label,
+              season_label: guardianMem.season_label,
+              category: guardianMem.category,
+              join_code: guardianMem.join_code
+            },
+            joinCode: guardianMem.join_code,
+            guardianPlayers,
+            guardianPlayer,
+            tokens: { parent: parentToken }
+          }, scope);
+          if (!ok) return false;
 
           this.cleanInviteTokenFromUrl();
 
@@ -578,20 +675,22 @@ export class TeamAppState {
 
       const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
       if (coachMem) {
-        if (!this.isScopeActive(scope)) return false;
-        if (activeRole === "coach") this.currentRole = "coach";
-        this.tokens.coach = coachToken || activeToken;
-        this.beta.teamSeasonId = coachMem.team_season_id;
-        localStorage.setItem("talde_team_season_id", coachMem.team_season_id);
-        this.beta.team = { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport };
-        this.beta.teamSeason = {
-          id: coachMem.team_season_id,
-          display_label: coachMem.display_label,
-          season_label: coachMem.season_label,
-          category: coachMem.category,
-          join_code: coachMem.join_code
-        };
-        this.beta.joinCode = coachMem.join_code;
+        const ok = this.applyContextTransition({
+          role: activeRole === "coach" ? "coach" : this.currentRole,
+          teamSeasonId: coachMem.team_season_id,
+          team: { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport },
+          teamSeason: {
+            id: coachMem.team_season_id,
+            display_label: coachMem.display_label,
+            season_label: coachMem.season_label,
+            category: coachMem.category,
+            join_code: coachMem.join_code
+          },
+          joinCode: coachMem.join_code,
+          tokens: { coach: coachToken || activeToken }
+        }, scope);
+        if (!ok) return false;
+
         const coachBadge = document.getElementById("coach-club-badge");
         if (coachBadge) coachBadge.textContent = coachMem.team_name;
         const teamNameInput = document.getElementById("team-name");
@@ -626,25 +725,29 @@ export class TeamAppState {
 
       const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0);
       if (guardianMem) {
-        if (!this.isScopeActive(scope)) return false;
-        this.currentRole = "parent";
-        this.tokens.parent = activeToken;
-        this.beta.teamSeasonId = guardianMem.team_season_id;
-        this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
-        this.beta.teamSeason = {
-          id: guardianMem.team_season_id,
-          display_label: guardianMem.display_label,
-          season_label: guardianMem.season_label,
-          category: guardianMem.category
-        };
-        this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
-        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+        const guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
+        const guardianPlayer = guardianPlayers[0] || null;
+        const ok = this.applyContextTransition({
+          role: "parent",
+          teamSeasonId: guardianMem.team_season_id,
+          team: { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport },
+          teamSeason: {
+            id: guardianMem.team_season_id,
+            display_label: guardianMem.display_label,
+            season_label: guardianMem.season_label,
+            category: guardianMem.category
+          },
+          guardianPlayers,
+          guardianPlayer,
+          tokens: { parent: activeToken }
+        }, scope);
+        if (!ok) return false;
         return true;
       }
     } catch (err) {
       if (!this.isScopeActive(scope)) return false;
       if (err?.wasAuthenticated && err?.status === 401) {
-        this.handleSessionExpired(err);
+        this.handleSessionExpired(err, scope);
       } else {
         console.warn("loadUserContext deferred or network issue:", err);
       }
@@ -762,6 +865,12 @@ export class TeamAppState {
     }
     if (sourceError && (!sourceError.wasAuthenticated || sourceError.path?.includes("/auth/otp/")) && sourceError.code !== "AUTH_REQUIRED") {
       return;
+    }
+    if (sourceError?.requestToken) {
+      const activeToken = api.client.getToken() || this.tokens[this.currentRole] || this.tokens.coach || this.tokens.parent;
+      if (activeToken && sourceError.requestToken !== activeToken) {
+        return;
+      }
     }
     this.contextGeneration++;
     this.currentSessionId = null;
@@ -1370,10 +1479,7 @@ export class TeamAppState {
   }
 
   async switchTeam(teamSeasonId) {
-    this.contextGeneration++;
     const scope = this.createScope();
-    this.abortAllInFlight();
-    this.clearAllManagedTimers();
     this.live = {
       events: [],
       activeEvent: null,
@@ -1400,7 +1506,7 @@ export class TeamAppState {
     }
 
     if (this.appMode === "DEMO") {
-      this.beta.teamSeasonId = teamSeasonId;
+      this.applyContextTransition({ teamSeasonId }, scope);
       return;
     }
 
@@ -1413,30 +1519,31 @@ export class TeamAppState {
         throw new Error("No tienes membresía activa en este equipo.");
       }
 
-      this.beta.teamSeasonId = targetMem.team_season_id;
-      localStorage.setItem("talde_team_season_id", targetMem.team_season_id);
-      this.beta.team = { id: targetMem.team_id, name: targetMem.team_name, sport: targetMem.sport };
-      this.beta.teamSeason = {
-        id: targetMem.team_season_id,
-        display_label: targetMem.display_label,
-        season_label: targetMem.season_label,
-        category: targetMem.category,
-        join_code: targetMem.join_code
-      };
-      this.beta.joinCode = targetMem.join_code;
+      const isCoach = targetMem.role === "COACH";
+      const guardianPlayers = isCoach ? [] : (targetMem.guardian_players || targetMem.guardianPlayers || []);
+      const guardianPlayer = isCoach ? null : (guardianPlayers[0] || null);
 
-      if (targetMem.role === "COACH") {
-        this.currentRole = "coach";
-        localStorage.setItem("talde_active_role", "coach");
+      const ok = this.applyContextTransition({
+        role: isCoach ? "coach" : "parent",
+        teamSeasonId: targetMem.team_season_id,
+        team: { id: targetMem.team_id, name: targetMem.team_name, sport: targetMem.sport },
+        teamSeason: {
+          id: targetMem.team_season_id,
+          display_label: targetMem.display_label,
+          season_label: targetMem.season_label,
+          category: targetMem.category,
+          join_code: targetMem.join_code
+        },
+        joinCode: targetMem.join_code,
+        guardianPlayers,
+        guardianPlayer
+      }, scope);
+      if (!ok) return;
+
+      if (isCoach) {
         await this.goToScreen("v2_01_coach_home", "inicio");
-        if (!this.isScopeActive(scope)) return;
       } else {
-        this.currentRole = "parent";
-        localStorage.setItem("talde_active_role", "parent");
-        this.beta.guardianPlayers = targetMem.guardian_players || targetMem.guardianPlayers || [];
-        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
         await this.goToScreen("v2_07_parent_home", "inicio");
-        if (!this.isScopeActive(scope)) return;
       }
     } catch (err) {
       if (!this.isScopeActive(scope)) return;
@@ -1449,9 +1556,7 @@ export class TeamAppState {
   }
 
   async switchMembership(membershipId) {
-    const reqGen = ++this.contextGeneration;
-    this.abortAllInFlight();
-    this.clearAllManagedTimers();
+    const scope = this.createScope();
     this.live = {
       events: [],
       activeEvent: null,
@@ -1478,7 +1583,7 @@ export class TeamAppState {
     }
 
     if (membershipId === "onboard") {
-      this.currentRole = "onboard";
+      this.applyContextTransition({ role: "onboard" }, scope);
       this.goToScreen("v2_00_onboarding_welcome");
       this.showToast("Modo Acceso Inicial / Onboarding");
       this.updateRoleUI();
@@ -1488,26 +1593,24 @@ export class TeamAppState {
 
     if (this.appMode === "DEMO") {
       if (membershipId === "indautxu_inf_a" || membershipId === "coach") {
-        this.currentRole = "coach";
-        localStorage.setItem("talde_active_role", "coach");
+        this.applyContextTransition({ role: "coach" }, scope);
         await this.ensureAuth("coach");
-        if (reqGen !== this.contextGeneration) return;
+        if (!this.isScopeActive(scope)) return;
         const target = (this.currentScreen.startsWith("v2_07_") || this.currentScreen.startsWith("v2_08_") || this.currentScreen.startsWith("v2_00_"))
           ? "v2_01_coach_home"
           : this.currentScreen;
         await this.goToScreen(target, "inicio");
-        if (reqGen !== this.contextGeneration) return;
+        if (!this.isScopeActive(scope)) return;
         this.showToast("Modo Entrenador: Mikel Zubeldia (Sesión autenticada)");
       } else if (membershipId === "indautxu_ale_b" || membershipId === "parent") {
-        this.currentRole = "parent";
-        localStorage.setItem("talde_active_role", "parent");
+        this.applyContextTransition({ role: "parent" }, scope);
         await this.ensureAuth("parent");
-        if (reqGen !== this.contextGeneration) return;
+        if (!this.isScopeActive(scope)) return;
         const target = (this.currentScreen.startsWith("v2_01_") || this.currentScreen.startsWith("v2_03_") || this.currentScreen.startsWith("v2_05_") || this.currentScreen.startsWith("v2_06_") || this.currentScreen.startsWith("v2_00_"))
           ? "v2_07_parent_home"
           : this.currentScreen;
         await this.goToScreen(target, "inicio");
-        if (reqGen !== this.contextGeneration) return;
+        if (!this.isScopeActive(scope)) return;
         this.showToast("Modo Familia: Elena Gómez / Ibai #9 (Sesión autenticada)");
       }
       this.updateRoleUI();
@@ -1521,7 +1624,7 @@ export class TeamAppState {
       if (activeToken) api.client.setToken(activeToken);
 
       const memRes = await api.teams.getMyMemberships();
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       const items = memRes?.items || [];
 
       if (membershipId === "coach" || membershipId === "indautxu_inf_a") {
@@ -1530,21 +1633,24 @@ export class TeamAppState {
           this.showToast("No tienes membresía activa como entrenador.");
           return;
         }
-        this.currentRole = "coach";
-        localStorage.setItem("talde_active_role", "coach");
-        this.beta.teamSeasonId = coachMem.team_season_id;
-        localStorage.setItem("talde_team_season_id", coachMem.team_season_id);
-        this.beta.team = { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport };
-        this.beta.teamSeason = {
-          id: coachMem.team_season_id,
-          display_label: coachMem.display_label,
-          season_label: coachMem.season_label,
-          category: coachMem.category,
-          join_code: coachMem.join_code
-        };
-        this.beta.joinCode = coachMem.join_code;
+        const ok = this.applyContextTransition({
+          role: "coach",
+          teamSeasonId: coachMem.team_season_id,
+          team: { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport },
+          teamSeason: {
+            id: coachMem.team_season_id,
+            display_label: coachMem.display_label,
+            season_label: coachMem.season_label,
+            category: coachMem.category,
+            join_code: coachMem.join_code
+          },
+          joinCode: coachMem.join_code,
+          guardianPlayers: [],
+          guardianPlayer: null
+        }, scope);
+        if (!ok) return;
+
         await this.goToScreen("v2_01_coach_home", "inicio");
-        if (reqGen !== this.contextGeneration) return;
         this.showToast("Modo Entrenador (Sesión BETA)");
       } else if (membershipId === "parent" || membershipId === "indautxu_ale_b") {
         const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
@@ -1552,39 +1658,39 @@ export class TeamAppState {
           this.showToast("No tienes membresía activa como familiar.");
           return;
         }
-        this.currentRole = "parent";
-        localStorage.setItem("talde_active_role", "parent");
-        this.beta.teamSeasonId = guardianMem.team_season_id;
-        localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
-        this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
-        this.beta.teamSeason = {
-          id: guardianMem.team_season_id,
-          display_label: guardianMem.display_label,
-          season_label: guardianMem.season_label,
-          category: guardianMem.category
-        };
-        this.beta.guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
-        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+        const guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
+        const guardianPlayer = guardianPlayers[0] || null;
+        const ok = this.applyContextTransition({
+          role: "parent",
+          teamSeasonId: guardianMem.team_season_id,
+          team: { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport },
+          teamSeason: {
+            id: guardianMem.team_season_id,
+            display_label: guardianMem.display_label,
+            season_label: guardianMem.season_label,
+            category: guardianMem.category
+          },
+          guardianPlayers,
+          guardianPlayer
+        }, scope);
+        if (!ok) return;
         await this.goToScreen("v2_07_parent_home", "inicio");
-        if (reqGen !== this.contextGeneration) return;
         this.showToast("Modo Familia (Sesión BETA)");
       } else {
         const specificMem = items.find(m => m.team_season_id === membershipId && m.status === "ACTIVE");
         if (specificMem) {
           await this.switchTeam(membershipId);
-          if (reqGen !== this.contextGeneration) return;
         }
       }
     } catch (err) {
-      if (reqGen !== this.contextGeneration) return;
+      if (!this.isScopeActive(scope)) return;
       if (err?.wasAuthenticated && err?.status === 401) {
-        this.handleSessionExpired(err);
+        this.handleSessionExpired(err, scope);
         return;
       }
       this.showToast(`Error al cambiar de membresía: ${mapDomainError(err)}`);
     }
 
-    if (reqGen !== this.contextGeneration) return;
     this.updateRoleUI();
     this.updateBottomNav();
   }
@@ -1594,11 +1700,12 @@ export class TeamAppState {
   }
 
   async handleParentAccess() {
-    this.currentRole = "parent";
-    localStorage.setItem("talde_active_role", "parent");
-
     if (this.appMode === "DEMO") {
+      this.currentRole = "parent";
+      localStorage.setItem("talde_active_role", "parent");
+      const scope = this.createScope({ mode: "DEMO", role: "parent" });
       await this.ensureAuth("parent");
+      if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
       await this.goToScreen("v2_07_parent_home", "inicio");
       return;
     }
@@ -1614,19 +1721,26 @@ export class TeamAppState {
         const items = res?.items || [];
         const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
         if (guardianMem) {
-          this.beta.teamSeasonId = guardianMem.team_season_id;
-          localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
-          this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
-          this.beta.teamSeason = {
-            id: guardianMem.team_season_id,
-            display_label: guardianMem.display_label,
-            season_label: guardianMem.season_label,
-            category: guardianMem.category,
-            join_code: guardianMem.join_code
-          };
-          this.beta.guardianPlayers = guardianMem.guardian_players || [];
-          this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
-          if (!this.isScopeActive(scope)) return;
+          const guardianPlayers = guardianMem.guardian_players || [];
+          const guardianPlayer = guardianPlayers[0] || null;
+          const ok = this.applyContextTransition({
+            role: "parent",
+            teamSeasonId: guardianMem.team_season_id,
+            team: { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport },
+            teamSeason: {
+              id: guardianMem.team_season_id,
+              display_label: guardianMem.display_label,
+              season_label: guardianMem.season_label,
+              category: guardianMem.category,
+              join_code: guardianMem.join_code
+            },
+            joinCode: guardianMem.join_code,
+            guardianPlayers,
+            guardianPlayer,
+            tokens: { parent: parentToken }
+          }, scope);
+          if (!ok) return;
+
           await this.goToScreen("v2_07_parent_home", "inicio");
           this.showToast(`Sesión familiar recuperada: ${this.beta.guardianPlayer ? (this.beta.guardianPlayer.firstName || this.beta.guardianPlayer.first_name) : 'Hijo'}`);
           return;
@@ -1640,7 +1754,7 @@ export class TeamAppState {
         console.warn("Error restoring parent session:", e);
       }
     }
-    if (!this.isScopeActive(scope)) return;
+    this.applyContextTransition({ role: "parent" }, scope);
     await this.goToScreen("v2_00_parent_join_team");
   }
 
@@ -1673,14 +1787,18 @@ export class TeamAppState {
     }
 
     if (coachOnlyScreens.includes(screenId) && (this.tokens.coach || this.appMode === "DEMO")) {
-      this.currentRole = "coach";
+      if (this.currentRole !== "coach") {
+        this.applyContextTransition({ role: "coach" });
+      }
     }
     const parentOnlyScreens = [
       "v2_07_parent_home",
       "v2_08_parent_rsvp"
     ];
     if (parentOnlyScreens.includes(screenId) && (this.tokens.parent || this.appMode === "DEMO")) {
-      this.currentRole = "parent";
+      if (this.currentRole !== "parent") {
+        this.applyContextTransition({ role: "parent" });
+      }
     }
 
     this.currentScreen = screenId;
@@ -3262,7 +3380,11 @@ export class TeamAppState {
       }
 
       if (!this.isScopeActive(scope)) return;
-      const callupId = draft ? draft.id : null;
+      const callupId = draft?.id;
+      if (!callupId) {
+        console.warn("No verified draft available for publication");
+        return;
+      }
       const expectedVersion = draft ? draft.version : 1;
       const confirmWarnings = (draft?.warnings || []).map(w => w.key);
 
@@ -3314,11 +3436,19 @@ export class TeamAppState {
         if (!this.isScopeActive(scope)) return;
       } catch (e) {
         if (!this.isScopeActive(scope)) return;
+        if (e?.status === 401 && e.wasAuthenticated) {
+          this.handleSessionExpired(e, scope);
+          return;
+        }
         console.info("Draft already existing or created:", e.message);
       }
 
-      const callupId = draft ? draft.id : (this.live.callup?.id || "50000000-0000-4000-8000-000000000001");
-      const expectedVersion = draft ? draft.version : 1;
+      const callupId = draft?.id || this.live.callup?.id;
+      if (!callupId) {
+        console.warn("No verified draft available for publication");
+        return;
+      }
+      const expectedVersion = draft ? draft.version : (this.live.callup?.version || 1);
 
       // Idempotency Key Manager mantiene la misma clave en reintentos
       const idemKey = idempotencyManager.getOrCreateKey(`publish-callup-${callupId}`);
@@ -3382,7 +3512,7 @@ export class TeamAppState {
     if (this.tokens.parent || this.appMode === "DEMO") {
       this.currentRole = "parent";
     }
-    const scope = this.createScope({ role: "parent" });
+    let scope = this.createScope({ role: "parent" });
     if (this.appMode === "DEMO") {
       await this.ensureAuth("parent");
       if (!this.isScopeActive(scope)) return;
@@ -3419,7 +3549,7 @@ export class TeamAppState {
     try {
       if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
         await this.loadUserContext();
-        if (!this.isScopeActive(scope)) return;
+        scope = this.createScope({ role: "parent" });
       }
       const activePlayer = this.beta.guardianPlayer || (this.beta.guardianPlayers && this.beta.guardianPlayers[0]);
       const pName = activePlayer ? `${activePlayer.firstName || activePlayer.first_name} ${activePlayer.lastName || activePlayer.last_name}` : "Deportista";
@@ -3568,14 +3698,14 @@ export class TeamAppState {
 
   cycleGuardianPlayer() {
     if (!this.beta.guardianPlayers || this.beta.guardianPlayers.length <= 1) return;
-    this.contextGeneration++;
     const parentContainer = document.getElementById("player-detail-parent-container");
     if (parentContainer) parentContainer.innerHTML = "";
     const currentId = this.beta.guardianPlayer?.playerId || this.beta.guardianPlayer?.id;
     const currentIndex = this.beta.guardianPlayers.findIndex(p => (p.playerId || p.id) === currentId);
     const nextIndex = (currentIndex + 1) % this.beta.guardianPlayers.length;
-    this.beta.guardianPlayer = this.beta.guardianPlayers[nextIndex];
-    this.showToast(`Cambiando vista a: ${this.beta.guardianPlayer.firstName || this.beta.guardianPlayer.first_name}`);
+    const nextPlayer = this.beta.guardianPlayers[nextIndex];
+    this.applyContextTransition({ guardianPlayer: nextPlayer });
+    this.showToast(`Cambiando vista a: ${nextPlayer.firstName || nextPlayer.first_name}`);
     this.syncCurrentScreen();
   }
 
@@ -3583,10 +3713,9 @@ export class TeamAppState {
     if (!this.beta.guardianPlayers?.length) return;
     const found = this.beta.guardianPlayers.find(p => (p.id || p.playerId) === playerId);
     if (found) {
-      this.contextGeneration++;
+      this.applyContextTransition({ guardianPlayer: found });
       const parentContainer = document.getElementById("player-detail-parent-container");
       if (parentContainer) parentContainer.innerHTML = "";
-      this.beta.guardianPlayer = found;
       this.showToast(`Mostrando ficha de: ${found.first_name || found.firstName}`);
       this.syncCurrentScreen();
     }
@@ -3657,12 +3786,16 @@ export class TeamAppState {
     if (!this.isScopeActive(scope)) return;
     if (!this.beta.guardianPlayer || !this.beta.guardianPlayers?.length) {
       await this.loadUserContext();
-      if (!this.isScopeActive(scope)) return;
+      scope = this.createScope({ role: "parent" });
     }
 
     const players = this.beta.guardianPlayers || [];
     const activePlayer = this.beta.guardianPlayer || players[0];
-    scope = this.createScope({ role: "parent", childId: activePlayer ? (activePlayer.id || activePlayer.playerId) : null });
+    scope = this.createScope({
+      role: "parent",
+      teamSeasonId: this.beta.teamSeasonId,
+      childId: activePlayer ? (activePlayer.id || activePlayer.playerId) : null
+    });
 
     if (categoryBadge) {
       categoryBadge.textContent = this.beta.teamSeason?.display_label || this.beta.teamSeason?.category || "Equipo";
@@ -3879,7 +4012,11 @@ export class TeamAppState {
   }
 
   async syncParentRsvp() {
-    const scope = this.createScope({ role: "parent" });
+    const scope = this.createScope({
+      role: "parent",
+      teamSeasonId: this.beta?.teamSeasonId || null,
+      childId: this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || null
+    });
     await this.ensureAuth("parent");
     if (!this.isScopeActive(scope)) return;
 
@@ -3905,32 +4042,39 @@ export class TeamAppState {
   }
 
   async saveParentRsvp() {
-    const scope = this.createScope({ role: "parent" });
+    const isDemo = this.appMode === "DEMO";
+    const eventId = isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : (this.beta.activeEventId || localStorage.getItem("talde_active_event_id"));
+    const playerId = isDemo ? DEMO_CONFIG.IBAI_PLAYER_ID : (this.beta.guardianPlayer?.id || this.beta.linkedPlayerId || localStorage.getItem("talde_linked_player_id"));
+    const teamSeasonId = this.beta.teamSeasonId;
+    const expectedVersion = this.live.parentAvailability ? this.live.parentAvailability.version : 0;
+    const status = this.parentRsvpChoice === "NO" ? "CANNOT_ATTEND" : (this.parentRsvpChoice === "SI" ? "CAN_ATTEND" : "UNSURE");
+
+    if (!eventId || !playerId) return;
+
+    const opContext = { eventId, playerId, teamSeasonId, expectedVersion, status };
+    const scope = this.createScope({ role: "parent", teamSeasonId, childId: playerId });
+
     await this.ensureAuth("parent");
     if (!this.isScopeActive(scope)) return;
+
+    if (this.beta.teamSeasonId !== opContext.teamSeasonId || (this.beta.guardianPlayer && (this.beta.guardianPlayer.id || this.beta.guardianPlayer.playerId) !== opContext.playerId)) {
+      return;
+    }
+
     try {
-      const isDemo = this.appMode === "DEMO";
-      const eventId = isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : (this.beta.activeEventId || localStorage.getItem("talde_active_event_id"));
-      const playerId = isDemo ? DEMO_CONFIG.IBAI_PLAYER_ID : (this.beta.guardianPlayer?.id || this.beta.linkedPlayerId || localStorage.getItem("talde_linked_player_id"));
-
-      if (!eventId || !playerId) return;
-
-      const expectedVersion = this.live.parentAvailability ? this.live.parentAvailability.version : 0;
-      const status = this.parentRsvpChoice === "NO" ? "CANNOT_ATTEND" : (this.parentRsvpChoice === "SI" ? "CAN_ATTEND" : "UNSURE");
-
-      const idemKey = idempotencyManager.getOrCreateKey(`parent-rsvp-${eventId}`);
+      const idemKey = idempotencyManager.getOrCreateKey(`parent-rsvp-${opContext.eventId}`);
 
       await api.availability.setGuardianAvailability(
-        eventId,
-        playerId,
-        { status, expectedVersion },
+        opContext.eventId,
+        opContext.playerId,
+        { status: opContext.status, expectedVersion: opContext.expectedVersion },
         idemKey
       );
       if (!this.isScopeActive(scope)) return;
 
-      idempotencyManager.clearKey(`parent-rsvp-${eventId}`);
+      idempotencyManager.clearKey(`parent-rsvp-${opContext.eventId}`);
 
-      this.showToast(status === "CANNOT_ATTEND"
+      this.showToast(opContext.status === "CANNOT_ATTEND"
         ? "✓ Disponibilidad guardada en PostgreSQL: NO asistirá (Baja registrada)."
         : "✓ Disponibilidad guardada con éxito.");
 
@@ -4079,7 +4223,7 @@ export class TeamAppState {
     } catch (err) {
       if (!this.isScopeActive(scope)) return;
       if (err?.status === 401 && err.wasAuthenticated) {
-        this.handleSessionExpired(err);
+        this.handleSessionExpired(err, scope);
         return;
       }
       this.showToast(`Error: ${mapDomainError(err)}`);
@@ -4090,15 +4234,35 @@ export class TeamAppState {
 
   startBetaClean() {
     this.setAppMode("BETA_NORMAL");
-    this.currentRole = "onboard";
+    this.applyContextTransition({
+      appMode: "BETA_NORMAL",
+      role: "onboard",
+      teamSeasonId: null,
+      team: null,
+      teamSeason: null,
+      guardianPlayers: [],
+      guardianPlayer: null,
+      bearer: null
+    });
     this.goToScreen("v2_00_onboarding_welcome", "onboard");
     this.showToast("✓ Modo BETA Limpio: Configuración desde cero.");
   }
 
   async startDemoMode() {
     this.setAppMode("DEMO");
-    this.currentRole = "coach";
+    this.applyContextTransition({
+      appMode: "DEMO",
+      role: "coach",
+      teamSeasonId: null,
+      team: null,
+      teamSeason: null,
+      guardianPlayers: [],
+      guardianPlayer: null,
+      bearer: null
+    });
+    const scope = this.createScope({ mode: "DEMO", role: "coach" });
     await this.resetBackendDataset(true);
+    if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
     this.applyDemoUI();
     this.goToScreen("v2_00_onboarding_welcome", "onboard");
     this.showToast("✓ Modo DEMO: Escenario S. D. Indautxu cargado (PostgreSQL sincronizado).");

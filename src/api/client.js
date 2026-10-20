@@ -78,6 +78,8 @@ export class ApiClient {
       const isOtpAuthEndpoint = path.includes("/auth/otp/verify") || path.includes("/auth/otp/request") || path.includes("/auth/dev/login");
       err.wasAuthenticated = !isOtpAuthEndpoint && Boolean(headers["Authorization"]);
       err.path = path;
+      err.requestToken = headers["Authorization"] ? headers["Authorization"].replace(/^Bearer\s+/i, "") : (this.token || null);
+      err.sessionContext = options.sessionContext || options.context || null;
       throw err;
     }
 

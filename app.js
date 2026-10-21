@@ -10,6 +10,7 @@
 
 import { api, DEMO_CONFIG, mapDomainError, idempotencyManager, escapeHtml } from "./src/api/index.js";
 import { ConcurrencyTracker, SessionManager, ResourceStore, ContextCoordinator } from "./src/core/index.js";
+import { AuthDomainController, TeamsDomainController, FamiliesDomainController, EventsDomainController } from "./src/domains/index.js";
 
 // Dataset histórico de jugadores para pantallas visuales / no migradas
 const SQUAD_DATA = [
@@ -229,6 +230,12 @@ export class TeamAppState {
         viewEpoch: 0
       }
     });
+
+    // REV-02 Domain Controllers (Modular Monolith)
+    this.authDomain = new AuthDomainController(this);
+    this.teamsDomain = new TeamsDomainController(this);
+    this.familiesDomain = new FamiliesDomainController(this);
+    this.eventsDomain = new EventsDomainController(this);
   }
 
   createScope(extra = {}) {

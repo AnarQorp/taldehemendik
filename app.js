@@ -322,6 +322,13 @@ export class TeamAppState {
         else localStorage.removeItem("talde_join_code");
       } catch {}
     }
+    if (transition.activeEventId !== undefined) {
+      this.beta.activeEventId = transition.activeEventId;
+      try {
+        if (transition.activeEventId) localStorage.setItem("talde_active_event_id", transition.activeEventId);
+        else localStorage.removeItem("talde_active_event_id");
+      } catch {}
+    }
     if (transition.guardianPlayers !== undefined) {
       this.beta.guardianPlayers = transition.guardianPlayers;
     }
@@ -1054,7 +1061,8 @@ export class TeamAppState {
       lastInvitation: null,
       verifiedInvitation: null,
       guardianPlayer: null,
-      guardianPlayers: []
+      guardianPlayers: [],
+      activeEventId: null
     };
     this.live = {
       events: [],
@@ -2828,16 +2836,21 @@ export class TeamAppState {
   }
 
   async prepareAndPublishCallup(eventId) {
-    if (eventId) {
-      this.beta.activeEventId = eventId;
-    }
-    const targetEventId = eventId || this.beta?.activeEventId;
-    const activeTeamSeasonId = this.beta.teamSeasonId;
-    const scope = this.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId: targetEventId });
+    if (this.currentRole !== "coach") return;
+    const isDemo = this.appMode === "DEMO";
+    const targetEventId = eventId || this.beta?.activeEventId || (isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : localStorage.getItem("talde_active_event_id"));
+    const activeTeamSeasonId = this.beta?.teamSeasonId || (isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : localStorage.getItem("talde_team_season_id"));
+    if (!targetEventId || !activeTeamSeasonId) return;
+
+    const isCurrentActive = targetEventId === (this.beta?.activeEventId || null);
+    const scope = this.createScope({
+      role: "coach",
+      teamSeasonId: activeTeamSeasonId,
+      ...(isCurrentActive ? { eventId: targetEventId } : {})
+    });
     await this.ensureAuth("coach");
     if (!this.isScopeActive(scope)) return;
     try {
-      if (!activeTeamSeasonId) throw new Error("No active team season");
 
       const playersRes = await api.teams.getPlayers(activeTeamSeasonId);
       if (!this.isScopeActive(scope)) return;
@@ -2904,6 +2917,10 @@ export class TeamAppState {
         `pub-${Date.now()}`
       );
       if (!this.isScopeActive(scope)) return;
+
+      this.beta.activeEventId = targetEventId;
+      try { localStorage.setItem("talde_active_event_id", targetEventId); } catch {}
+      this.live.callup = draft;
 
       this.showToast(`✓ Convocatoria publicada (${playerIds.length} jugadores convocados).`);
       await this.syncCurrentScreen();
@@ -3103,14 +3120,15 @@ export class TeamAppState {
   }
 
   async syncEventHubNormal() {
-    const scope = this.createScope({ role: "coach" });
+    if (this.currentRole !== "coach") return;
+    const isDemo = this.appMode === "DEMO";
+    const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : (this.beta?.teamSeasonId || localStorage.getItem("talde_team_season_id"));
+    let eventId = isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : (this.beta?.activeEventId || localStorage.getItem("talde_active_event_id"));
+
+    const scope = this.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId: eventId || undefined });
     await this.ensureAuth("coach");
     if (!this.isScopeActive(scope)) return;
 
-    const isDemo = this.appMode === "DEMO";
-    const activeTeamSeasonId = isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : (this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id"));
-
-    let eventId = isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : (this.beta.activeEventId || localStorage.getItem("talde_active_event_id"));
     let activeEvent = null;
 
     if (activeTeamSeasonId || isDemo) {
@@ -3126,7 +3144,11 @@ export class TeamAppState {
         if (events.length > 0) {
           activeEvent = events[0];
           eventId = activeEvent.id;
-          if (!isDemo) this.beta.activeEventId = eventId;
+          if (!isDemo) {
+            this.beta.activeEventId = eventId;
+            try { localStorage.setItem("talde_active_event_id", eventId); } catch {}
+          }
+          scope.eventId = eventId;
         }
       }
     }
@@ -3323,18 +3345,46 @@ export class TeamAppState {
   }
 
   async handlePrepareCallup(eventId) {
-    const scope = this.createScope({ role: "coach" });
+    if (this.currentRole !== "coach") return;
+    const isDemo = this.appMode === "DEMO";
+    const targetEventId = eventId || this.beta?.activeEventId || (isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : localStorage.getItem("talde_active_event_id"));
+    const activeTeamSeasonId = this.beta?.teamSeasonId || (isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : localStorage.getItem("talde_team_season_id"));
+    if (!targetEventId || !activeTeamSeasonId) return;
+
+    const scope = this.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId });
     await this.ensureAuth("coach");
     if (!this.isScopeActive(scope)) return;
-    if (eventId) {
-      this.beta.activeEventId = eventId;
-      try { localStorage.setItem("talde_active_event_id", eventId); } catch {}
-    }
-    if (!this.isScopeActive(scope)) return;
-    if (this.appMode === "DEMO") {
-      await this.handlePublishCallup();
-    } else {
-      await this.goToScreen("screen_e_create_squad", "agenda");
+
+    try {
+      if (targetEventId && targetEventId !== this.beta?.activeEventId) {
+        const evRes = await api.events.getEvent(targetEventId);
+        if (!this.isScopeActive(scope)) return;
+        const ev = (evRes && evRes.event) ? evRes.event : evRes;
+        const isKnownErrorStatus = ev && (ev.status === "CANCELLED" || ev.status === "COMPLETED" || ev.status === "INACTIVE");
+        const isExplicitlyDisabled = ev && ev.callup_enabled === false;
+        const isCrossTeam = ev && ev.team_season_id && activeTeamSeasonId && ev.team_season_id !== activeTeamSeasonId;
+        const isEmptyObject = ev && typeof ev === "object" && Object.keys(ev).length === 0;
+        if (!ev || isEmptyObject || isKnownErrorStatus || isExplicitlyDisabled || isCrossTeam) {
+          throw new Error("Evento no disponible para convocatoria");
+        }
+      }
+
+      this.beta.activeEventId = targetEventId;
+      try { localStorage.setItem("talde_active_event_id", targetEventId); } catch {}
+
+      if (this.appMode === "DEMO") {
+        await this.handlePublishCallup();
+      } else {
+        await this.goToScreen("screen_e_create_squad", "agenda");
+      }
+    } catch (err) {
+      if (!this.isScopeActive(scope)) return;
+      if (err?.status === 401 && err.wasAuthenticated) {
+        this.handleSessionExpired(err, scope);
+        return;
+      }
+      console.error("Error preparing callup:", err);
+      this.showToast(`Error al preparar convocatoria: ${err.message || 'Error en backend'}`);
     }
   }
 
@@ -3366,13 +3416,15 @@ export class TeamAppState {
   }
 
   async executePublishCallupFromSquad() {
-    const eventId = this.beta.activeEventId || localStorage.getItem("talde_active_event_id");
-    const activeTeamSeasonId = this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+    if (this.currentRole !== "coach") return;
+    const isDemo = this.appMode === "DEMO";
+    const eventId = this.beta?.activeEventId || (isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : null);
+    const activeTeamSeasonId = this.beta?.teamSeasonId || (isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : null);
+    if (!eventId || !activeTeamSeasonId) return;
+
     const scope = this.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId });
     await this.ensureAuth("coach");
     if (!this.isScopeActive(scope)) return;
-
-    if (!eventId || !activeTeamSeasonId) return;
 
     try {
       const playersRes = await api.teams.getPlayers(activeTeamSeasonId);
@@ -3473,8 +3525,13 @@ export class TeamAppState {
   }
 
   async handlePublishCallup(eventIdParam) {
-    const eventId = eventIdParam || this.beta?.activeEventId || DEMO_CONFIG.EVENT_INDAUTXU_ID;
-    const activeTeamSeasonId = this.beta.teamSeasonId || DEMO_CONFIG.TEAM_SEASON_ID;
+    if (this.currentRole !== "coach") return;
+    const isDemo = this.appMode === "DEMO";
+    const eventId = eventIdParam || this.beta?.activeEventId || (isDemo ? DEMO_CONFIG.EVENT_INDAUTXU_ID : null);
+    const activeTeamSeasonId = this.beta?.teamSeasonId || (isDemo ? DEMO_CONFIG.TEAM_SEASON_ID : null);
+    if (!eventId || !activeTeamSeasonId) return;
+
+    const initialWarnings = [...(this.live?.unconfirmedWarnings || [])];
     const scope = this.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId });
     await this.ensureAuth("coach");
     if (!this.isScopeActive(scope)) return;
@@ -3484,7 +3541,7 @@ export class TeamAppState {
       const items = availRes.items || [];
 
       // Las 3 reservas no convocadas que quedarán disponibles son Ane Mintegi, Irati Fernandez y Nahia Garcia
-      const reserveIds = [DEMO_CONFIG.ANE_PLAYER_ID, "30000000-0000-4000-8000-000000000004", "30000000-0000-4000-8000-000000000003"];
+      const reserveIds = isDemo ? [DEMO_CONFIG.ANE_PLAYER_ID, "30000000-0000-4000-8000-000000000004", "30000000-0000-4000-8000-000000000003"] : [];
       const canAttendCalled = items.filter(p => p.status === "CAN_ATTEND" && !reserveIds.includes(p.player_id)).map(p => p.player_id);
       const noResponse = items.filter(p => p.status === "NO_RESPONSE").map(p => p.player_id);
 
@@ -3508,7 +3565,7 @@ export class TeamAppState {
           if (
             existing &&
             existing.status === "DRAFT" &&
-            (existing.event_id === eventId || existing.event_id === DEMO_CONFIG.EVENT_INDAUTXU_ID) &&
+            (existing.event_id === eventId || (activeTeamSeasonId !== DEMO_CONFIG.TEAM_SEASON_ID && existing.event_id === DEMO_CONFIG.EVENT_INDAUTXU_ID)) &&
             existing.team_season_id === activeTeamSeasonId &&
             Number.isInteger(existing.version) &&
             existing.version >= 1
@@ -3541,7 +3598,7 @@ export class TeamAppState {
         // Intento 1 sin confirmación de advertencias
         const res = await api.callup.publishCallup(callupId, {
           expectedVersion,
-          confirmWarnings: this.live.unconfirmedWarnings
+          confirmWarnings: initialWarnings
         }, idemKey);
         if (!this.isScopeActive(scope)) return;
 
@@ -4351,6 +4408,7 @@ export class TeamAppState {
       teamSeason: null,
       guardianPlayers: [],
       guardianPlayer: null,
+      activeEventId: null,
       bearer: null
     });
     this.goToScreen("v2_00_onboarding_welcome", "onboard");

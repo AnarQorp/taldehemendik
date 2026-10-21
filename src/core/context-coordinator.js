@@ -156,6 +156,17 @@ export class ContextCoordinator {
     }
     const changed = ["contextGeneration"];
 
+    if (payload.currentSessionId !== undefined && payload.currentSessionId !== this.confirmedContext.currentSessionId) {
+      this.confirmedContext.currentSessionId = payload.currentSessionId;
+      if (this.stateRef) {
+        this.stateRef.currentSessionId = payload.currentSessionId;
+        if (this.stateRef.resourceStore) {
+          this.stateRef.resourceStore.clearAll();
+        }
+      }
+      changed.push("currentSessionId");
+    }
+
     if (payload.teamSeasonId !== undefined && payload.teamSeasonId !== this.confirmedContext.teamSeasonId) {
       this.confirmedContext.teamSeasonId = payload.teamSeasonId;
       this.confirmedContext.activeEventId = null;

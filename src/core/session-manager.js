@@ -55,19 +55,19 @@ export class SessionManager {
     }
 
     if (dispatchScope) {
-      const isSessionMatch = dispatchScope.sessionId === this.currentSessionId;
-      const isEpochMatch = dispatchScope.credentialEpoch === this.credentialEpoch;
-
-      if (isSessionMatch && isEpochMatch && this.currentSessionId !== null) {
-        this.clearSession();
-        return true;
+      // Petición originada en otra sesión distinta ya reemplazada: la nueva sesión sobrevive
+      const reqSession = dispatchScope.sessionId || dispatchScope.currentSessionId || null;
+      if (reqSession && this.currentSessionId && reqSession !== this.currentSessionId) {
+        return false;
       }
-      // Petición obsoleta o de otra sesión: no purgar
-      return false;
+      const reqToken = dispatchScope.bearerToken || dispatchScope.requestToken || dispatchScope.token || null;
+      if (reqToken && this.accessToken && reqToken !== this.accessToken) {
+        return false;
+      }
     }
 
-    // Sin scope pero usuario autenticado explícito sobre sesión viva
-    if (this.currentSessionId !== null) {
+    // Misma sesión o credencial activa: expira de inmediato
+    if (this.currentSessionId !== null || this.accessToken !== null) {
       this.clearSession();
       return true;
     }

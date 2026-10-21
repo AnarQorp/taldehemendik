@@ -25,21 +25,38 @@ export class ResourceStore {
   }
 
   reconcileCallup(key, incomingEntity) {
-    if (!incomingEntity) {
-      return { applied: false, reason: "null_entity" };
+    if (!incomingEntity || typeof incomingEntity !== "object" || Object.keys(incomingEntity).length === 0) {
+      return { applied: false, reason: "null_or_empty_entity" };
     }
+
+    // 1. Verificación de identidad estricta de recurso
+    if (incomingEntity.event_id && key.eventId && incomingEntity.event_id !== key.eventId) {
+      return { applied: false, reason: "identity_mismatch" };
+    }
+    if (incomingEntity.team_season_id && key.teamSeasonId && incomingEntity.team_season_id !== key.teamSeasonId) {
+      return { applied: false, reason: "identity_mismatch" };
+    }
+    if (key.callupId && key.callupId !== "primary" && incomingEntity.id && incomingEntity.id !== key.callupId) {
+      return { applied: false, reason: "identity_mismatch" };
+    }
+
+    // 2. Validación de formato de versión monotónica
+    const incomingVer = Number(incomingEntity.version);
+    if (!Number.isInteger(incomingVer) || (typeof incomingEntity.version === "string" && !/^\d+$/.test(incomingEntity.version)) || incomingVer < 0) {
+      return { applied: false, reason: "invalid_version" };
+    }
+
     const k = this._toKey(key);
     const existing = this.store.get(k);
 
     if (existing) {
-      // 1. Prohibición de degradación: PUBLISHED nunca baja a DRAFT
+      // 3. Prohibición estricta de degradación: PUBLISHED nunca baja a DRAFT
       if (existing.status === "PUBLISHED" && incomingEntity.status === "DRAFT") {
         return { applied: false, reason: "downgrade_prohibited" };
       }
 
-      // 2. Ordenación formal de versiones
+      // 4. Ordenación formal de versiones
       const existingVer = Number(existing.version || 0);
-      const incomingVer = Number(incomingEntity.version || 0);
 
       if (incomingVer < existingVer) {
         return { applied: false, reason: "stale_version" };
@@ -52,11 +69,53 @@ export class ResourceStore {
         if (isSameStatus && isSameId) {
           return { applied: false, reason: "idempotent" };
         }
+        return { applied: false, reason: "conflict_divergent" };
       }
     }
 
-    // Version mayor o inserción inicial o actualización válida
-    this.store.set(k, { ...incomingEntity });
+    // Versión mayor o inserción inicial o actualización válida
+    this.store.set(k, { ...incomingEntity, version: incomingVer });
+    this._notify(key, incomingEntity);
+    return { applied: true, reason: existing ? "updated" : "created" };
+  }
+
+  _toAvailabilityKey(key) {
+    if (!key || !key.eventId) {
+      throw new Error("AvailabilityKey must include eventId");
+    }
+    const teamSeasonId = key.teamSeasonId || "default";
+    const playerId = key.playerId || "all";
+    const ns = key.namespace || "default";
+    return `avail:${teamSeasonId}:${key.eventId}:${playerId}:${ns}`;
+  }
+
+  getAvailability(key) {
+    const k = this._toAvailabilityKey(key);
+    return this.store.get(k) || null;
+  }
+
+  reconcileAvailability(key, incomingEntity) {
+    if (!incomingEntity || typeof incomingEntity !== "object" || Object.keys(incomingEntity).length === 0) {
+      return { applied: false, reason: "null_or_empty_entity" };
+    }
+    const incomingVer = Number(incomingEntity.version !== undefined ? incomingEntity.version : 0);
+    if (!Number.isInteger(incomingVer) || (typeof incomingEntity.version === "string" && !/^\d+$/.test(incomingEntity.version)) || incomingVer < 0) {
+      return { applied: false, reason: "invalid_version" };
+    }
+
+    const k = this._toAvailabilityKey(key);
+    const existing = this.store.get(k);
+    if (existing) {
+      const existingVer = Number(existing.version || 0);
+      if (incomingVer < existingVer) {
+        return { applied: false, reason: "stale_version" };
+      }
+      if (incomingVer === existingVer && existing.status === incomingEntity.status) {
+        return { applied: false, reason: "idempotent" };
+      }
+    }
+
+    this.store.set(k, { ...incomingEntity, version: incomingVer });
     this._notify(key, incomingEntity);
     return { applied: true, reason: existing ? "updated" : "created" };
   }

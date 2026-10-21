@@ -1484,39 +1484,15 @@ export class TeamAppState {
   async ensureAuth(role) {
     const scope = this.createScope({ role, mode: this.appMode });
     if (this.appMode === "DEMO") {
-      const devOpts = {
-        signal: this.createInFlightSignal(),
-        checkActive: () => this.isScopeActive(scope) && this.appMode === "DEMO"
-      };
       if (role === "coach") {
         if (!this.tokens.coach) {
-          try {
-            const res = await api.auth.loginDev(DEMO_CONFIG.COACH_EMAIL, "Mikel Zubeldia", devOpts);
-            if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
-            if (res?.accessToken) {
-              this.tokens.coach = res.accessToken;
-            }
-          } catch {
-            if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
-            this.tokens.coach = "demo_token_coach";
-          }
+          this.tokens.coach = "demo_token_coach";
         }
-        if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
         api.client.setToken(this.tokens.coach);
       } else if (role === "parent") {
         if (!this.tokens.parent) {
-          try {
-            const res = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez", devOpts);
-            if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
-            if (res?.accessToken) {
-              this.tokens.parent = res.accessToken;
-            }
-          } catch {
-            if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
-            this.tokens.parent = "demo_token_parent";
-          }
+          this.tokens.parent = "demo_token_parent";
         }
-        if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
         api.client.setToken(this.tokens.parent);
       }
       return;
@@ -1727,11 +1703,15 @@ export class TeamAppState {
   }
 
   async handleParentAccess() {
+    this._explicitIntentSeq = (this._explicitIntentSeq || 0) + 1;
+    const myIntentSeq = this._explicitIntentSeq;
+
     if (this.appMode === "DEMO") {
       this.currentRole = "parent";
       localStorage.setItem("talde_active_role", "parent");
       const scope = this.createScope({ mode: "DEMO", role: "parent" });
       await this.ensureAuth("parent");
+      if (myIntentSeq !== this._explicitIntentSeq) return;
       if (!this.isScopeActive(scope) || this.appMode !== "DEMO") return;
       await this.goToScreen("v2_07_parent_home", "inicio");
       return;
@@ -1744,6 +1724,7 @@ export class TeamAppState {
       this.tokens.parent = parentToken;
       try {
         const res = await api.teams.getMyMemberships();
+        if (myIntentSeq !== this._explicitIntentSeq) return;
         if (!this.isScopeActive(scope)) return;
         const items = res?.items || [];
         const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE");
@@ -1770,11 +1751,13 @@ export class TeamAppState {
           }, scope);
           if (!ok) return;
 
+          if (myIntentSeq !== this._explicitIntentSeq) return;
           await this.goToScreen("v2_07_parent_home", "inicio");
           this.showToast(`Sesión familiar recuperada: ${this.beta.guardianPlayer ? (this.beta.guardianPlayer.firstName || this.beta.guardianPlayer.first_name) : 'Hijo'}`);
           return;
         }
       } catch (e) {
+        if (myIntentSeq !== this._explicitIntentSeq) return;
         if (!this.isScopeActive(scope)) return;
         if (e?.status === 401 && e.wasAuthenticated) {
           this.handleSessionExpired(e, scope);
@@ -1783,6 +1766,8 @@ export class TeamAppState {
         console.warn("Error restoring parent session:", e);
       }
     }
+    if (myIntentSeq !== this._explicitIntentSeq) return;
+    if (!this.isScopeActive(scope)) return;
     this.applyContextTransition({ role: "parent" }, scope);
     await this.goToScreen("v2_00_parent_join_team");
   }
@@ -2843,8 +2828,12 @@ export class TeamAppState {
   }
 
   async prepareAndPublishCallup(eventId) {
+    if (eventId) {
+      this.beta.activeEventId = eventId;
+    }
+    const targetEventId = eventId || this.beta?.activeEventId;
     const activeTeamSeasonId = this.beta.teamSeasonId;
-    const scope = this.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId });
+    const scope = this.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId: targetEventId });
     await this.ensureAuth("coach");
     if (!this.isScopeActive(scope)) return;
     try {
@@ -2862,7 +2851,7 @@ export class TeamAppState {
       let draft;
       try {
         if (!this.isScopeActive(scope)) return;
-        draft = await api.callup.createDraft(eventId, playerIds);
+        draft = await api.callup.createDraft(targetEventId, playerIds);
       } catch (err) {
         if (!this.isScopeActive(scope)) return;
         if (err?.status === 401 && err.wasAuthenticated) {
@@ -2870,20 +2859,27 @@ export class TeamAppState {
           return;
         }
         if (err?.status === 409 && (err?.code === "LINK_REQUEST_ALREADY_EXISTS" || err?.code === "DRAFT_ALREADY_EXISTS")) {
-          const evRes = await api.events.getEvent(eventId);
+          const evRes = await api.events.getEvent(targetEventId);
           if (!this.isScopeActive(scope)) return;
           const ev = (evRes && evRes.event) ? evRes.event : evRes;
-          if (!ev || !ev.callup_id || (ev.status && ev.status !== "ACTIVE") || (ev.team_season_id && activeTeamSeasonId && ev.team_season_id !== activeTeamSeasonId)) {
+          if (
+            !ev ||
+            ev.id !== targetEventId ||
+            ev.status !== "ACTIVE" ||
+            ev.team_season_id !== activeTeamSeasonId ||
+            !ev.callup_id
+          ) {
             throw err;
           }
           const existingCallup = await api.callup.getCallup(ev.callup_id);
           if (!this.isScopeActive(scope)) return;
           if (
             !existingCallup ||
+            existingCallup.id !== ev.callup_id ||
             existingCallup.status !== "DRAFT" ||
-            (existingCallup.event_id && existingCallup.event_id !== eventId) ||
-            (existingCallup.team_season_id && activeTeamSeasonId && existingCallup.team_season_id !== activeTeamSeasonId) ||
-            typeof existingCallup.version !== "number" ||
+            existingCallup.event_id !== targetEventId ||
+            existingCallup.team_season_id !== activeTeamSeasonId ||
+            !Number.isInteger(existingCallup.version) ||
             existingCallup.version < 1
           ) {
             throw err;
@@ -3413,17 +3409,24 @@ export class TeamAppState {
           const evRes = await api.events.getEvent(eventId);
           if (!this.isScopeActive(scope)) return;
           const ev = (evRes && evRes.event) ? evRes.event : evRes;
-          if (!ev || !ev.callup_id || (ev.status && ev.status !== "ACTIVE") || (ev.team_season_id && activeTeamSeasonId && ev.team_season_id !== activeTeamSeasonId)) {
+          if (
+            !ev ||
+            ev.id !== eventId ||
+            ev.status !== "ACTIVE" ||
+            ev.team_season_id !== activeTeamSeasonId ||
+            !ev.callup_id
+          ) {
             throw err;
           }
           const existingCallup = await api.callup.getCallup(ev.callup_id);
           if (!this.isScopeActive(scope)) return;
           if (
             !existingCallup ||
+            existingCallup.id !== ev.callup_id ||
             existingCallup.status !== "DRAFT" ||
-            (existingCallup.event_id && existingCallup.event_id !== eventId) ||
-            (existingCallup.team_season_id && activeTeamSeasonId && existingCallup.team_season_id !== activeTeamSeasonId) ||
-            typeof existingCallup.version !== "number" ||
+            existingCallup.event_id !== eventId ||
+            existingCallup.team_season_id !== activeTeamSeasonId ||
+            !Number.isInteger(existingCallup.version) ||
             existingCallup.version < 1
           ) {
             throw err;
@@ -3469,10 +3472,10 @@ export class TeamAppState {
     }
   }
 
-  async handlePublishCallup() {
-    const eventId = DEMO_CONFIG.EVENT_INDAUTXU_ID;
+  async handlePublishCallup(eventIdParam) {
+    const eventId = eventIdParam || this.beta?.activeEventId || DEMO_CONFIG.EVENT_INDAUTXU_ID;
     const activeTeamSeasonId = this.beta.teamSeasonId || DEMO_CONFIG.TEAM_SEASON_ID;
-    const scope = this.createScope({ role: "coach" });
+    const scope = this.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId });
     await this.ensureAuth("coach");
     if (!this.isScopeActive(scope)) return;
     try {
@@ -3505,9 +3508,9 @@ export class TeamAppState {
           if (
             existing &&
             existing.status === "DRAFT" &&
-            existing.event_id === eventId &&
-            (!existing.team_season_id || existing.team_season_id === activeTeamSeasonId || existing.team_season_id === "A") &&
-            typeof existing.version === "number" &&
+            (existing.event_id === eventId || existing.event_id === DEMO_CONFIG.EVENT_INDAUTXU_ID) &&
+            existing.team_season_id === activeTeamSeasonId &&
+            Number.isInteger(existing.version) &&
             existing.version >= 1
           ) {
             draft = existing;
@@ -3574,8 +3577,12 @@ export class TeamAppState {
           this.live.callup = retryRes;
           this.showToast("✓ Convocatoria publicada con advertencias confirmadas (Revisión 1 en PostgreSQL).");
           await this.syncEventHubNormal();
+        } else if (err?.status === 401 && err.wasAuthenticated) {
+          this.handleSessionExpired(err, scope);
+          return;
         } else {
-          throw err;
+          console.error("Error publishing callup:", err);
+          this.showToast(`Error al publicar convocatoria: ${mapDomainError(err)}`);
         }
       }
     } catch (err) {
@@ -4855,11 +4862,11 @@ export class TeamAppState {
       this.showToast(`✓ Equipo ${res.team.name} registrado con éxito (Código: ${res.joinCode}).`);
       this.renderBetaPlayersList();
     } catch (err) {
+      if (!this.isScopeActive(scope)) return;
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = `<span class="material-symbols-outlined text-[20px]" data-icon="add_circle">add_circle</span><span>Crear equipo y generar código</span>`;
       }
-      if (!this.isScopeActive(scope)) return;
       console.error("Bootstrap error:", err);
       if (err?.status === 401 && err.wasAuthenticated) {
         this.handleSessionExpired(err);

@@ -72,26 +72,30 @@ export class ContextCoordinator {
       generation: _g,
       sessionId: _s,
       credentialEpoch: _c,
+      mode: _m,
       bearerToken: _b,
       ...safeExtra
     } = extra || {};
     return Object.freeze({
-      ...safeExtra,
+      role: safeExtra.role || this.stateRef?.currentRole || this.confirmedContext.currentRole || null,
+      teamSeasonId: safeExtra.teamSeasonId !== undefined ? safeExtra.teamSeasonId : this._getCurrentTeamSeasonId(),
+      eventId: safeExtra.eventId !== undefined ? (safeExtra.eventId ? String(safeExtra.eventId) : null) : this._getCurrentActiveEventId(),
+      childId: safeExtra.childId !== undefined ? safeExtra.childId : null,
       generation: this._getCurrentGeneration(),
       sessionId: this._getCurrentSessionId(),
       credentialEpoch: this.sessionManager.getCredentialEpoch(),
       bearerToken: this.sessionManager.getToken(),
-      teamSeasonId: safeExtra.teamSeasonId !== undefined ? safeExtra.teamSeasonId : this._getCurrentTeamSeasonId()
+      mode: this.confirmedContext.mode || (this.stateRef?.appMode || "BETA_NORMAL")
     });
   }
 
   createTargetScope(targetEventId, intentToken) {
-    return {
+    return Object.freeze({
       originEventId: this._getCurrentActiveEventId(),
       targetEventId: targetEventId ? String(targetEventId) : null,
       intentToken,
       generation: this._getCurrentGeneration()
-    };
+    });
   }
 
   createViewScope(viewId, extra = {}) {
@@ -123,6 +127,17 @@ export class ContextCoordinator {
     return true;
   }
 
+  isWriteReconciliationAllowed(scope) {
+    if (!scope) return false;
+    const currentSession = this._getCurrentSessionId();
+    if (!currentSession) return false;
+    if (scope.sessionId !== undefined && scope.sessionId !== currentSession) return false;
+    if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== this._getCurrentTeamSeasonId()) return false;
+    const currentMode = this.confirmedContext.appMode || this.confirmedContext.mode || (this.stateRef?.appMode || "BETA_NORMAL");
+    if (scope.mode !== undefined && scope.mode !== currentMode) return false;
+    return true;
+  }
+
   isViewScopeActive(scope) {
     if (!scope) return false;
     if (scope.viewEpoch !== undefined && scope.viewEpoch !== this.confirmedContext.viewEpoch) return false;
@@ -131,6 +146,40 @@ export class ContextCoordinator {
     if (scope.eventId !== undefined && scope.eventId !== null && scope.eventId !== this._getCurrentActiveEventId()) return false;
     if (scope.viewId !== undefined && this.stateRef?.currentScreen && scope.viewId !== this.stateRef.currentScreen) return false;
     return true;
+  }
+
+  setEventContext(eventId) {
+    this.confirmedContext.activeEventId = eventId ? String(eventId) : null;
+    this.confirmedContext.eventEpoch = (this.confirmedContext.eventEpoch || 0) + 1;
+    this._notify(["activeEventId", "eventEpoch"]);
+  }
+
+  setModeContext(newMode) {
+    this.confirmedContext.appMode = newMode;
+    if (newMode === "DEMO") {
+      this.confirmedContext.teamSeasonId = null;
+      this.confirmedContext.activeEventId = null;
+      this.confirmedContext.eventEpoch = 0;
+    } else {
+      this.confirmedContext.eventEpoch = (this.confirmedContext.eventEpoch || 0) + 1;
+    }
+    this._notify(["appMode", "teamSeasonId", "activeEventId", "eventEpoch"]);
+  }
+
+  purgeContext() {
+    this.confirmedContext.currentSessionId = null;
+    this.confirmedContext.teamSeasonId = null;
+    this.confirmedContext.activeEventId = null;
+    this.confirmedContext.activeChildId = null;
+    this.confirmedContext.eventEpoch = 0;
+    this.confirmedContext.generation += 1;
+    this._notify(["purge", "generation"]);
+  }
+
+  initContext(sessionId, mode) {
+    this.confirmedContext.currentSessionId = sessionId ? String(sessionId) : null;
+    this.confirmedContext.appMode = mode || "BETA_NORMAL";
+    this._notify(["init"]);
   }
 
   /**

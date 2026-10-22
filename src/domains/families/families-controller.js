@@ -74,7 +74,7 @@ export class FamiliesDomainController {
           confirmedVersion = res.version;
         }
       } else {
-        confirmedVersion = expectedVersion + 1;
+        confirmedVersion = null; // Versión no confirmada no se fabrica
       }
       const availEntity = (res && typeof res === "object") ? {
         event_id: opContext.eventId,
@@ -94,12 +94,13 @@ export class FamiliesDomainController {
       const currentTeam = this.coordinator ? this.coordinator._getCurrentTeamSeasonId() : this.app.beta?.teamSeasonId;
       const isSessionValid = Boolean(scope.sessionId && scope.sessionId === currentSession);
       const isTeamValid = Boolean(opContext.teamSeasonId && opContext.teamSeasonId === currentTeam);
-      const isEpochValid = !dispatchScope || dispatchScope.credentialEpoch === this.app.sessionManager.getCredentialEpoch();
-      const isModeValid = !dispatchScope || (dispatchScope.mode ? dispatchScope.mode === this.app.appMode : this.app.appMode === "BETA_NORMAL");
-      const isDispatchActive = this.coordinator ? this.coordinator.isDispatchScopeActive(dispatchScope) : (isSessionValid && isTeamValid);
+      const isModeValid = this.app.appMode === "BETA_NORMAL";
+      const isReconcileAllowed = this.coordinator && typeof this.coordinator.isWriteReconciliationAllowed === "function"
+        ? this.coordinator.isWriteReconciliationAllowed(dispatchScope)
+        : (isSessionValid && isTeamValid && isModeValid);
 
       let reconcileResult = { applied: false };
-      if (isSessionValid && isTeamValid && isEpochValid && isModeValid && isDispatchActive && this.store) {
+      if (isReconcileAllowed && this.store) {
         reconcileResult = this.store.reconcileAvailability({
           teamSeasonId: opContext.teamSeasonId,
           eventId: opContext.eventId,
@@ -118,7 +119,7 @@ export class FamiliesDomainController {
       const currentChild = this.app.beta?.guardianPlayer?.id || this.app.beta?.guardianPlayer?.playerId || this.app.beta?.linkedPlayerId || (isDemo ? DEMO_CONFIG.IBAI_PLAYER_ID : null);
       const isCurrentActiveChild = currentChild === opContext.playerId;
 
-      if (isSessionValid && isTeamValid && isEpochValid && isModeValid && isCurrentActiveEvent && isCurrentActiveChild) {
+      if (isReconcileAllowed && isCurrentActiveEvent && isCurrentActiveChild) {
         this.app.live.parentAvailability = this.store ? (this.store.getAvailability({
           teamSeasonId: opContext.teamSeasonId,
           eventId: opContext.eventId,

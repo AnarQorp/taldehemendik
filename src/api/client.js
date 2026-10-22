@@ -79,6 +79,9 @@ export class ApiClient {
       err.wasAuthenticated = !isOtpAuthEndpoint && Boolean(headers["Authorization"]);
       err.path = path;
       err.requestToken = headers["Authorization"] ? headers["Authorization"].replace(/^Bearer\s+/i, "") : (this.token || null);
+      err.requestSessionId = options.scope?.sessionId || options.sessionId || (options.sessionContext?.sessionId) || null;
+      err.requestCredentialEpoch = options.scope?.credentialEpoch ?? options.credentialEpoch ?? (options.sessionContext?.credentialEpoch) ?? null;
+      err.scope = options.scope || options.sessionContext || null;
       err.sessionContext = options.sessionContext || options.context || null;
       throw err;
     }

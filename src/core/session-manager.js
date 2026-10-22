@@ -55,7 +55,7 @@ export class SessionManager {
     }
 
     if (dispatchScope) {
-      if (dispatchScope.credentialEpoch !== undefined && dispatchScope.credentialEpoch !== this.credentialEpoch) {
+      if (dispatchScope.credentialEpoch !== undefined && dispatchScope.credentialEpoch !== null && dispatchScope.credentialEpoch !== this.credentialEpoch) {
         return false;
       }
       // Petición originada en otra sesión distinta ya reemplazada: la nueva sesión sobrevive

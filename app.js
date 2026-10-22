@@ -247,20 +247,53 @@ export class TeamAppState {
       bearerToken: _b,
       ...safeExtra
     } = extra || {};
-    const dispatchScope = this.contextCoordinator ? this.contextCoordinator.createDispatchScope() : {};
-    return {
-      generation: this.contextGeneration,
-      sessionId: this.currentSessionId,
-      credentialEpoch: this.sessionManager ? this.sessionManager.getCredentialEpoch() : 0,
-      mode: this.appMode,
-      role: this.currentRole,
-      ...dispatchScope,
-      ...safeExtra
+
+    const baseGeneration = this.contextGeneration;
+    const baseSessionId = this.currentSessionId;
+    const baseEpoch = this.sessionManager ? this.sessionManager.getCredentialEpoch() : 0;
+    const baseMode = this.appMode;
+    const baseRole = safeExtra.role || this.currentRole;
+    const baseTeam = safeExtra.teamSeasonId !== undefined ? safeExtra.teamSeasonId : (this.beta?.teamSeasonId || null);
+    const baseChild = safeExtra.childId !== undefined ? safeExtra.childId : (this.beta?.guardianPlayer?.id || this.beta?.guardianPlayer?.playerId || null);
+    const baseEvent = safeExtra.eventId !== undefined ? (safeExtra.eventId ? String(safeExtra.eventId) : null) : (this.beta?.activeEventId || null);
+
+    const snapshot = {
+      role: baseRole,
+      teamSeasonId: baseTeam,
+      childId: baseChild,
+      eventId: baseEvent,
+      ...safeExtra,
+      generation: baseGeneration,
+      sessionId: baseSessionId,
+      credentialEpoch: baseEpoch,
+      mode: baseMode,
+      bearerToken: this.sessionManager?.getToken() || null
     };
+
+    Object.defineProperty(snapshot, "_origin", {
+      value: Object.freeze({
+        generation: baseGeneration,
+        sessionId: baseSessionId,
+        credentialEpoch: baseEpoch,
+        mode: baseMode,
+        teamSeasonId: baseTeam
+      }),
+      writable: false,
+      enumerable: false,
+      configurable: false
+    });
+
+    return snapshot;
   }
 
   isScopeActive(scope) {
     if (!scope) return false;
+    if (scope._origin) {
+      if (scope._origin.generation !== this.contextGeneration) return false;
+      if (scope._origin.sessionId !== this.currentSessionId) return false;
+      if (scope._origin.mode !== this.appMode) return false;
+      if (scope.sessionId !== scope._origin.sessionId) return false;
+    }
     if (scope.generation !== undefined && scope.generation !== this.contextGeneration) return false;
     if (scope.sessionId !== undefined && scope.sessionId !== this.currentSessionId) return false;
     if (scope.credentialEpoch !== undefined && this.sessionManager && scope.credentialEpoch !== this.sessionManager.getCredentialEpoch()) return false;
@@ -398,9 +431,7 @@ export class TeamAppState {
         else localStorage.removeItem("talde_active_event_id");
       } catch {}
       if (this.contextCoordinator) {
-        this.contextCoordinator.confirmedContext.activeEventId = transition.activeEventId;
-        this.contextCoordinator.confirmedContext.eventEpoch = (this.contextCoordinator.confirmedContext.eventEpoch || 0) + 1;
-        this.contextCoordinator._notify(["activeEventId", "eventEpoch"]);
+        this.contextCoordinator.setEventContext(transition.activeEventId);
       }
     }
     if (transition.guardianPlayers !== undefined) {
@@ -448,13 +479,27 @@ export class TeamAppState {
     return true;
   }
 
-  registerManagedTimeout(fn, ms, scope) {
+  registerManagedTimeout(fn, ms, scope = null) {
     let timerId = null;
+    const initialScreen = this.currentScreen;
+    const initialRole = this.currentRole;
+    const initialSession = this.currentSessionId;
     const wrappedFn = () => {
       this.managedTimers.delete(timerId);
-      if (this.isScopeActive(scope)) {
-        fn();
+      if (scope) {
+        if (!this.isScopeActive(scope)) return;
+        if (scope.role && this.currentRole !== scope.role) return;
+        if (scope.viewId && this.currentScreen !== scope.viewId) return;
+        if (scope.expectedScreen && this.currentScreen !== scope.expectedScreen) return;
+        if (scope.isOtpModal && !this.isOtpModalOpen()) return;
+        if (scope.modalId) {
+          const m = document.getElementById(scope.modalId);
+          if (!m || m.classList.contains("hidden")) return;
+        }
       }
+      if (initialRole && this.currentRole !== initialRole && scope?.enforceRole !== false) return;
+      if (initialSession && this.currentSessionId !== initialSession) return;
+      fn();
     };
     timerId = setTimeout(wrappedFn, ms);
     this.managedTimers.set(timerId, { timerId, scope });
@@ -527,8 +572,7 @@ export class TeamAppState {
       this.tokens.parent = unifiedToken;
       api.client.setToken(unifiedToken);
       if (this.contextCoordinator) {
-        this.contextCoordinator.confirmedContext.currentSessionId = this.currentSessionId;
-        this.contextCoordinator.confirmedContext.appMode = this.appMode;
+        this.contextCoordinator.initContext(this.currentSessionId, this.appMode);
       }
       if (this.sessionManager) {
         this.sessionManager.setSession(this.currentSessionId, unifiedToken, this.appMode);
@@ -1017,28 +1061,26 @@ export class TeamAppState {
       return;
     }
     const activeToken = api.client.getToken() || this.tokens[this.currentRole] || this.tokens.coach || this.tokens.parent;
-    if (sourceError?.requestToken) {
-      if (activeToken && sourceError.requestToken !== activeToken) {
-        return;
-      }
+    const reqToken = sourceError?.requestToken || scope?.bearerToken || scope?.requestToken || scope?.token || null;
+    const reqSession = sourceError?.requestSessionId || scope?.sessionId || scope?.currentSessionId || null;
+
+    if (reqToken && activeToken && reqToken !== activeToken) {
+      return;
     }
-    if (scope) {
-      const scopeSession = scope.sessionId || scope.currentSessionId || null;
-      if (scopeSession && this.currentSessionId && scopeSession !== this.currentSessionId) {
-        return;
-      }
-      if (!sourceError?.requestToken) {
-        const scopeToken = scope.bearerToken || scope.requestToken || scope.token || null;
-        if (scopeToken && activeToken && scopeToken !== activeToken) {
-          return;
-        }
-      }
+    if (reqSession && this.currentSessionId && reqSession !== this.currentSessionId) {
+      return;
     }
+
+    const effectiveScope = scope || (reqSession || reqToken ? {
+      sessionId: reqSession,
+      bearerToken: reqToken,
+      ...(sourceError?.requestCredentialEpoch != null ? { credentialEpoch: sourceError.requestCredentialEpoch } : {})
+    } : null);
 
     const isAuth = Boolean(sourceError?.wasAuthenticated !== false);
     if (this.sessionManager) {
-      const handled = this.sessionManager.handleUnauthorized(scope, isAuth);
-      if (!handled && scope) {
+      const handled = this.sessionManager.handleUnauthorized(effectiveScope, isAuth);
+      if (!handled && effectiveScope) {
         return;
       }
     }
@@ -1077,11 +1119,7 @@ export class TeamAppState {
       this.resourceStore.clearAll();
     }
     if (this.contextCoordinator) {
-      this.contextCoordinator.confirmedContext.teamSeasonId = null;
-      this.contextCoordinator.confirmedContext.activeEventId = null;
-      this.contextCoordinator.confirmedContext.appMode = newMode;
-      this.contextCoordinator.confirmedContext.eventEpoch = (this.contextCoordinator.confirmedContext.eventEpoch || 0) + 1;
-      this.contextCoordinator._notify(["teamSeasonId", "activeEventId", "appMode", "eventEpoch"]);
+      this.contextCoordinator.setModeContext(newMode);
     }
     if (this.isOtpModalOpen()) {
       this.closeOtpModal();
@@ -1169,9 +1207,7 @@ export class TeamAppState {
       this.resourceStore.clearAll();
     }
     if (this.contextCoordinator) {
-      this.contextCoordinator.confirmedContext.activeEventId = null;
-      this.contextCoordinator.confirmedContext.eventEpoch = 0;
-      this.contextCoordinator.confirmedContext.teamSeasonId = null;
+      this.contextCoordinator.purgeContext();
     }
     localStorage.removeItem("talde_session_token");
     localStorage.removeItem("talde_token_coach");
@@ -1282,7 +1318,7 @@ export class TeamAppState {
       const emailInput = document.getElementById("modal-otp-email-input");
       if (emailInput) {
         emailInput.value = this.otpState.email;
-        this.registerManagedTimeout(() => emailInput.focus(), 100, this.createScope());
+        this.registerManagedTimeout(() => emailInput.focus(), 100, this.createScope({ isOtpModal: true, modalId: "modal-otp-auth", expectedScreen: this.currentScreen }));
       }
       modal.classList.remove("hidden");
     } else {
@@ -1346,7 +1382,7 @@ export class TeamAppState {
       const otpInput = document.getElementById("modal-otp-input");
       if (otpInput) {
         otpInput.value = "";
-        this.registerManagedTimeout(() => otpInput.focus(), 150, this.createScope());
+        this.registerManagedTimeout(() => otpInput.focus(), 150, this.createScope({ isOtpModal: true, modalId: "modal-otp-auth", expectedScreen: this.currentScreen }));
       }
     } catch (err) {
       if (err?.name === "AbortError") return;
@@ -3399,18 +3435,10 @@ export class TeamAppState {
       if (!storedCallup && typeof this.resourceStore.getActiveCallup === "function") {
         storedCallup = this.resourceStore.getActiveCallup(activeTeamSeasonId, eventId, "live");
       }
-      if (!storedCallup) {
-        storedCallup = this.resourceStore.getCallup({
-          teamSeasonId: activeTeamSeasonId,
-          eventId: eventId,
-          callupId: "primary",
-          namespace: "live"
-        });
-      }
     }
-    const effectiveCallup = storedCallup || (this.live.callup?.event_id === eventId && (this.live.callup?.team_season_id === activeTeamSeasonId || !this.live.callup?.team_season_id) ? this.live.callup : null);
-    const isPublished = (effectiveCallup && effectiveCallup.status === "PUBLISHED") || (activeEvent && activeEvent.callup_status === "PUBLISHED");
-    const callupRev = isDemo ? (this.live.callup?.current_revision_number || 1) : (effectiveCallup?.current_revision_number || effectiveCallup?.version || activeEvent?.callup_revision || 1);
+    const effectiveCallup = storedCallup;
+    const isPublished = Boolean(effectiveCallup && effectiveCallup.status === "PUBLISHED");
+    const callupRev = isDemo ? (this.live.callup?.current_revision_number || 1) : (effectiveCallup?.current_revision_number || effectiveCallup?.version || 1);
 
     if (isPublished) {
       if (callupBadge) {
@@ -4016,9 +4044,9 @@ export class TeamAppState {
         };
         const rec = this.resourceStore.reconcileAvailability(key, incomingEntity);
         const stored = this.resourceStore.getAvailability(key);
-        this.live.parentAvailability = stored || (rec.applied ? incomingEntity : this.live.parentAvailability);
+        this.live.parentAvailability = stored || null;
       } else {
-        this.live.parentAvailability = incomingEntity;
+        this.live.parentAvailability = null;
       }
     } catch (err) {
       if (err?.status === 401 && err.wasAuthenticated && this.isScopeActive(scope)) {
@@ -4161,10 +4189,14 @@ export class TeamAppState {
 
       this.showToast(`✓ Sustitución completada en PostgreSQL: ${this.selectedSubstitute} incorporada (Revisión ${res.revisionNumber}).`);
 
+      const viewScope = this.contextCoordinator ? this.contextCoordinator.createViewScope(this.currentScreen) : null;
       this.registerManagedTimeout(() => {
         if (!this.isScopeActive(scope)) return;
+        if (this.currentRole !== "coach") return;
+        if (this.currentScreen !== "v2_06_coach_substitute") return;
+        if (viewScope && this.contextCoordinator && !this.contextCoordinator.isViewScopeActive(viewScope)) return;
         this.goToScreen("v2_01_coach_home", "inicio");
-      }, 1500, scope);
+      }, 1500, { ...scope, role: "coach", viewId: "v2_06_coach_substitute", expectedScreen: "v2_06_coach_substitute" });
     } catch (err) {
       if (!this.isScopeActive(scope)) return;
       if (err?.status === 401 && err.wasAuthenticated) {

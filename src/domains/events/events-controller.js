@@ -4,7 +4,7 @@
  * y sustituciones conforme a las cuatro puertas de autoridad.
  */
 
-import { api, DEMO_CONFIG, mapDomainError } from "../../api/index.js";
+import { api, DEMO_CONFIG, mapDomainError, escapeHtml } from "../../api/index.js";
 
 export class EventsDomainController {
   constructor(app) {
@@ -201,17 +201,18 @@ export class EventsDomainController {
       }
       const callupEntity = published;
 
-      // 1. Verificación de autorización de sesión y equipo (F01)
+      // 1. Verificación de autorización de sesión y equipo (P2 / B3)
       const currentSession = this.coordinator ? this.coordinator._getCurrentSessionId() : this.app.currentSessionId;
       const currentTeam = this.coordinator ? this.coordinator._getCurrentTeamSeasonId() : this.app.beta?.teamSeasonId;
       const isSessionValid = Boolean(dispatchScope && dispatchScope.sessionId && dispatchScope.sessionId === currentSession);
       const isTeamValid = Boolean(activeTeamSeasonId && activeTeamSeasonId === currentTeam);
-      const isEpochValid = !dispatchScope || dispatchScope.credentialEpoch === this.app.sessionManager.getCredentialEpoch();
-      const isModeValid = !dispatchScope || (dispatchScope.mode ? dispatchScope.mode === this.app.appMode : this.app.appMode === "BETA_NORMAL");
-      const isDispatchActive = this.coordinator ? this.coordinator.isDispatchScopeActive(dispatchScope) : (isSessionValid && isTeamValid);
+      const isModeValid = this.app.appMode === "BETA_NORMAL";
+      const isReconcileAllowed = this.coordinator && typeof this.coordinator.isWriteReconciliationAllowed === "function"
+        ? this.coordinator.isWriteReconciliationAllowed(dispatchScope)
+        : (isSessionValid && isTeamValid && isModeValid);
 
       let reconcileResult = { applied: false };
-      if (isSessionValid && isTeamValid && isEpochValid && isModeValid && isDispatchActive && this.store && callupEntity && callupEntity.id) {
+      if (isReconcileAllowed && this.store && callupEntity && callupEntity.id) {
         reconcileResult = this.store.reconcileCallup({
           teamSeasonId: activeTeamSeasonId,
           eventId: targetEventId,
@@ -240,7 +241,7 @@ export class EventsDomainController {
           this.app.beta.activeEventId = targetEventId;
           try { localStorage.setItem("talde_active_event_id", targetEventId); } catch {}
         }
-        if (isSessionValid && isTeamValid && isEpochValid && isModeValid) {
+        if (isReconcileAllowed) {
           const stored = this.store ? (this.store.getCallup({
             teamSeasonId: activeTeamSeasonId,
             eventId: targetEventId,
@@ -400,17 +401,18 @@ export class EventsDomainController {
       }
       const callupEntity = published;
 
-      // 1. Verificación de autorización de sesión y equipo (F01)
+      // 1. Verificación de autorización de sesión y equipo (P2 / B3)
       const currentSession = this.coordinator ? this.coordinator._getCurrentSessionId() : this.app.currentSessionId;
       const currentTeam = this.coordinator ? this.coordinator._getCurrentTeamSeasonId() : this.app.beta?.teamSeasonId;
       const isSessionValid = Boolean(dispatchScope && dispatchScope.sessionId && dispatchScope.sessionId === currentSession);
       const isTeamValid = Boolean(activeTeamSeasonId && activeTeamSeasonId === currentTeam);
-      const isEpochValid = !dispatchScope || dispatchScope.credentialEpoch === this.app.sessionManager.getCredentialEpoch();
-      const isModeValid = !dispatchScope || (dispatchScope.mode ? dispatchScope.mode === this.app.appMode : this.app.appMode === "BETA_NORMAL");
-      const isDispatchActive = this.coordinator ? this.coordinator.isDispatchScopeActive(dispatchScope) : (isSessionValid && isTeamValid);
+      const isModeValid = this.app.appMode === "BETA_NORMAL";
+      const isReconcileAllowed = this.coordinator && typeof this.coordinator.isWriteReconciliationAllowed === "function"
+        ? this.coordinator.isWriteReconciliationAllowed(dispatchScope)
+        : (isSessionValid && isTeamValid && isModeValid);
 
       let reconcileResult = { applied: false };
-      if (isSessionValid && isTeamValid && isEpochValid && isModeValid && isDispatchActive && this.store && callupEntity && callupEntity.id) {
+      if (isReconcileAllowed && this.store && callupEntity && callupEntity.id) {
         reconcileResult = this.store.reconcileCallup({
           teamSeasonId: activeTeamSeasonId,
           eventId: targetEventId,
@@ -439,7 +441,7 @@ export class EventsDomainController {
           this.app.beta.activeEventId = targetEventId;
           try { localStorage.setItem("talde_active_event_id", targetEventId); } catch {}
         }
-        if (isSessionValid && isTeamValid && isEpochValid && isModeValid) {
+        if (isReconcileAllowed) {
           const stored = this.store ? (this.store.getCallup({
             teamSeasonId: activeTeamSeasonId,
             eventId: targetEventId,
@@ -511,34 +513,78 @@ export class EventsDomainController {
     const event = (evRes && evRes.event) ? evRes.event : evRes;
 
     const squadScreen = document.getElementById("screen_e_create_squad") || (document.querySelector && document.querySelector("#screen_e_create_squad"));
-    if (squadScreen && players.length > 0) {
+    if (squadScreen) {
       const playerListContainer = squadScreen.querySelector ? squadScreen.querySelector(".space-y-2") : null;
-      const cardsHtml = players.map(p => `
+      if (players.length === 0) {
+        const emptyHtml = `<div class="p-6 text-center text-on-surface-variant text-body-sm font-medium">No hay jugadores disponibles en la plantilla</div>`;
+        if (playerListContainer) {
+          playerListContainer.innerHTML = emptyHtml;
+        } else if (typeof squadScreen.innerHTML === "string" && squadScreen.innerHTML.includes('<div class="space-y-2">')) {
+          const listStart = squadScreen.innerHTML.indexOf('<div class="space-y-2">');
+          const listEnd = squadScreen.innerHTML.indexOf('</section>', listStart);
+          if (listEnd !== -1) {
+            squadScreen.innerHTML = squadScreen.innerHTML.slice(0, listStart) + '<div class="space-y-2">' + emptyHtml + '</div>' + squadScreen.innerHTML.slice(listEnd);
+          }
+        }
+      } else {
+        const cardsHtml = players.map(p => {
+          const pId = p.id || p.playerId;
+          let availStatus = null;
+          if (this.store) {
+            const storedAvail = this.store.getAvailability({
+              teamSeasonId: activeTeamSeasonId,
+              eventId,
+              playerId: pId,
+              namespace: "live"
+            });
+            if (storedAvail) availStatus = storedAvail.status;
+          }
+          if (!availStatus && availRes && Array.isArray(availRes.items)) {
+            const match = availRes.items.find(item => (item.player_id || item.playerId) === pId);
+            if (match) availStatus = match.status;
+          }
+          const isAttending = availStatus === "CAN_ATTEND" || availStatus === "AVAILABLE";
+          const isNotAttending = availStatus === "CANNOT_ATTEND" || availStatus === "UNAVAILABLE";
+          const statusBadge = isAttending
+            ? `<span class="font-label-sm text-label-sm text-secondary font-bold">Disponible</span>`
+            : (isNotAttending
+              ? `<span class="font-label-sm text-label-sm text-error font-bold">No disponible</span>`
+              : `<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">Sin confirmar</span>`);
+
+          const shirtNum = escapeHtml(p.shirt_number || p.number || '•');
+          const rawName = p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Jugador';
+          const pName = escapeHtml(rawName);
+          const pPos = escapeHtml(p.position || 'Jugador');
+
+          return `
 <article class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center justify-between shadow-sm active:scale-[0.99] transition-transform">
 <div class="flex items-center gap-3">
 <div class="w-9 h-9 rounded-full bg-surface-container-high text-on-surface font-label-lg text-label-lg flex items-center justify-center font-bold">
-  ${p.shirt_number || p.number || '•'}
+  ${shirtNum}
 </div>
 <div>
-<p class="font-headline-sm text-headline-sm text-on-surface leading-snug">${p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Jugador'}</p>
+<p class="font-headline-sm text-headline-sm text-on-surface leading-snug">${pName}</p>
 <div class="flex items-center gap-2 mt-0.5">
-<span class="font-label-sm text-label-sm text-on-surface-variant">${p.position || 'Jugador'}</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">${pPos}</span>
 <span class="w-1 h-1 rounded-full bg-outline-variant"></span>
-<span class="font-label-sm text-label-sm text-secondary font-bold">Disponible</span>
+${statusBadge}
 </div>
 </div>
 </div>
-<button aria-label="Desmarcar ${p.name || 'jugador'}" class="w-8 h-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center shadow-sm active:scale-[0.95]" type="button">
+<button aria-label="Desmarcar ${pName}" class="w-8 h-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center shadow-sm active:scale-[0.95]" type="button">
 <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">check</span>
 </button>
-</article>`).join("");
-      if (playerListContainer) {
-        playerListContainer.innerHTML = cardsHtml;
-      } else if (typeof squadScreen.innerHTML === "string" && squadScreen.innerHTML.includes('<div class="space-y-2">')) {
-        const listStart = squadScreen.innerHTML.indexOf('<div class="space-y-2">');
-        const listEnd = squadScreen.innerHTML.indexOf('</section>', listStart);
-        if (listEnd !== -1) {
-          squadScreen.innerHTML = squadScreen.innerHTML.slice(0, listStart) + '<div class="space-y-2">' + cardsHtml + '</div>' + squadScreen.innerHTML.slice(listEnd);
+</article>`;
+        }).join("");
+
+        if (playerListContainer) {
+          playerListContainer.innerHTML = cardsHtml;
+        } else if (typeof squadScreen.innerHTML === "string" && squadScreen.innerHTML.includes('<div class="space-y-2">')) {
+          const listStart = squadScreen.innerHTML.indexOf('<div class="space-y-2">');
+          const listEnd = squadScreen.innerHTML.indexOf('</section>', listStart);
+          if (listEnd !== -1) {
+            squadScreen.innerHTML = squadScreen.innerHTML.slice(0, listStart) + '<div class="space-y-2">' + cardsHtml + '</div>' + squadScreen.innerHTML.slice(listEnd);
+          }
         }
       }
     }

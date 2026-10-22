@@ -47,7 +47,10 @@ export class ContextCoordinator {
   }
 
   _getCurrentTeamSeasonId() {
-    return this.stateRef?.beta?.teamSeasonId ?? this.confirmedContext.teamSeasonId;
+    if (this.stateRef?.beta && Object.prototype.hasOwnProperty.call(this.stateRef.beta, "teamSeasonId")) {
+      return this.stateRef.beta.teamSeasonId;
+    }
+    return this.confirmedContext.teamSeasonId;
   }
 
   _getCurrentGeneration() {
@@ -65,14 +68,21 @@ export class ContextCoordinator {
   }
 
   createDispatchScope(extra = {}) {
-    return {
+    const {
+      generation: _g,
+      sessionId: _s,
+      credentialEpoch: _c,
+      bearerToken: _b,
+      ...safeExtra
+    } = extra || {};
+    return Object.freeze({
+      ...safeExtra,
       generation: this._getCurrentGeneration(),
       sessionId: this._getCurrentSessionId(),
       credentialEpoch: this.sessionManager.getCredentialEpoch(),
       bearerToken: this.sessionManager.getToken(),
-      teamSeasonId: this._getCurrentTeamSeasonId(),
-      ...extra
-    };
+      teamSeasonId: safeExtra.teamSeasonId !== undefined ? safeExtra.teamSeasonId : this._getCurrentTeamSeasonId()
+    });
   }
 
   createTargetScope(targetEventId, intentToken) {
@@ -85,31 +95,42 @@ export class ContextCoordinator {
   }
 
   createViewScope(viewId, extra = {}) {
-    return {
+    const {
+      viewId: _v,
+      viewEpoch: _ve,
+      eventEpoch: _ee,
+      ...safeExtra
+    } = extra || {};
+    return Object.freeze({
+      ...safeExtra,
       viewId: String(viewId),
       viewEpoch: this.confirmedContext.viewEpoch,
       eventEpoch: this.confirmedContext.eventEpoch,
-      teamSeasonId: this._getCurrentTeamSeasonId(),
-      eventId: this._getCurrentActiveEventId(),
-      ...extra
-    };
+      teamSeasonId: safeExtra.teamSeasonId !== undefined ? safeExtra.teamSeasonId : this._getCurrentTeamSeasonId(),
+      eventId: safeExtra.eventId !== undefined ? safeExtra.eventId : this._getCurrentActiveEventId(),
+      role: safeExtra.role || this.stateRef?.currentRole || this.confirmedContext.currentRole || null,
+      currentScreen: this.stateRef?.currentScreen || null
+    });
   }
 
   isDispatchScopeActive(scope) {
     if (!scope) return false;
     const currentSession = this._getCurrentSessionId();
-    const isSessionMatch = scope.sessionId === currentSession;
-    const isEpochMatch = scope.credentialEpoch === this.sessionManager.getCredentialEpoch();
-    return Boolean(isSessionMatch && isEpochMatch);
+    if (scope.sessionId !== undefined && scope.sessionId !== currentSession) return false;
+    if (scope.credentialEpoch !== undefined && scope.credentialEpoch !== this.sessionManager.getCredentialEpoch()) return false;
+    if (scope.generation !== undefined && scope.generation !== this._getCurrentGeneration()) return false;
+    if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== this._getCurrentTeamSeasonId()) return false;
+    return true;
   }
 
   isViewScopeActive(scope) {
     if (!scope) return false;
-    const isViewEpochMatch = scope.viewEpoch === this.confirmedContext.viewEpoch;
-    const isEventEpochMatch = scope.eventEpoch === this.confirmedContext.eventEpoch;
-    const currentEventId = this._getCurrentActiveEventId();
-    const isEventMatch = scope.eventId === null || scope.eventId === currentEventId;
-    return Boolean(isViewEpochMatch && isEventEpochMatch && isEventMatch);
+    if (scope.viewEpoch !== undefined && scope.viewEpoch !== this.confirmedContext.viewEpoch) return false;
+    if (scope.eventEpoch !== undefined && scope.eventEpoch !== this.confirmedContext.eventEpoch) return false;
+    if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== this._getCurrentTeamSeasonId()) return false;
+    if (scope.eventId !== undefined && scope.eventId !== null && scope.eventId !== this._getCurrentActiveEventId()) return false;
+    if (scope.viewId !== undefined && this.stateRef?.currentScreen && scope.viewId !== this.stateRef.currentScreen) return false;
+    return true;
   }
 
   /**
@@ -206,10 +227,15 @@ export class ContextCoordinator {
       changed.push("appMode");
     }
 
+    const effectiveSessId = payload.currentSessionId || this._getCurrentSessionId() || this.confirmedContext.currentSessionId || null;
+    if (effectiveSessId) {
+      this.confirmedContext.currentSessionId = effectiveSessId;
+    }
+
     if (payload.bearer !== undefined || (payload.tokens && payload.tokens[payload.role || this.confirmedContext.currentRole])) {
       const tok = payload.bearer || (payload.tokens && payload.tokens[payload.role || this.confirmedContext.currentRole]);
       this.sessionManager.setSession(
-        payload.currentSessionId || this.confirmedContext.currentSessionId,
+        effectiveSessId,
         tok,
         payload.appMode || this.confirmedContext.appMode || "BETA_NORMAL"
       );

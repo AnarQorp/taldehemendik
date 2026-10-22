@@ -30,10 +30,23 @@ export class FamiliesDomainController {
 
     const opContext = { eventId, playerId, teamSeasonId, expectedVersion, status };
     const viewScope = this.coordinator ? this.coordinator.createViewScope(this.app.currentScreen, { eventId }) : null;
+    const preSessionId = this.coordinator ? this.coordinator._getCurrentSessionId() : this.app.currentSessionId;
+    const preRole = this.app.currentRole;
+    const preMode = this.app.appMode;
+    const preGeneration = this.app.contextGeneration;
+    const preTeam = this.app.beta?.teamSeasonId;
 
     await this.app.ensureAuth("parent");
-    const scope = this.app.createScope({ role: "parent", teamSeasonId, childId: playerId });
-    if (!this.app.isScopeActive(scope)) return;
+
+    if (this.app.currentRole !== preRole || this.app.currentRole !== "parent") return;
+    if (this.app.appMode !== preMode) return;
+    if (this.app.contextGeneration !== preGeneration) return;
+    if (this.app.beta?.teamSeasonId !== preTeam) return;
+    const currentSession = this.coordinator ? this.coordinator._getCurrentSessionId() : this.app.currentSessionId;
+    if (preSessionId && currentSession && preSessionId !== currentSession) return;
+
+    const dispatchScope = this.coordinator ? this.coordinator.createDispatchScope({ role: "parent", teamSeasonId, childId: playerId, eventId }) : null;
+    const scope = this.app.createScope({ role: "parent", teamSeasonId, childId: playerId, eventId });
 
     if (this.app.beta.teamSeasonId !== opContext.teamSeasonId || (this.app.beta.guardianPlayer && (this.app.beta.guardianPlayer.id || this.app.beta.guardianPlayer.playerId) !== opContext.playerId)) {
       return;
@@ -53,9 +66,16 @@ export class FamiliesDomainController {
 
       // 1. RECONCILIACIÓN POR RECURSO Y VERSIÓN (D12-F05, F01, F02, F08)
       const hasVersionProp = res && Object.prototype.hasOwnProperty.call(res, "version");
-      const confirmedVersion = hasVersionProp
-        ? (res.version === null ? null : (res.version === undefined ? undefined : Number(res.version)))
-        : (expectedVersion + 1);
+      let confirmedVersion;
+      if (hasVersionProp) {
+        if (typeof res.version === "number" && Number.isInteger(res.version)) {
+          confirmedVersion = res.version;
+        } else {
+          confirmedVersion = res.version;
+        }
+      } else {
+        confirmedVersion = expectedVersion + 1;
+      }
       const availEntity = (res && typeof res === "object") ? {
         event_id: opContext.eventId,
         player_id: opContext.playerId,
@@ -74,9 +94,12 @@ export class FamiliesDomainController {
       const currentTeam = this.coordinator ? this.coordinator._getCurrentTeamSeasonId() : this.app.beta?.teamSeasonId;
       const isSessionValid = Boolean(scope.sessionId && scope.sessionId === currentSession);
       const isTeamValid = Boolean(opContext.teamSeasonId && opContext.teamSeasonId === currentTeam);
+      const isEpochValid = !dispatchScope || dispatchScope.credentialEpoch === this.app.sessionManager.getCredentialEpoch();
+      const isModeValid = !dispatchScope || (dispatchScope.mode ? dispatchScope.mode === this.app.appMode : this.app.appMode === "BETA_NORMAL");
+      const isDispatchActive = this.coordinator ? this.coordinator.isDispatchScopeActive(dispatchScope) : (isSessionValid && isTeamValid);
 
       let reconcileResult = { applied: false };
-      if (isSessionValid && isTeamValid && this.store) {
+      if (isSessionValid && isTeamValid && isEpochValid && isModeValid && isDispatchActive && this.store) {
         reconcileResult = this.store.reconcileAvailability({
           teamSeasonId: opContext.teamSeasonId,
           eventId: opContext.eventId,
@@ -86,7 +109,7 @@ export class FamiliesDomainController {
       }
 
       // Si el almacén rechazó la entidad (por identidad o versión inválida), no proyectar al singleton activo (F02, F08)
-      if (!reconcileResult.applied && this.store) {
+      if (!reconcileResult.applied && reconcileResult.reason !== "idempotent" && reconcileResult.reason !== "stale_version" && this.store) {
         return;
       }
 
@@ -95,13 +118,13 @@ export class FamiliesDomainController {
       const currentChild = this.app.beta?.guardianPlayer?.id || this.app.beta?.guardianPlayer?.playerId || this.app.beta?.linkedPlayerId || (isDemo ? DEMO_CONFIG.IBAI_PLAYER_ID : null);
       const isCurrentActiveChild = currentChild === opContext.playerId;
 
-      if (isSessionValid && isTeamValid && isCurrentActiveEvent && isCurrentActiveChild) {
-        this.app.live.parentAvailability = this.store ? this.store.getAvailability({
+      if (isSessionValid && isTeamValid && isEpochValid && isModeValid && isCurrentActiveEvent && isCurrentActiveChild) {
+        this.app.live.parentAvailability = this.store ? (this.store.getAvailability({
           teamSeasonId: opContext.teamSeasonId,
           eventId: opContext.eventId,
           playerId: opContext.playerId,
           namespace: "live"
-        }) : availEntity;
+        }) || availEntity) : availEntity;
       }
 
       // 2. PUERTA VISUAL (D12-F05 / F06 / parent-view-only)
@@ -114,6 +137,7 @@ export class FamiliesDomainController {
         this.app.registerManagedTimeout(() => {
           if (!this.app.isScopeActive(scope)) return;
           if (viewScope && this.coordinator && !this.coordinator.isViewScopeActive(viewScope)) return;
+          if (this.app.currentRole !== "parent") return;
           if (this.app.currentScreen !== "v2_08_parent_rsvp") return;
           if (this.app.beta?.activeEventId !== opContext.eventId) return;
           const liveChild = this.app.beta?.guardianPlayer?.id || this.app.beta?.guardianPlayer?.playerId || this.app.beta?.linkedPlayerId;

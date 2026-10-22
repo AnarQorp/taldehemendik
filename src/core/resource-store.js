@@ -24,6 +24,21 @@ export class ResourceStore {
     return this.store.get(k) || null;
   }
 
+  getActiveCallup(teamSeasonId, eventId, namespace = "live") {
+    if (!teamSeasonId || !eventId) return null;
+    const prefix = `${teamSeasonId}:${eventId}:`;
+    const suffix = `:${namespace}`;
+    let best = null;
+    for (const [k, v] of this.store.entries()) {
+      if (k.startsWith(prefix) && k.endsWith(suffix) && !k.startsWith("avail:")) {
+        if (!best || (Number(v.version || 0) > Number(best.version || 0))) {
+          best = v;
+        }
+      }
+    }
+    return best;
+  }
+
   reconcileCallup(key, incomingEntity) {
     if (!incomingEntity || typeof incomingEntity !== "object" || Object.keys(incomingEntity).length === 0) {
       return { applied: false, reason: "null_or_empty_entity" };
@@ -89,7 +104,14 @@ export class ResourceStore {
     }
 
     // Versión mayor o inserción inicial o actualización válida
-    this.store.set(k, { ...incomingEntity, version: incomingVer });
+    const savedEntity = { ...incomingEntity, version: incomingVer };
+    this.store.set(k, savedEntity);
+    if (incomingEntity.id) {
+      const idKey = `${key.teamSeasonId}:${key.eventId}:${incomingEntity.id}:${key.namespace || "default"}`;
+      this.store.set(idKey, savedEntity);
+      const primaryKey = `${key.teamSeasonId}:${key.eventId}:primary:${key.namespace || "default"}`;
+      this.store.set(primaryKey, savedEntity);
+    }
     this._notify(key, incomingEntity);
     return { applied: true, reason: existing ? "updated" : "created" };
   }

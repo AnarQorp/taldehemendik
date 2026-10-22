@@ -76,17 +76,46 @@ export class ContextCoordinator {
       bearerToken: _b,
       ...safeExtra
     } = extra || {};
-    return Object.freeze({
-      role: safeExtra.role || this.stateRef?.currentRole || this.confirmedContext.currentRole || null,
-      teamSeasonId: safeExtra.teamSeasonId !== undefined ? safeExtra.teamSeasonId : this._getCurrentTeamSeasonId(),
-      eventId: safeExtra.eventId !== undefined ? (safeExtra.eventId ? String(safeExtra.eventId) : null) : this._getCurrentActiveEventId(),
-      childId: safeExtra.childId !== undefined ? safeExtra.childId : null,
-      generation: this._getCurrentGeneration(),
-      sessionId: this._getCurrentSessionId(),
-      credentialEpoch: this.sessionManager.getCredentialEpoch(),
-      bearerToken: this.sessionManager.getToken(),
-      mode: this.confirmedContext.mode || (this.stateRef?.appMode || "BETA_NORMAL")
+    const baseRole = safeExtra.role || this.stateRef?.currentRole || this.confirmedContext.currentRole || null;
+    const baseTeam = safeExtra.teamSeasonId !== undefined ? safeExtra.teamSeasonId : this._getCurrentTeamSeasonId();
+    const baseEvent = safeExtra.eventId !== undefined ? (safeExtra.eventId ? String(safeExtra.eventId) : null) : this._getCurrentActiveEventId();
+    const baseChild = safeExtra.childId !== undefined ? safeExtra.childId : null;
+    const baseGeneration = this._getCurrentGeneration();
+    const baseSessionId = this._getCurrentSessionId();
+    const baseEpoch = this.sessionManager.getCredentialEpoch();
+    const baseToken = this.sessionManager.getToken();
+    const baseMode = this.confirmedContext.mode || (this.stateRef?.appMode || "BETA_NORMAL");
+
+    const scope = {
+      role: baseRole,
+      teamSeasonId: baseTeam,
+      eventId: baseEvent,
+      childId: baseChild,
+      generation: baseGeneration,
+      sessionId: baseSessionId,
+      credentialEpoch: baseEpoch,
+      bearerToken: baseToken,
+      mode: baseMode,
+      ...safeExtra
+    };
+
+    Object.defineProperty(scope, "_origin", {
+      value: Object.freeze({
+        generation: baseGeneration,
+        sessionId: baseSessionId,
+        credentialEpoch: baseEpoch,
+        mode: baseMode,
+        role: baseRole,
+        teamSeasonId: baseTeam,
+        childId: baseChild,
+        eventId: baseEvent
+      }),
+      writable: false,
+      enumerable: false,
+      configurable: false
     });
+
+    return Object.freeze(scope);
   }
 
   createTargetScope(targetEventId, intentToken) {
@@ -120,10 +149,20 @@ export class ContextCoordinator {
   isDispatchScopeActive(scope) {
     if (!scope) return false;
     const currentSession = this._getCurrentSessionId();
+    if (scope._origin) {
+      if (scope._origin.generation !== this._getCurrentGeneration()) return false;
+      if (scope._origin.sessionId !== currentSession) return false;
+      if (scope.sessionId !== scope._origin.sessionId) return false;
+      if (scope._origin.role !== undefined && scope.role !== scope._origin.role) return false;
+      if (scope._origin.teamSeasonId !== undefined && scope.teamSeasonId !== scope._origin.teamSeasonId) return false;
+      if (scope._origin.childId !== undefined && scope.childId !== scope._origin.childId) return false;
+      if (scope._origin.eventId !== undefined && scope.eventId !== scope._origin.eventId) return false;
+    }
     if (scope.sessionId !== undefined && scope.sessionId !== currentSession) return false;
     if (scope.credentialEpoch !== undefined && scope.credentialEpoch !== this.sessionManager.getCredentialEpoch()) return false;
     if (scope.generation !== undefined && scope.generation !== this._getCurrentGeneration()) return false;
     if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== this._getCurrentTeamSeasonId()) return false;
+    if (scope.eventId !== undefined && scope.eventId !== this._getCurrentActiveEventId()) return false;
     return true;
   }
 
@@ -131,6 +170,11 @@ export class ContextCoordinator {
     if (!scope) return false;
     const currentSession = this._getCurrentSessionId();
     if (!currentSession) return false;
+    if (scope._origin) {
+      if (scope._origin.sessionId !== currentSession) return false;
+      if (scope.sessionId !== scope._origin.sessionId) return false;
+      if (scope._origin.teamSeasonId !== undefined && scope.teamSeasonId !== scope._origin.teamSeasonId) return false;
+    }
     if (scope.sessionId !== undefined && scope.sessionId !== currentSession) return false;
     if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== this._getCurrentTeamSeasonId()) return false;
     const currentMode = this.confirmedContext.appMode || this.confirmedContext.mode || (this.stateRef?.appMode || "BETA_NORMAL");

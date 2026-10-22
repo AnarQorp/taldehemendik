@@ -5,6 +5,7 @@ export class ApiClient {
   constructor(baseUrl = API_BASE_URL) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.token = null;
+    this.sessionContext = null;
   }
 
   setToken(token) {
@@ -13,6 +14,14 @@ export class ApiClient {
 
   getToken() {
     return this.token;
+  }
+
+  setSessionContext(sessionContext) {
+    this.sessionContext = sessionContext ? { ...sessionContext } : null;
+  }
+
+  getSessionContext() {
+    return this.sessionContext;
   }
 
   async request(path, options = {}) {
@@ -32,6 +41,10 @@ export class ApiClient {
     if (options.idempotencyKey) {
       headers["Idempotency-Key"] = options.idempotencyKey;
     }
+
+    const dispatchSessionId = options.scope?.sessionId || options.sessionId || options.sessionContext?.sessionId || this.sessionContext?.sessionId || null;
+    const dispatchCredentialEpoch = options.scope?.credentialEpoch ?? options.credentialEpoch ?? options.sessionContext?.credentialEpoch ?? this.sessionContext?.credentialEpoch ?? null;
+    const dispatchToken = headers["Authorization"] ? headers["Authorization"].replace(/^Bearer\s+/i, "") : (this.token || null);
 
     const fetchOptions = {
       method: options.method || "GET",
@@ -78,11 +91,11 @@ export class ApiClient {
       const isOtpAuthEndpoint = path.includes("/auth/otp/verify") || path.includes("/auth/otp/request") || path.includes("/auth/dev/login");
       err.wasAuthenticated = !isOtpAuthEndpoint && Boolean(headers["Authorization"]);
       err.path = path;
-      err.requestToken = headers["Authorization"] ? headers["Authorization"].replace(/^Bearer\s+/i, "") : (this.token || null);
-      err.requestSessionId = options.scope?.sessionId || options.sessionId || (options.sessionContext?.sessionId) || null;
-      err.requestCredentialEpoch = options.scope?.credentialEpoch ?? options.credentialEpoch ?? (options.sessionContext?.credentialEpoch) ?? null;
-      err.scope = options.scope || options.sessionContext || null;
-      err.sessionContext = options.sessionContext || options.context || null;
+      err.requestToken = dispatchToken;
+      err.requestSessionId = dispatchSessionId;
+      err.requestCredentialEpoch = dispatchCredentialEpoch;
+      err.scope = options.scope || options.sessionContext || (dispatchSessionId ? { sessionId: dispatchSessionId, credentialEpoch: dispatchCredentialEpoch } : null);
+      err.sessionContext = options.sessionContext || options.context || (dispatchSessionId ? { sessionId: dispatchSessionId, credentialEpoch: dispatchCredentialEpoch } : null);
       throw err;
     }
 

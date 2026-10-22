@@ -32,9 +32,22 @@ export class AuthDomainController {
         return;
       }
     }
+    const reqSession = sourceError?.requestSessionId || scope?.sessionId || scope?.currentSessionId || null;
+    if (reqSession && this.app.currentSessionId && reqSession !== this.app.currentSessionId) {
+      return;
+    }
+
+    const effectiveScope = scope || (reqSession || sourceError?.requestToken ? {
+      sessionId: reqSession,
+      bearerToken: sourceError?.requestToken,
+      ...(sourceError?.requestCredentialEpoch != null ? { credentialEpoch: sourceError.requestCredentialEpoch } : {})
+    } : null);
 
     if (this.sessionManager) {
-      this.sessionManager.handleUnauthorized(scope, isAuth);
+      const handled = this.sessionManager.handleUnauthorized(effectiveScope, isAuth);
+      if (!handled && effectiveScope) {
+        return;
+      }
     }
 
     this.app.contextGeneration++;
@@ -76,9 +89,7 @@ export class AuthDomainController {
       this.app.resourceStore.clearAll();
     }
     if (this.coordinator) {
-      this.coordinator.confirmedContext.activeEventId = null;
-      this.coordinator.confirmedContext.eventEpoch = 0;
-      this.coordinator.confirmedContext.teamSeasonId = null;
+      this.coordinator.purgeContext();
     }
     localStorage.removeItem("talde_session_token");
     localStorage.removeItem("talde_token_coach");

@@ -4,12 +4,22 @@
  * Regla M01: 401 sobre credencial activa expira sesión; 401 de sesión obsoleta o unauth OTP no.
  */
 
+import { defaultClient } from "../api/client.js";
+
 export class SessionManager {
   constructor(initial = {}) {
     this.currentSessionId = initial.currentSessionId || null;
     this.credentialEpoch = initial.credentialEpoch || 0;
     this.accessToken = initial.accessToken || null;
     this.appMode = initial.appMode || null;
+    if (this.currentSessionId) {
+      try {
+        defaultClient.setSessionContext({
+          sessionId: this.currentSessionId,
+          credentialEpoch: this.credentialEpoch
+        });
+      } catch {}
+    }
   }
 
   getCurrentSessionId() {
@@ -33,6 +43,12 @@ export class SessionManager {
     this.accessToken = token ? String(token) : null;
     this.appMode = mode;
     this.credentialEpoch += 1;
+    try {
+      defaultClient.setSessionContext({
+        sessionId: this.currentSessionId,
+        credentialEpoch: this.credentialEpoch
+      });
+    } catch {}
   }
 
   clearSession() {
@@ -40,6 +56,9 @@ export class SessionManager {
     this.accessToken = null;
     this.appMode = null;
     this.credentialEpoch += 1;
+    try {
+      defaultClient.setSessionContext(null);
+    } catch {}
   }
 
   /**

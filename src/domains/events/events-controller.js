@@ -484,13 +484,14 @@ export class EventsDomainController {
     const activeTeamSeasonId = this.app.beta?.teamSeasonId;
     if (!eventId || !activeTeamSeasonId) return;
 
+    await this.app.ensureAuth("coach");
+
     const viewScope = this.coordinator ? this.coordinator.createViewScope("screen_e_create_squad", {
       eventId,
       eventEpoch: this.coordinator.confirmedContext.eventEpoch
     }) : null;
 
     const scope = this.app.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId });
-    await this.app.ensureAuth("coach");
     if (!this.app.isScopeActive(scope)) return;
 
     const [playersRes, availRes, evRes] = await Promise.all([
@@ -512,6 +513,20 @@ export class EventsDomainController {
     this.app.beta.players = players;
     const event = (evRes && evRes.event) ? evRes.event : evRes;
 
+    if (this.store && availRes && Array.isArray(availRes.items)) {
+      for (const item of availRes.items) {
+        const pId = item.player_id || item.playerId;
+        if (pId) {
+          this.store.reconcileAvailability({
+            teamSeasonId: activeTeamSeasonId,
+            eventId,
+            playerId: pId,
+            namespace: "live"
+          }, item);
+        }
+      }
+    }
+
     const squadScreen = document.getElementById("screen_e_create_squad") || (document.querySelector && document.querySelector("#screen_e_create_squad"));
     if (squadScreen) {
       const playerListContainer = squadScreen.querySelector ? squadScreen.querySelector(".space-y-2") : null;
@@ -526,6 +541,16 @@ export class EventsDomainController {
             squadScreen.innerHTML = squadScreen.innerHTML.slice(0, listStart) + '<div class="space-y-2">' + emptyHtml + '</div>' + squadScreen.innerHTML.slice(listEnd);
           }
         }
+        const allSections = squadScreen.querySelectorAll ? squadScreen.querySelectorAll("section") : [];
+        allSections.forEach(sec => {
+          if (sec !== playerListContainer && !sec.contains(playerListContainer)) {
+            const hasArticles = sec.querySelector && sec.querySelector("article");
+            if (hasArticles) {
+              sec.classList.add("hidden");
+              sec.innerHTML = "";
+            }
+          }
+        });
       } else {
         const cardsHtml = players.map(p => {
           const pId = p.id || p.playerId;
@@ -538,10 +563,6 @@ export class EventsDomainController {
               namespace: "live"
             });
             if (storedAvail) availStatus = storedAvail.status;
-          }
-          if (!availStatus && availRes && Array.isArray(availRes.items)) {
-            const match = availRes.items.find(item => (item.player_id || item.playerId) === pId);
-            if (match) availStatus = match.status;
           }
           const isAttending = availStatus === "CAN_ATTEND" || availStatus === "AVAILABLE";
           const isNotAttending = availStatus === "CANNOT_ATTEND" || availStatus === "UNAVAILABLE";
@@ -586,6 +607,16 @@ ${statusBadge}
             squadScreen.innerHTML = squadScreen.innerHTML.slice(0, listStart) + '<div class="space-y-2">' + cardsHtml + '</div>' + squadScreen.innerHTML.slice(listEnd);
           }
         }
+        const allSections = squadScreen.querySelectorAll ? squadScreen.querySelectorAll("section") : [];
+        allSections.forEach(sec => {
+          if (sec !== playerListContainer && !sec.contains(playerListContainer)) {
+            const hasArticles = sec.querySelector && sec.querySelector("article");
+            if (hasArticles) {
+              sec.classList.add("hidden");
+              sec.innerHTML = "";
+            }
+          }
+        });
       }
     }
 

@@ -276,7 +276,10 @@ export class TeamAppState {
         sessionId: baseSessionId,
         credentialEpoch: baseEpoch,
         mode: baseMode,
-        teamSeasonId: baseTeam
+        role: baseRole,
+        teamSeasonId: baseTeam,
+        childId: baseChild,
+        eventId: baseEvent
       }),
       writable: false,
       enumerable: false,
@@ -293,6 +296,11 @@ export class TeamAppState {
       if (scope._origin.sessionId !== this.currentSessionId) return false;
       if (scope._origin.mode !== this.appMode) return false;
       if (scope.sessionId !== scope._origin.sessionId) return false;
+      if (scope._origin.role !== undefined && scope.role !== scope._origin.role) return false;
+      if (scope._origin.teamSeasonId !== undefined && scope.teamSeasonId !== scope._origin.teamSeasonId) return false;
+      if (scope._origin.childId !== undefined && scope.childId !== scope._origin.childId) return false;
+      if (scope._origin.eventId !== undefined && scope.eventId !== scope._origin.eventId) return false;
+      if (scope._origin.mode !== undefined && scope.mode !== scope._origin.mode) return false;
     }
     if (scope.generation !== undefined && scope.generation !== this.contextGeneration) return false;
     if (scope.sessionId !== undefined && scope.sessionId !== this.currentSessionId) return false;
@@ -484,8 +492,16 @@ export class TeamAppState {
     const initialScreen = this.currentScreen;
     const initialRole = this.currentRole;
     const initialSession = this.currentSessionId;
+    const initialViewEpoch = this.contextCoordinator?.confirmedContext?.viewEpoch ?? scope?.viewEpoch ?? null;
+    const initialEventEpoch = this.contextCoordinator?.confirmedContext?.eventEpoch ?? scope?.eventEpoch ?? null;
     const wrappedFn = () => {
       this.managedTimers.delete(timerId);
+      if (initialViewEpoch !== null && this.contextCoordinator?.confirmedContext?.viewEpoch !== initialViewEpoch) {
+        return;
+      }
+      if (initialEventEpoch !== null && this.contextCoordinator?.confirmedContext?.eventEpoch !== initialEventEpoch) {
+        return;
+      }
       if (scope) {
         if (!this.isScopeActive(scope)) return;
         if (scope.role && this.currentRole !== scope.role) return;
@@ -502,7 +518,7 @@ export class TeamAppState {
       fn();
     };
     timerId = setTimeout(wrappedFn, ms);
-    this.managedTimers.set(timerId, { timerId, scope });
+    this.managedTimers.set(timerId, { timerId, scope, initialViewEpoch, initialEventEpoch });
     return timerId;
   }
 

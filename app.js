@@ -304,7 +304,6 @@ export class TeamAppState {
     }
     if (scope.generation !== undefined && scope.generation !== this.contextGeneration) return false;
     if (scope.sessionId !== undefined && scope.sessionId !== this.currentSessionId) return false;
-    if (scope.credentialEpoch !== undefined && this.sessionManager && scope.credentialEpoch !== this.sessionManager.getCredentialEpoch()) return false;
     if (scope.mode !== undefined && scope.mode !== this.appMode) return false;
     if (scope.role !== undefined && scope.role !== this.currentRole) return false;
     if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== (this.beta?.teamSeasonId || null)) return false;

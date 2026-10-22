@@ -159,7 +159,6 @@ export class ContextCoordinator {
       if (scope._origin.eventId !== undefined && scope.eventId !== scope._origin.eventId) return false;
     }
     if (scope.sessionId !== undefined && scope.sessionId !== currentSession) return false;
-    if (scope.credentialEpoch !== undefined && scope.credentialEpoch !== this.sessionManager.getCredentialEpoch()) return false;
     if (scope.generation !== undefined && scope.generation !== this._getCurrentGeneration()) return false;
     if (scope.teamSeasonId !== undefined && scope.teamSeasonId !== this._getCurrentTeamSeasonId()) return false;
     if (scope.eventId !== undefined && scope.eventId !== this._getCurrentActiveEventId()) return false;
@@ -216,8 +215,14 @@ export class ContextCoordinator {
     this.confirmedContext.activeEventId = null;
     this.confirmedContext.activeChildId = null;
     this.confirmedContext.eventEpoch = 0;
-    this.confirmedContext.generation += 1;
-    this._notify(["purge", "generation"]);
+    const nextGen = (this.stateRef?.contextGeneration !== undefined && this.stateRef.contextGeneration > this.confirmedContext.contextGeneration)
+      ? this.stateRef.contextGeneration
+      : (this.confirmedContext.contextGeneration || 0) + 1;
+    this.confirmedContext.contextGeneration = nextGen;
+    if (this.stateRef && this.stateRef.contextGeneration !== nextGen) {
+      this.stateRef.contextGeneration = nextGen;
+    }
+    this._notify(["purge", "contextGeneration"]);
   }
 
   initContext(sessionId, mode) {

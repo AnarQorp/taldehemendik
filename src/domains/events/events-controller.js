@@ -484,14 +484,15 @@ export class EventsDomainController {
     const activeTeamSeasonId = this.app.beta?.teamSeasonId;
     if (!eventId || !activeTeamSeasonId) return;
 
-    await this.app.ensureAuth("coach");
-
     const viewScope = this.coordinator ? this.coordinator.createViewScope("screen_e_create_squad", {
       eventId,
       eventEpoch: this.coordinator.confirmedContext.eventEpoch
     }) : null;
 
     const scope = this.app.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId, eventId });
+    if (!this.app.isScopeActive(scope)) return;
+
+    await this.app.ensureAuth("coach");
     if (!this.app.isScopeActive(scope)) return;
 
     const [playersRes, availRes, evRes] = await Promise.all([

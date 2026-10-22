@@ -36,7 +36,10 @@ export class ContextCoordinator {
   }
 
   _getCurrentActiveEventId() {
-    return this.stateRef?.beta?.activeEventId ?? this.confirmedContext.activeEventId;
+    if (this.stateRef?.beta && Object.prototype.hasOwnProperty.call(this.stateRef.beta, "activeEventId")) {
+      return this.stateRef.beta.activeEventId;
+    }
+    return this.confirmedContext.activeEventId;
   }
 
   _getCurrentSessionId() {
@@ -184,6 +187,14 @@ export class ContextCoordinator {
       changed.push("currentRole");
     }
 
+    if (payload.activeEventId !== undefined && payload.activeEventId !== this.confirmedContext.activeEventId) {
+      this.confirmedContext.activeEventId = payload.activeEventId;
+      if (payload.activeEventId === null) {
+        this.confirmedContext.eventEpoch = 0;
+      }
+      changed.push("activeEventId", "eventEpoch");
+    }
+
     if (payload.activeChildId !== undefined && payload.activeChildId !== this.confirmedContext.activeChildId) {
       this.confirmedContext.activeChildId = payload.activeChildId;
       changed.push("activeChildId");
@@ -193,6 +204,21 @@ export class ContextCoordinator {
       this.confirmedContext.appMode = payload.appMode;
       if (this.stateRef) this.stateRef.appMode = payload.appMode;
       changed.push("appMode");
+    }
+
+    if (payload.bearer !== undefined || (payload.tokens && payload.tokens[payload.role || this.confirmedContext.currentRole])) {
+      const tok = payload.bearer || (payload.tokens && payload.tokens[payload.role || this.confirmedContext.currentRole]);
+      this.sessionManager.setSession(
+        payload.currentSessionId || this.confirmedContext.currentSessionId,
+        tok,
+        payload.appMode || this.confirmedContext.appMode || "BETA_NORMAL"
+      );
+    } else if (payload.currentSessionId !== undefined) {
+      this.sessionManager.setSession(
+        payload.currentSessionId,
+        this.sessionManager.getToken(),
+        payload.appMode || this.confirmedContext.appMode || "BETA_NORMAL"
+      );
     }
 
     this._notify(changed);

@@ -102,14 +102,15 @@ export class EventsDomainController {
       token = this.tracker.startIntent("event", targetEventId, this.app.beta?.activeEventId);
       targetScope = this.coordinator.createTargetScope(targetEventId, token);
     }
+    const viewScope = this.coordinator ? this.coordinator.createViewScope(this.app.currentScreen, { eventId: targetEventId }) : null;
+
+    await this.app.ensureAuth("coach");
     const dispatchScope = this.coordinator ? this.coordinator.createDispatchScope({ role: "coach", eventId: targetEventId, intentToken: token }) : null;
     const scope = this.app.createScope({
       role: "coach",
       teamSeasonId: activeTeamSeasonId
     });
-    const viewScope = this.coordinator ? this.coordinator.createViewScope(this.app.currentScreen, { eventId: targetEventId }) : null;
 
-    await this.app.ensureAuth("coach");
     if (token && this.tracker && !this.tracker.isCurrent(token)) return;
     if (!this.app.isScopeActive(scope)) return;
 
@@ -184,15 +185,20 @@ export class EventsDomainController {
         `pub-${Date.now()}`
       );
 
-      const callupEntity = (published && published.id) ? published : {
-        ...draft,
-        status: "PUBLISHED",
-        version: (draft.version || 1) + 1
-      };
+      if (!published || typeof published !== "object" || Object.keys(published).length === 0 || !published.id) {
+        throw new Error("Respuesta inválida al publicar convocatoria.");
+      }
+      const callupEntity = published;
 
-      // 1. Reconciliación incondicional en ResourceStore (D12-F03)
-      if (this.store && callupEntity && callupEntity.id) {
-        this.store.reconcileCallup({
+      // 1. Verificación de autorización de sesión y equipo (F01)
+      const currentSession = this.coordinator ? this.coordinator._getCurrentSessionId() : this.app.currentSessionId;
+      const currentTeam = this.coordinator ? this.coordinator._getCurrentTeamSeasonId() : this.app.beta?.teamSeasonId;
+      const isSessionValid = Boolean(dispatchScope && dispatchScope.sessionId && dispatchScope.sessionId === currentSession);
+      const isTeamValid = Boolean(activeTeamSeasonId && activeTeamSeasonId === currentTeam);
+
+      let reconcileResult = { applied: false };
+      if (isSessionValid && isTeamValid && this.store && callupEntity && callupEntity.id) {
+        reconcileResult = this.store.reconcileCallup({
           teamSeasonId: activeTeamSeasonId,
           eventId: targetEventId,
           callupId: draft.id,
@@ -200,7 +206,12 @@ export class EventsDomainController {
         }, callupEntity);
       }
 
-      // 2. Puerta de selección y proyección visual (D12-F01)
+      // Si el almacén rechazó la entidad (por identidad o versión inválida), no proyectar (F08)
+      if (!reconcileResult.applied && this.store) {
+        return;
+      }
+
+      // 2. Puerta de selección y proyección visual (F03, F05, D12-F01)
       let committed = false;
       if (targetScope && this.coordinator) {
         committed = this.coordinator.commitSelection(targetScope);
@@ -208,18 +219,31 @@ export class EventsDomainController {
         committed = true;
       }
 
-      if (committed) {
-        this.app.beta.activeEventId = targetEventId;
-        try { localStorage.setItem("talde_active_event_id", targetEventId); } catch {}
-        this.app.live.callup = (this.store ? this.store.getCallup({
-          teamSeasonId: activeTeamSeasonId,
-          eventId: targetEventId,
-          callupId: draft.id,
-          namespace: "live"
-        }) : null) || callupEntity;
+      const isTargetEventActive = (this.coordinator ? this.coordinator._getCurrentActiveEventId() : this.app.beta?.activeEventId) === targetEventId;
 
-        const isViewActive = viewScope && this.coordinator ? this.coordinator.isViewScopeActive(viewScope) : true;
-        if (isViewActive) {
+      if (committed || isTargetEventActive) {
+        if (committed) {
+          this.app.beta.activeEventId = targetEventId;
+          try { localStorage.setItem("talde_active_event_id", targetEventId); } catch {}
+        }
+        if (isSessionValid && isTeamValid) {
+          const stored = this.store ? this.store.getCallup({
+            teamSeasonId: activeTeamSeasonId,
+            eventId: targetEventId,
+            callupId: draft.id,
+            namespace: "live"
+          }) : null;
+          if (stored || !this.store) {
+            this.app.live.callup = stored || callupEntity;
+          }
+        }
+
+        const isViewStillCurrent = viewScope && this.coordinator
+          ? (viewScope.viewEpoch === this.coordinator.confirmedContext.viewEpoch &&
+             this.app.currentScreen === viewScope.viewId &&
+             (committed || isTargetEventActive))
+          : true;
+        if (isViewStillCurrent) {
           this.app.showToast(`✓ Convocatoria publicada (${playerIds.length} jugadores convocados).`);
           await this.app.syncCurrentScreen();
         }
@@ -250,11 +274,12 @@ export class EventsDomainController {
       token = this.tracker.startIntent("event", targetEventId, this.app.beta?.activeEventId);
       targetScope = this.coordinator.createTargetScope(targetEventId, token);
     }
-    const dispatchScope = this.coordinator ? this.coordinator.createDispatchScope({ role: "coach", eventId: targetEventId, intentToken: token }) : null;
-    const scope = this.app.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId });
     const viewScope = this.coordinator ? this.coordinator.createViewScope(this.app.currentScreen, { eventId: targetEventId }) : null;
 
     await this.app.ensureAuth("coach");
+    const dispatchScope = this.coordinator ? this.coordinator.createDispatchScope({ role: "coach", eventId: targetEventId, intentToken: token }) : null;
+    const scope = this.app.createScope({ role: "coach", teamSeasonId: activeTeamSeasonId });
+
     if (token && this.tracker && !this.tracker.isCurrent(token)) return;
     if (!this.app.isScopeActive(scope)) return;
 
@@ -345,15 +370,20 @@ export class EventsDomainController {
         confirmWarnings
       }, idemKey);
 
-      const callupEntity = (published && published.id) ? published : {
-        ...draft,
-        status: "PUBLISHED",
-        version: (draft.version || 1) + 1
-      };
+      if (!published || typeof published !== "object" || Object.keys(published).length === 0 || !published.id) {
+        throw new Error("Respuesta inválida al publicar convocatoria desde plantilla.");
+      }
+      const callupEntity = published;
 
-      // 1. Reconciliación incondicional en ResourceStore (D12-F03)
-      if (this.store && callupEntity && callupEntity.id) {
-        this.store.reconcileCallup({
+      // 1. Verificación de autorización de sesión y equipo (F01)
+      const currentSession = this.coordinator ? this.coordinator._getCurrentSessionId() : this.app.currentSessionId;
+      const currentTeam = this.coordinator ? this.coordinator._getCurrentTeamSeasonId() : this.app.beta?.teamSeasonId;
+      const isSessionValid = Boolean(dispatchScope && dispatchScope.sessionId && dispatchScope.sessionId === currentSession);
+      const isTeamValid = Boolean(activeTeamSeasonId && activeTeamSeasonId === currentTeam);
+
+      let reconcileResult = { applied: false };
+      if (isSessionValid && isTeamValid && this.store && callupEntity && callupEntity.id) {
+        reconcileResult = this.store.reconcileCallup({
           teamSeasonId: activeTeamSeasonId,
           eventId: targetEventId,
           callupId: callupId,
@@ -361,7 +391,12 @@ export class EventsDomainController {
         }, callupEntity);
       }
 
-      // 2. Puerta de selección y proyección visual
+      // Si el almacén rechazó la entidad (por identidad o versión inválida), no proyectar (F08)
+      if (!reconcileResult.applied && this.store) {
+        return;
+      }
+
+      // 2. Puerta de selección y proyección visual (F03, F05, D12-F01)
       let committed = false;
       if (targetScope && this.coordinator) {
         committed = this.coordinator.commitSelection(targetScope);
@@ -369,18 +404,31 @@ export class EventsDomainController {
         committed = true;
       }
 
-      if (committed) {
-        this.app.beta.activeEventId = targetEventId;
-        try { localStorage.setItem("talde_active_event_id", targetEventId); } catch {}
-        this.app.live.callup = (this.store ? this.store.getCallup({
-          teamSeasonId: activeTeamSeasonId,
-          eventId: targetEventId,
-          callupId: callupId,
-          namespace: "live"
-        }) : null) || callupEntity;
+      const isTargetEventActive = (this.coordinator ? this.coordinator._getCurrentActiveEventId() : this.app.beta?.activeEventId) === targetEventId;
 
-        const isViewActive = viewScope && this.coordinator ? this.coordinator.isViewScopeActive(viewScope) : true;
-        if (isViewActive) {
+      if (committed || isTargetEventActive) {
+        if (committed) {
+          this.app.beta.activeEventId = targetEventId;
+          try { localStorage.setItem("talde_active_event_id", targetEventId); } catch {}
+        }
+        if (isSessionValid && isTeamValid) {
+          const stored = this.store ? this.store.getCallup({
+            teamSeasonId: activeTeamSeasonId,
+            eventId: targetEventId,
+            callupId: callupId,
+            namespace: "live"
+          }) : null;
+          if (stored || !this.store) {
+            this.app.live.callup = stored || callupEntity;
+          }
+        }
+
+        const isViewStillCurrent = viewScope && this.coordinator
+          ? (viewScope.viewEpoch === this.coordinator.confirmedContext.viewEpoch &&
+             this.app.currentScreen === viewScope.viewId &&
+             (committed || isTargetEventActive))
+          : true;
+        if (isViewStillCurrent) {
           this.app.showToast(`✓ Convocatoria publicada (${selectedPlayerIds.length} ${selectedPlayerIds.length === 1 ? 'jugador convocado' : 'jugadores convocados'}).`);
           await this.app.goToScreen("v2_05_event_hub_normal", "agenda");
         }
@@ -431,6 +479,7 @@ export class EventsDomainController {
     }
 
     const players = playersRes.items || [];
+    this.app.beta.players = players;
     const event = (evRes && evRes.event) ? evRes.event : evRes;
 
     const submitBtn = document.querySelector("#screen_e_create_squad footer button");

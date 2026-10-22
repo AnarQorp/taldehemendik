@@ -29,7 +29,7 @@ export class ResourceStore {
       return { applied: false, reason: "null_or_empty_entity" };
     }
 
-    // 1. Verificación de identidad estricta de recurso
+    // 1. Verificación de identidad estricta de recurso (F08)
     if (incomingEntity.event_id && key.eventId && incomingEntity.event_id !== key.eventId) {
       return { applied: false, reason: "identity_mismatch" };
     }
@@ -39,10 +39,22 @@ export class ResourceStore {
     if (key.callupId && key.callupId !== "primary" && incomingEntity.id && incomingEntity.id !== key.callupId) {
       return { applied: false, reason: "identity_mismatch" };
     }
+    // En el namespace 'live', los recursos deben tener identidades válidas
+    if (key.namespace === "live" && (!incomingEntity.event_id || !incomingEntity.team_season_id)) {
+      return { applied: false, reason: "identity_mismatch" };
+    }
 
-    // 2. Validación de formato de versión monotónica
+    // 2. Validación estricta de formato de versión monotónica (F08)
+    if (
+      incomingEntity.version === null ||
+      incomingEntity.version === undefined ||
+      typeof incomingEntity.version === "boolean" ||
+      (typeof incomingEntity.version === "string" && !/^\d+$/.test(incomingEntity.version))
+    ) {
+      return { applied: false, reason: "invalid_version" };
+    }
     const incomingVer = Number(incomingEntity.version);
-    if (!Number.isInteger(incomingVer) || (typeof incomingEntity.version === "string" && !/^\d+$/.test(incomingEntity.version)) || incomingVer < 0) {
+    if (!Number.isInteger(incomingVer) || incomingVer < 0) {
       return { applied: false, reason: "invalid_version" };
     }
 
@@ -63,10 +75,13 @@ export class ResourceStore {
       }
 
       if (incomingVer === existingVer) {
-        // Idempotencia si el contenido relevante es equivalente
+        // Idempotencia si el contenido relevante es equivalente; si difiere, conflict_divergent
         const isSameStatus = existing.status === incomingEntity.status;
         const isSameId = existing.id === incomingEntity.id;
-        if (isSameStatus && isSameId) {
+        const existingPlayers = Array.isArray(existing.selected_player_ids) ? [...existing.selected_player_ids].sort() : [];
+        const incomingPlayers = Array.isArray(incomingEntity.selected_player_ids) ? [...incomingEntity.selected_player_ids].sort() : [];
+        const isSamePlayers = existingPlayers.length === incomingPlayers.length && existingPlayers.every((p, i) => p === incomingPlayers[i]);
+        if (isSameStatus && isSameId && isSamePlayers) {
           return { applied: false, reason: "idempotent" };
         }
         return { applied: false, reason: "conflict_divergent" };
@@ -98,8 +113,29 @@ export class ResourceStore {
     if (!incomingEntity || typeof incomingEntity !== "object" || Object.keys(incomingEntity).length === 0) {
       return { applied: false, reason: "null_or_empty_entity" };
     }
-    const incomingVer = Number(incomingEntity.version !== undefined ? incomingEntity.version : 0);
-    if (!Number.isInteger(incomingVer) || (typeof incomingEntity.version === "string" && !/^\d+$/.test(incomingEntity.version)) || incomingVer < 0) {
+
+    // 1. Verificación de identidad estricta de recurso (F08)
+    if (incomingEntity.event_id && key.eventId && incomingEntity.event_id !== key.eventId) {
+      return { applied: false, reason: "identity_mismatch" };
+    }
+    if (incomingEntity.player_id && key.playerId && key.playerId !== "all" && incomingEntity.player_id !== key.playerId) {
+      return { applied: false, reason: "identity_mismatch" };
+    }
+    if (incomingEntity.team_season_id && key.teamSeasonId && key.teamSeasonId !== "default" && incomingEntity.team_season_id !== key.teamSeasonId) {
+      return { applied: false, reason: "identity_mismatch" };
+    }
+
+    // 2. Validación estricta de formato de versión monotónica (F08)
+    if (
+      incomingEntity.version === null ||
+      incomingEntity.version === undefined ||
+      typeof incomingEntity.version === "boolean" ||
+      (typeof incomingEntity.version === "string" && !/^\d+$/.test(incomingEntity.version))
+    ) {
+      return { applied: false, reason: "invalid_version" };
+    }
+    const incomingVer = Number(incomingEntity.version);
+    if (!Number.isInteger(incomingVer) || incomingVer < 0) {
       return { applied: false, reason: "invalid_version" };
     }
 
@@ -110,8 +146,11 @@ export class ResourceStore {
       if (incomingVer < existingVer) {
         return { applied: false, reason: "stale_version" };
       }
-      if (incomingVer === existingVer && existing.status === incomingEntity.status) {
-        return { applied: false, reason: "idempotent" };
+      if (incomingVer === existingVer) {
+        if (existing.status === incomingEntity.status) {
+          return { applied: false, reason: "idempotent" };
+        }
+        return { applied: false, reason: "conflict_divergent" };
       }
     }
 
@@ -131,8 +170,9 @@ export class ResourceStore {
 
   clearTeamSeason(teamSeasonId) {
     const prefix = `${teamSeasonId}:`;
+    const availPrefix = `avail:${teamSeasonId}:`;
     for (const k of this.store.keys()) {
-      if (k.startsWith(prefix)) {
+      if (k.startsWith(prefix) || k.startsWith(availPrefix)) {
         this.store.delete(k);
       }
     }

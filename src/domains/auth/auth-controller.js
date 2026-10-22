@@ -129,5 +129,18 @@ export class AuthDomainController {
       unconfirmedWarnings: []
     };
     this.app.purgePrivateFormsAndDom();
+    if (typeof document !== "undefined") {
+      const codeDisplay = document.getElementById("coach-code-display");
+      if (codeDisplay) codeDisplay.textContent = "------";
+      const coachCodeSection = document.getElementById("coach-code-section");
+      if (coachCodeSection) coachCodeSection.classList.add("hidden");
+      const rosterSection = document.getElementById("coach-roster-management-section");
+      if (rosterSection) rosterSection.classList.add("hidden");
+      const parentNotice = document.getElementById("parent-clean-backend-notice");
+      if (parentNotice) parentNotice.classList.add("hidden");
+    }
+    if (typeof this.app.goToScreen === "function") {
+      this.app.goToScreen("v2_00_onboarding_welcome", "onboard");
+    }
   }
 }

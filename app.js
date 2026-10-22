@@ -274,12 +274,16 @@ export class TeamAppState {
       ? (transition.guardianPlayer ? (transition.guardianPlayer.id || transition.guardianPlayer.playerId || null) : null)
       : currentChildId;
 
+    const isTeamChanged = transition.teamSeasonId !== undefined && transition.teamSeasonId !== (this.beta?.teamSeasonId || null);
+    const isRoleChanged = transition.role !== undefined && transition.role !== this.currentRole;
+    const isSessionChanged = transition.currentSessionId !== undefined && transition.currentSessionId !== this.currentSessionId;
+
     const isIdentityChange = Boolean(
       transition.forceTransition ||
       (transition.appMode !== undefined && transition.appMode !== this.appMode) ||
-      (transition.currentSessionId !== undefined && transition.currentSessionId !== this.currentSessionId) ||
-      (transition.role !== undefined && transition.role !== this.currentRole) ||
-      (transition.teamSeasonId !== undefined && transition.teamSeasonId !== (this.beta?.teamSeasonId || null)) ||
+      isSessionChanged ||
+      isRoleChanged ||
+      isTeamChanged ||
       (transition.guardianPlayer !== undefined && targetChildId !== currentChildId) ||
       (transition.bearer !== undefined && transition.bearer !== api.client.getToken())
     );
@@ -295,16 +299,20 @@ export class TeamAppState {
       this.abortAllInFlight();
       this.clearAllManagedTimers();
 
-      if (
-        (transition.teamSeasonId !== undefined && transition.teamSeasonId !== this.beta?.teamSeasonId) ||
-        (transition.role !== undefined && transition.role !== this.currentRole) ||
-        (transition.currentSessionId !== undefined && transition.currentSessionId !== this.currentSessionId)
-      ) {
-        if (this.resourceStore && transition.teamSeasonId !== undefined && transition.teamSeasonId !== this.beta?.teamSeasonId) {
+      if (isTeamChanged || isRoleChanged || isSessionChanged) {
+        if (this.resourceStore && isTeamChanged) {
           this.resourceStore.clearTeamSeason(this.beta?.teamSeasonId);
         }
-        if (this.resourceStore && transition.currentSessionId !== undefined && transition.currentSessionId !== this.currentSessionId) {
+        if (this.resourceStore && isSessionChanged) {
           this.resourceStore.clearAll();
+        }
+        if (isTeamChanged) {
+          this.beta.activeEventId = null;
+          try { localStorage.removeItem("talde_active_event_id"); } catch {}
+          if (this.contextCoordinator) {
+            this.contextCoordinator.confirmedContext.activeEventId = null;
+            this.contextCoordinator.confirmedContext.eventEpoch = 0;
+          }
         }
         if (transition.players === undefined) {
           this.beta.players = [];
@@ -339,8 +347,9 @@ export class TeamAppState {
     }
     if (transition.currentSessionId !== undefined) {
       this.currentSessionId = transition.currentSessionId;
+      const effToken = transition.bearer || api.client.getToken() || (transition.tokens && transition.tokens[this.currentRole]);
       if (this.sessionManager) {
-        this.sessionManager.setSession(this.currentSessionId, api.client.getToken(), this.appMode);
+        this.sessionManager.setSession(this.currentSessionId, effToken, this.appMode);
       }
     }
     if (transition.role !== undefined) {
@@ -418,6 +427,9 @@ export class TeamAppState {
         if (transition.bearer) localStorage.setItem("talde_session_token", transition.bearer);
         else localStorage.removeItem("talde_session_token");
       } catch {}
+      if (this.sessionManager) {
+        this.sessionManager.setSession(this.currentSessionId, transition.bearer, this.appMode);
+      }
     }
     return true;
   }
@@ -493,6 +505,9 @@ export class TeamAppState {
       this.tokens.coach = unifiedToken;
       this.tokens.parent = unifiedToken;
       api.client.setToken(unifiedToken);
+      if (this.sessionManager) {
+        this.sessionManager.setSession(this.currentSessionId, unifiedToken, this.appMode);
+      }
     } else {
       if (localStorage.getItem("talde_token_coach")) {
         this.tokens.coach = localStorage.getItem("talde_token_coach");
@@ -976,6 +991,13 @@ export class TeamAppState {
     if (sourceError && (!sourceError.wasAuthenticated || sourceError.path?.includes("/auth/otp/")) && sourceError.code !== "AUTH_REQUIRED") {
       return;
     }
+    const isAuth = Boolean(sourceError?.wasAuthenticated !== false);
+    if (this.sessionManager) {
+      const handled = this.sessionManager.handleUnauthorized(scope, isAuth);
+      if (!handled && scope) {
+        return;
+      }
+    }
     const activeToken = api.client.getToken() || this.tokens[this.currentRole] || this.tokens.coach || this.tokens.parent;
     if (sourceError?.requestToken) {
       if (activeToken && sourceError.requestToken !== activeToken) {
@@ -987,9 +1009,11 @@ export class TeamAppState {
       if (scopeSession && this.currentSessionId && scopeSession !== this.currentSessionId) {
         return;
       }
-      const scopeToken = scope.bearerToken || scope.requestToken || scope.token || null;
-      if (scopeToken && activeToken && scopeToken !== activeToken) {
-        return;
+      if (!sourceError?.requestToken) {
+        const scopeToken = scope.bearerToken || scope.requestToken || scope.token || null;
+        if (scopeToken && activeToken && scopeToken !== activeToken) {
+          return;
+        }
       }
     }
 
@@ -1020,6 +1044,12 @@ export class TeamAppState {
     this.clearAllManagedTimers();
     this.contextGeneration++;
     this.currentSessionId = null;
+    if (this.sessionManager) {
+      this.sessionManager.clearSession();
+    }
+    if (this.resourceStore) {
+      this.resourceStore.clearAll();
+    }
     if (this.isOtpModalOpen()) {
       this.closeOtpModal();
     }
@@ -1080,6 +1110,9 @@ export class TeamAppState {
   }
 
   clearSessionData() {
+    if (this.authDomain && typeof this.authDomain.clearSessionData === "function") {
+      return this.authDomain.clearSessionData();
+    }
     this.contextGeneration++;
     this.currentSessionId = null;
     this._explicitIntentSeq = (this._explicitIntentSeq || 0) + 1;
@@ -1590,17 +1623,26 @@ export class TeamAppState {
       if (token) {
         this.tokens.coach = token;
         api.client.setToken(token);
+        if (this.sessionManager && this.sessionManager.getToken() !== token) {
+          this.sessionManager.setSession(this.currentSessionId, token, this.appMode);
+        }
       }
     } else if (role === "parent") {
       const token = this.tokens.parent || unifiedToken || localStorage.getItem("talde_token_parent");
       if (token) {
         this.tokens.parent = token;
         api.client.setToken(token);
+        if (this.sessionManager && this.sessionManager.getToken() !== token) {
+          this.sessionManager.setSession(this.currentSessionId, token, this.appMode);
+        }
       }
     }
   }
 
   async switchTeam(teamSeasonId) {
+    if (this.teamsDomain && typeof this.teamsDomain.switchTeam === "function") {
+      return this.teamsDomain.switchTeam(teamSeasonId);
+    }
     this._explicitIntentSeq = (this._explicitIntentSeq || 0) + 1;
     const myIntentSeq = this._explicitIntentSeq;
     const scope = this.createScope();
@@ -3310,8 +3352,18 @@ export class TeamAppState {
     const callupSubtitle = document.getElementById("hub-callup-subtitle");
     const callupBtnText = document.getElementById("hub-callup-btn-text");
 
-    const isPublished = isDemo ? (this.live.callup && this.live.callup.status === "PUBLISHED") : (activeEvent && activeEvent.callup_status === "PUBLISHED");
-    const callupRev = isDemo ? (this.live.callup?.current_revision_number || 1) : (activeEvent?.callup_revision || 1);
+    let storedCallup = null;
+    if (this.resourceStore && activeTeamSeasonId && eventId) {
+      storedCallup = this.resourceStore.getCallup({
+        teamSeasonId: activeTeamSeasonId,
+        eventId: eventId,
+        callupId: (activeEvent && activeEvent.callup_id) || "primary",
+        namespace: "live"
+      });
+    }
+    const effectiveCallup = storedCallup || this.live.callup;
+    const isPublished = (effectiveCallup && effectiveCallup.status === "PUBLISHED") || (activeEvent && activeEvent.callup_status === "PUBLISHED");
+    const callupRev = isDemo ? (this.live.callup?.current_revision_number || 1) : (effectiveCallup?.current_revision_number || effectiveCallup?.version || activeEvent?.callup_revision || 1);
 
     if (isPublished) {
       if (callupBadge) {

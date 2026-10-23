@@ -334,8 +334,7 @@ export class TeamAppState {
     const isConfirmedDivergent = Boolean(
       this.contextCoordinator && (
         (targetRole !== undefined && targetRole !== currentConfirmedRole) ||
-        (transition.teamSeasonId !== undefined && transition.teamSeasonId !== currentConfirmedTeam) ||
-        (transition.appMode !== undefined && transition.appMode !== currentConfirmedMode)
+        (transition.teamSeasonId !== undefined && transition.teamSeasonId !== currentConfirmedTeam)
       )
     );
 
@@ -690,17 +689,14 @@ export class TeamAppState {
 
     this.bindGlobalEvents();
 
-    const scope = this.createScope();
+    const initScope = this.createScope();
     let contextLoaded = false;
     try {
       if (this.currentRole !== "onboard" && this.appMode === "DEMO") {
         await this.ensureAuth(this.currentRole);
       }
-      if (!this.isScopeActive(scope)) return;
+      if (!this.isScopeActive(initScope)) return;
       contextLoaded = await this.loadUserContext();
-      if (!this.isScopeActive(scope)) return;
-      await this.syncCurrentScreen();
-      if (!this.isScopeActive(scope)) return;
     } catch (err) {
       if (err?.status === 401 && err?.wasAuthenticated) {
         this.handleSessionExpired(err);
@@ -709,36 +705,62 @@ export class TeamAppState {
       console.warn("Backend auth/sync deferred:", err);
     }
 
-    if (!this.isScopeActive(scope)) return;
+    if (contextLoaded) {
+      if (initScope._origin) {
+        if (initScope._origin.sessionId !== this.currentSessionId) return;
+        if (initScope._origin.mode !== this.appMode) return;
+        if (this.contextGeneration !== initScope._origin.generation && this.contextGeneration !== initScope._origin.generation + 1) return;
+      }
+    } else {
+      if (!this.isScopeActive(initScope)) return;
 
-    if (this.appMode !== "DEMO" && !contextLoaded) {
-      this.currentRole = "onboard";
-      this.currentScreen = "beta_entry_screen";
-      this.beta.teamSeasonId = null;
-      if (this.contextCoordinator) {
-        this.contextCoordinator.confirmedContext.currentRole = "onboard";
-        this.contextCoordinator.confirmedContext.teamSeasonId = null;
+      if (this.appMode !== "DEMO") {
+        if (this.currentSessionId) {
+          if (
+            this.currentRole !== "onboard" ||
+            (this.beta && this.beta.teamSeasonId !== null) ||
+            this.contextCoordinator?.confirmedContext?.currentRole !== "onboard" ||
+            this.contextCoordinator?.confirmedContext?.teamSeasonId !== null
+          ) {
+            this.applyContextTransition({ role: "onboard", teamSeasonId: null }, initScope);
+          }
+        } else {
+          this.currentRole = "onboard";
+          if (this.beta) this.beta.teamSeasonId = null;
+        }
+        this.currentScreen = "beta_entry_screen";
       }
     }
 
-    const postInitScope = this.createScope();
-    this.goToScreen(this.currentScreen);
+    const postLoadScope = this.createScope();
+    try {
+      await this.goToScreen(this.currentScreen);
+    } catch (err) {
+      if (err?.status === 401 && err?.wasAuthenticated) {
+        this.handleSessionExpired(err, postLoadScope);
+        return;
+      }
+      console.warn("goToScreen deferred:", err);
+    }
+
+    if (!this.isScopeActive(postLoadScope)) return;
+
     this.updateBottomNav();
     this.updateRoleUI();
     this.updateStepUI();
 
     if (inviteToken && this.beta.individualInviteToken !== null && !contextLoaded) {
       this.registerManagedTimeout(() => {
-        if (!this.isScopeActive(postInitScope)) return;
+        if (!this.isScopeActive(postLoadScope)) return;
         this.setupIndividualInvite(inviteToken);
-      }, 150, postInitScope);
+      }, 150, postLoadScope);
     } else if (joinCode && !contextLoaded) {
       this.registerManagedTimeout(() => {
-        if (!this.isScopeActive(postInitScope)) return;
+        if (!this.isScopeActive(postLoadScope)) return;
         const input = document.getElementById("parent-join-code-input");
         if (input) input.value = joinCode.toUpperCase();
         this.verifyGeneralJoinCode();
-      }, 150, postInitScope);
+      }, 150, postLoadScope);
     }
   }
 

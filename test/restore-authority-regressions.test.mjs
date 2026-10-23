@@ -70,10 +70,11 @@ const root = process.cwd();
 const { TeamAppState } = await import(pathToFileURL(root + "/app.js"));
 const { api } = await import(pathToFileURL(root + "/src/api/index.js"));
 
-test("RESTORE-01: Coach with persisted team confirms coach role and membership into ContextCoordinator", async () => {
+test("RESTORE-01: Coach with persisted team confirms coach role and membership into ContextCoordinator natively during init", async () => {
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "";
 
   localStorage.setItem("talde_app_mode", "BETA_NORMAL");
   localStorage.setItem("talde_active_role", "coach");
@@ -81,8 +82,17 @@ test("RESTORE-01: Coach with persisted team confirms coach role and membership i
   localStorage.setItem("talde_team_season_id", "TEAM_A");
 
   const app = new TeamAppState();
-  app.syncCoachHome = async () => {};
+  const trace = [];
+  app.syncCoachHome = async () => {
+    trace.push({ kind: "syncCoachHome", role: app.currentRole, team: app.beta.teamSeasonId });
+  };
   app.syncParentHome = async () => {};
+
+  const origGoTo = app.goToScreen.bind(app);
+  app.goToScreen = async (...args) => {
+    trace.push({ kind: "goToScreen", target: args[0] });
+    return origGoTo(...args);
+  };
 
   const commits = [];
   const original = app.contextCoordinator.applyIdentityTransition.bind(app.contextCoordinator);
@@ -111,8 +121,16 @@ test("RESTORE-01: Coach with persisted team confirms coach role and membership i
   });
 
   await initPromise;
-  await app.goToScreen(app.currentScreen);
   await new Promise(r => setImmediate(r));
+
+  // Must have completed navigation and sync WITHOUT any external goToScreen call from the test
+  const navCalls = trace.filter(x => x.kind === "goToScreen");
+  const syncCalls = trace.filter(x => x.kind === "syncCoachHome");
+  assert.equal(navCalls.length, 1, "init() must complete navigation natively");
+  assert.equal(navCalls[0].target, "v2_01_coach_home", "Must navigate to v2_01_coach_home");
+  assert.equal(syncCalls.length, 1, "init() must invoke syncCoachHome natively");
+  assert.equal(syncCalls[0].role, "coach");
+  assert.equal(syncCalls[0].team, "TEAM_A");
 
   const confirmed = app.contextCoordinator.getConfirmedContext();
   assert.equal(app.currentRole, "coach", "App role must be coach");
@@ -123,18 +141,28 @@ test("RESTORE-01: Coach with persisted team confirms coach role and membership i
   assert.equal(app.contextGeneration, 1, "contextGeneration must advance to 1");
 });
 
-test("RESTORE-02: Control - Coach without persisted team confirms coach role", async () => {
+test("RESTORE-02: Control - Coach without persisted team confirms coach role natively", async () => {
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "";
 
   localStorage.setItem("talde_app_mode", "BETA_NORMAL");
   localStorage.setItem("talde_active_role", "coach");
   localStorage.setItem("talde_session_token", "SYNTHETIC_TOKEN");
 
   const app = new TeamAppState();
-  app.syncCoachHome = async () => {};
+  const trace = [];
+  app.syncCoachHome = async () => {
+    trace.push({ kind: "syncCoachHome", role: app.currentRole });
+  };
   app.syncParentHome = async () => {};
+
+  const origGoTo = app.goToScreen.bind(app);
+  app.goToScreen = async (...args) => {
+    trace.push({ kind: "goToScreen", target: args[0] });
+    return origGoTo(...args);
+  };
 
   const commits = [];
   const original = app.contextCoordinator.applyIdentityTransition.bind(app.contextCoordinator);
@@ -163,8 +191,10 @@ test("RESTORE-02: Control - Coach without persisted team confirms coach role", a
   });
 
   await initPromise;
-  await app.goToScreen(app.currentScreen);
   await new Promise(r => setImmediate(r));
+
+  assert.equal(trace.filter(x => x.kind === "goToScreen").length, 1, "Must navigate natively");
+  assert.equal(trace.filter(x => x.kind === "syncCoachHome").length, 1, "Must sync natively");
 
   const confirmed = app.contextCoordinator.getConfirmedContext();
   assert.equal(app.currentRole, "coach");
@@ -173,10 +203,11 @@ test("RESTORE-02: Control - Coach without persisted team confirms coach role", a
   assert.equal(commits.length, 1);
 });
 
-test("RESTORE-03: Control - Parent with child confirms parent role", async () => {
+test("RESTORE-03: Control - Parent with child confirms parent role natively", async () => {
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "";
 
   localStorage.setItem("talde_app_mode", "BETA_NORMAL");
   localStorage.setItem("talde_active_role", "parent");
@@ -184,8 +215,17 @@ test("RESTORE-03: Control - Parent with child confirms parent role", async () =>
   localStorage.setItem("talde_team_season_id", "TEAM_A");
 
   const app = new TeamAppState();
+  const trace = [];
   app.syncCoachHome = async () => {};
-  app.syncParentHome = async () => {};
+  app.syncParentHome = async () => {
+    trace.push({ kind: "syncParentHome", role: app.currentRole, team: app.beta.teamSeasonId });
+  };
+
+  const origGoTo = app.goToScreen.bind(app);
+  app.goToScreen = async (...args) => {
+    trace.push({ kind: "goToScreen", target: args[0] });
+    return origGoTo(...args);
+  };
 
   const commits = [];
   const original = app.contextCoordinator.applyIdentityTransition.bind(app.contextCoordinator);
@@ -215,8 +255,11 @@ test("RESTORE-03: Control - Parent with child confirms parent role", async () =>
   });
 
   await initPromise;
-  await app.goToScreen(app.currentScreen);
   await new Promise(r => setImmediate(r));
+
+  assert.equal(trace.filter(x => x.kind === "goToScreen").length, 1, "Must navigate natively to parent home");
+  assert.equal(trace.filter(x => x.kind === "goToScreen")[0].target, "v2_07_parent_home");
+  assert.equal(trace.filter(x => x.kind === "syncParentHome").length, 1, "Must sync parent home natively");
 
   const confirmed = app.contextCoordinator.getConfirmedContext();
   assert.equal(app.currentRole, "parent");
@@ -228,6 +271,7 @@ test("RESTORE-04: DEMO selected without session confirms DEMO mode on ContextCoo
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "";
 
   localStorage.setItem("talde_app_mode", "DEMO");
   localStorage.setItem("talde_active_role", "coach");
@@ -237,19 +281,20 @@ test("RESTORE-04: DEMO selected without session confirms DEMO mode on ContextCoo
   app.syncParentHome = async () => {};
 
   await app.init();
-  await app.goToScreen(app.currentScreen);
   await new Promise(r => setImmediate(r));
 
   const confirmed = app.contextCoordinator.getConfirmedContext();
   assert.equal(app.appMode, "DEMO");
   assert.equal(confirmed.appMode, "DEMO", "Confirmed appMode must be DEMO, not null");
   assert.equal(confirmed.currentSessionId, null, "No session token means currentSessionId is null");
+  assert.equal(app.contextGeneration, 0, "No session must preserve generation 0");
 });
 
 test("RESTORE-05: BETA selected without session confirms BETA_NORMAL mode on ContextCoordinator", async () => {
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "";
 
   localStorage.setItem("talde_app_mode", "BETA_NORMAL");
   localStorage.setItem("talde_active_role", "onboard");
@@ -259,37 +304,39 @@ test("RESTORE-05: BETA selected without session confirms BETA_NORMAL mode on Con
   app.syncParentHome = async () => {};
 
   await app.init();
-  await app.goToScreen(app.currentScreen);
   await new Promise(r => setImmediate(r));
 
   const confirmed = app.contextCoordinator.getConfirmedContext();
   assert.equal(app.appMode, "BETA_NORMAL");
   assert.equal(confirmed.appMode, "BETA_NORMAL", "Confirmed appMode must be BETA_NORMAL, not null");
   assert.equal(confirmed.currentSessionId, null);
+  assert.equal(app.contextGeneration, 0, "No session must preserve generation 0");
 });
 
 test("RESTORE-06: Control - Fresh unselected start preserves null appMode", async () => {
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "";
 
   const app = new TeamAppState();
   app.syncCoachHome = async () => {};
   app.syncParentHome = async () => {};
 
   await app.init();
-  await app.goToScreen(app.currentScreen);
   await new Promise(r => setImmediate(r));
 
   const confirmed = app.contextCoordinator.getConfirmedContext();
   assert.equal(app.appMode, null, "App mode must be null for fresh start");
   assert.equal(confirmed.appMode, null, "Confirmed appMode must remain null for fresh start");
+  assert.equal(app.contextGeneration, 0);
 });
 
-test("RESTORE-07: Inactive or absent membership prevents coach role adoption from storage", async () => {
+test("RESTORE-07: Inactive or absent membership prevents coach role adoption, neutralizes authoritatively before sync", async () => {
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "?screen=v2_01_coach_home";
 
   localStorage.setItem("talde_app_mode", "BETA_NORMAL");
   localStorage.setItem("talde_active_role", "coach");
@@ -297,8 +344,23 @@ test("RESTORE-07: Inactive or absent membership prevents coach role adoption fro
   localStorage.setItem("talde_team_season_id", "TEAM_A");
 
   const app = new TeamAppState();
-  app.syncCoachHome = async () => {};
+  const trace = [];
+  app.syncCoachHome = async () => {
+    trace.push({ kind: "coach-screen-leaf-invoked", role: app.currentRole, team: app.beta.teamSeasonId });
+  };
   app.syncParentHome = async () => {};
+
+  const sync = app.syncCurrentScreen.bind(app);
+  app.syncCurrentScreen = async () => {
+    trace.push({ kind: "sync", role: app.currentRole, team: app.beta.teamSeasonId, screen: app.currentScreen });
+    return sync();
+  };
+
+  const nav = app.goToScreen.bind(app);
+  app.goToScreen = async (...args) => {
+    trace.push({ kind: "nav", target: args[0] });
+    return nav(...args);
+  };
 
   let resolveMembers, started;
   const called = new Promise(r => started = r);
@@ -312,20 +374,31 @@ test("RESTORE-07: Inactive or absent membership prevents coach role adoption fro
   resolveMembers({ items: [] });
 
   await initPromise;
-  await app.goToScreen(app.currentScreen);
   await new Promise(r => setImmediate(r));
+
+  // 318-NQ-02: Zero protected coach leaf invocations
+  const coachLeafCalls = trace.filter(x => x.kind === "coach-screen-leaf-invoked");
+  assert.equal(coachLeafCalls.length, 0, "Protected coach leaf must NEVER be called on absent membership");
+
+  // 318-NQ-02: Zero unauthorized coach sync projections
+  const unauthorizedProjections = trace.filter(x => x.kind === "sync" && x.role === "coach");
+  assert.equal(unauthorizedProjections.length, 0, "No unauthorized coach sync projection");
 
   const confirmed = app.contextCoordinator.getConfirmedContext();
   assert.equal(app.currentRole, "onboard", "Storage coach must drop to onboard when backend has no active membership");
-  assert.equal(confirmed.currentRole, "onboard", "Confirmed role must stay onboard");
+  assert.equal(confirmed.currentRole, "onboard", "Confirmed role must be onboard via coordinator transition");
   assert.equal(app.currentScreen, "beta_entry_screen", "Screen must be beta_entry_screen");
   assert.equal(confirmed.teamSeasonId, null, "Confirmed teamSeasonId must be null");
+  assert.equal(app.contextGeneration, 1, "Neutralization must advance generation via coordinator authority");
+  assert.equal(localStorage.getItem("talde_active_role"), "onboard", "Storage must reflect onboard role");
+  assert.equal(localStorage.getItem("talde_team_season_id"), null, "Storage team must be removed");
 });
 
 test("RESTORE-08: Scope invalidation during loadUserContext aborts stale init navigation", async () => {
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "";
 
   localStorage.setItem("talde_app_mode", "BETA_NORMAL");
   localStorage.setItem("talde_active_role", "coach");
@@ -362,12 +435,14 @@ test("RESTORE-08: Scope invalidation during loadUserContext aborts stale init na
   await new Promise(r => setImmediate(r));
 
   assert.equal(app.appMode, "DEMO", "Stale init completion must not overwrite interleaved mode change");
+  assert.equal(app.contextCoordinator.getConfirmedContext().currentRole, "onboard", "Stale coach must not be confirmed");
 });
 
 test("RESTORE-09: Idempotent restore without changes does NOT emit redundant commits or advance generation", async () => {
   localStorage.clear();
   api.client.setToken(null);
   api.client.setSessionContext(null);
+  window.location.search = "";
 
   localStorage.setItem("talde_app_mode", "BETA_NORMAL");
   localStorage.setItem("talde_active_role", "coach");
@@ -397,7 +472,6 @@ test("RESTORE-09: Idempotent restore without changes does NOT emit redundant com
   api.teams.getMyMemberships = async () => memberships;
 
   await app.init();
-  await app.goToScreen(app.currentScreen);
   await new Promise(r => setImmediate(r));
 
   assert.equal(commits.length, 1, "First restore produces exactly 1 commit");
@@ -408,4 +482,70 @@ test("RESTORE-09: Idempotent restore without changes does NOT emit redundant com
 
   assert.equal(commits.length, 1, "Second pass must NOT emit additional commits");
   assert.equal(app.contextGeneration, 1, "Second pass must NOT bump contextGeneration");
+});
+
+test("RESTORE-10: Inactive COACH membership with explicit deeplink neutralizes and avoids leaf sync", async () => {
+  localStorage.clear();
+  api.client.setToken(null);
+  api.client.setSessionContext(null);
+  window.location.search = "?screen=v2_01_coach_home";
+
+  localStorage.setItem("talde_app_mode", "BETA_NORMAL");
+  localStorage.setItem("talde_active_role", "coach");
+  localStorage.setItem("talde_session_token", "SYNTHETIC_TOKEN");
+  localStorage.setItem("talde_team_season_id", "TEAM_A");
+
+  const app = new TeamAppState();
+  const trace = [];
+  app.syncCoachHome = async () => {
+    trace.push({ kind: "coach-screen-leaf-invoked", role: app.currentRole, team: app.beta.teamSeasonId });
+  };
+  app.syncParentHome = async () => {};
+
+  const sync = app.syncCurrentScreen.bind(app);
+  app.syncCurrentScreen = async () => {
+    trace.push({ kind: "sync", role: app.currentRole, team: app.beta.teamSeasonId, screen: app.currentScreen });
+    return sync();
+  };
+
+  api.teams.getMyMemberships = async () => ({
+    items: [{
+      role: "COACH",
+      status: "INACTIVE",
+      team_season_id: "TEAM_A",
+      team_id: "TEAM",
+      team_name: "Synthetic Club"
+    }]
+  });
+
+  await app.init();
+  await new Promise(r => setImmediate(r));
+
+  assert.equal(trace.some(x => x.kind === "coach-screen-leaf-invoked"), false);
+  assert.equal(trace.some(x => x.kind === "sync" && x.role === "coach"), false);
+  assert.equal(app.currentRole, "onboard");
+  assert.equal(app.currentScreen, "beta_entry_screen");
+  assert.equal(app.contextCoordinator.getConfirmedContext().currentRole, "onboard");
+  assert.equal(app.contextCoordinator.getConfirmedContext().teamSeasonId, null);
+});
+
+test("RESTORE-11: Mode divergence without identity change does not bump generation or abort in-flight", async () => {
+  localStorage.clear();
+  api.client.setToken(null);
+  api.client.setSessionContext(null);
+  window.location.search = "";
+
+  const app = new TeamAppState();
+  app.appMode = "BETA_NORMAL";
+  let aborted = 0;
+  app.inFlightControllers.add({ abort() { aborted++; } });
+
+  const beforeGen = app.contextGeneration;
+  const beforeEpoch = app.sessionManager.getCredentialEpoch();
+
+  app.applyContextTransition({ appMode: "BETA_NORMAL" });
+
+  assert.equal(app.contextGeneration, beforeGen, "Same-mode applyContextTransition must NOT bump generation");
+  assert.equal(app.sessionManager.getCredentialEpoch(), beforeEpoch, "Epoch must be unchanged");
+  assert.equal(aborted, 0, "No in-flight controllers must be aborted");
 });

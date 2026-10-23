@@ -205,6 +205,11 @@ export class TeamAppState {
     this._explicitIntentSeq = 0;
     this.inFlightControllers = new Set();
     this.managedTimers = new Map();
+    this._lastContextCommit = null;
+    this._lastRestoreCommit = null;
+    this._restoreOpSeq = 0;
+    this._activeRestoreOp = null;
+    this._restoreReceipts = new Map();
 
     // REV-02 Core Coordination Architecture
     this.concurrencyTracker = new ConcurrencyTracker();
@@ -699,6 +704,7 @@ export class TeamAppState {
 
     const initScope = this.createScope();
     const initGen = this.contextGeneration;
+    const myRestoreOpId = ++this._restoreOpSeq;
     this._lastRestoreCommit = null;
     let contextLoaded = false;
     try {
@@ -706,6 +712,7 @@ export class TeamAppState {
         await this.ensureAuth(this.currentRole);
       }
       if (!this.isScopeActive(initScope)) return;
+      this._activeRestoreOp = myRestoreOpId;
       contextLoaded = await this.loadUserContext();
     } catch (err) {
       if (err?.status === 401 && err?.wasAuthenticated) {
@@ -713,11 +720,15 @@ export class TeamAppState {
         return;
       }
       console.warn("Backend auth/sync deferred:", err);
+    } finally {
+      this._activeRestoreOp = null;
     }
 
+    const ownCommit = this._restoreReceipts.get(myRestoreOpId) || null;
+    this._restoreReceipts.delete(myRestoreOpId);
+
     if (contextLoaded) {
-      if (this._lastRestoreCommit) {
-        const ownCommit = this._lastRestoreCommit;
+      if (ownCommit) {
         const isSessionValid = initScope._origin?.sessionId === this.currentSessionId && this.currentSessionId === ownCommit.sessionId;
         const isModeValid = initScope._origin?.mode === this.appMode && this.appMode === ownCommit.mode;
         const isGenerationLegitimate = this.contextGeneration === ownCommit.generation && ownCommit.generation === initGen + 1;
@@ -890,11 +901,24 @@ export class TeamAppState {
     return false;
   }
 
+  _recordRestoreCommit(opId, commit) {
+    this._lastRestoreCommit = commit;
+    if (opId) {
+      this._restoreReceipts.set(opId, commit);
+      if (this._restoreReceipts.size > 50) {
+        const oldestKey = this._restoreReceipts.keys().next().value;
+        this._restoreReceipts.delete(oldestKey);
+      }
+    }
+  }
+
   async loadUserContext() {
+    const opId = this._activeRestoreOp || ++this._restoreOpSeq;
+    this._activeRestoreOp = null;
     if (this.appMode === "DEMO") return false;
     const scope = this.createScope();
     const commitBefore = this._lastContextCommit;
-    this._lastRestoreCommit = null;
+    this._recordRestoreCommit(opId, null);
     try {
       const activeRole = localStorage.getItem("talde_active_role") || this.currentRole || "coach";
       const coachToken = this.tokens.coach || localStorage.getItem("talde_token_coach");
@@ -941,7 +965,7 @@ export class TeamAppState {
           }, scope);
           if (!ok) return false;
           if (this._lastContextCommit && this._lastContextCommit !== commitBefore) {
-            this._lastRestoreCommit = this._lastContextCommit;
+            this._recordRestoreCommit(opId, this._lastContextCommit);
           }
 
           this.cleanInviteTokenFromUrl();
@@ -982,7 +1006,7 @@ export class TeamAppState {
         }, scope);
         if (!ok) return false;
         if (this._lastContextCommit && this._lastContextCommit !== commitBefore) {
-          this._lastRestoreCommit = this._lastContextCommit;
+          this._recordRestoreCommit(opId, this._lastContextCommit);
         }
 
         const coachBadge = document.getElementById("coach-club-badge");
@@ -1037,7 +1061,7 @@ export class TeamAppState {
         }, scope);
         if (!ok) return false;
         if (this._lastContextCommit && this._lastContextCommit !== commitBefore) {
-          this._lastRestoreCommit = this._lastContextCommit;
+          this._recordRestoreCommit(opId, this._lastContextCommit);
         }
         return true;
       }

@@ -651,3 +651,109 @@ test("RESTORE-12: Stale init re-entry on accepted context discards continuation 
   assert.equal(app.contextCoordinator.getConfirmedContext().teamSeasonId, "TEAM_B", "TEAM_B must remain confirmed in coordinator");
   assert.equal(app.contextGeneration, 2, "Generation 2 must remain authoritative");
 });
+
+test("RESTORE-13: Concurrent real loader confirms foreign team; stale init does not adopt foreign receipt and produces 0 effects", async () => {
+  localStorage.clear();
+  api.client.setToken(null);
+  api.client.setSessionContext(null);
+  window.location.search = "";
+
+  for (const [k, v] of Object.entries({
+    talde_app_mode: "BETA_NORMAL",
+    talde_active_role: "coach",
+    talde_session_token: "SYNTHETIC_TOKEN",
+    talde_team_season_id: "TEAM_A"
+  })) {
+    localStorage.setItem(k, v);
+  }
+
+  const app = new TeamAppState();
+  const trace = [];
+  app.syncCoachHome = async () => {
+    trace.push({
+      kind: "coach-sync",
+      team: app.beta.teamSeasonId,
+      role: app.currentRole,
+      generation: app.contextGeneration,
+      session: app.currentSessionId,
+      mode: app.appMode
+    });
+  };
+  app.syncParentHome = async () => {};
+
+  const originalGoToScreen = app.goToScreen.bind(app);
+  app.goToScreen = async (...args) => {
+    trace.push({ kind: "navigation", target: args[0], role: app.currentRole, team: app.beta.teamSeasonId });
+    return originalGoToScreen(...args);
+  };
+  app.contextCoordinator.subscribe((ctx, keys) => trace.push({ kind: "notify", keys, ctx }));
+
+  let phase = "baseline";
+  api.teams.getMyMemberships = async () => ({
+    items: phase === "foreign"
+      ? [{ role: "COACH", status: "ACTIVE", team_season_id: "TEAM_B", team_id: "TEAM", team_name: "Synthetic Club" }]
+      : [
+          { role: "COACH", status: "ACTIVE", team_season_id: "TEAM_A", team_id: "TEAM", team_name: "Synthetic Club" },
+          { role: "COACH", status: "ACTIVE", team_season_id: "TEAM_B", team_id: "TEAM", team_name: "Synthetic Club" }
+        ]
+  });
+
+  // 1. Initial valid init establishes accepted context on TEAM_A (generation 1)
+  await app.init();
+  await new Promise(r => setImmediate(r));
+
+  assert.equal(app.contextGeneration, 1, "Baseline generation is 1");
+  assert.equal(app.beta.teamSeasonId, "TEAM_A", "Baseline team is TEAM_A");
+  assert.equal(trace.filter(x => x.kind === "navigation").length, 1, "Baseline navigation occurred");
+  trace.length = 0;
+
+  // 2. Re-entry on already accepted context. Call 1 of real loader returns true without own commit.
+  // Interleave Call 2 of real loader which confirms TEAM_B before Call 1's init resumes.
+  const realLoad = app.loadUserContext.bind(app);
+  let originScope;
+  let foreignTransition;
+
+  app.loadUserContext = function() {
+    originScope = this.createScope();
+    return realLoad().then(async (ok) => {
+      assert.equal(ok, true, "First loader returns true");
+      assert.equal(this.contextGeneration, originScope.generation, "First loader did not commit own transition");
+      assert.equal(this._lastRestoreCommit, null, "First loader produced null restore commit");
+
+      phase = "foreign";
+      // Second REAL invocation of loadUserContext
+      const foreignOk = await realLoad();
+      assert.equal(foreignOk, true, "Foreign loader returns true");
+
+      foreignTransition = {
+        generation: this.contextGeneration,
+        session: this.currentSessionId,
+        mode: this.appMode,
+        team: this.beta.teamSeasonId,
+        restoreReceipt: this._lastRestoreCommit
+      };
+      assert.equal(this.isScopeActive(originScope), false, "Origin scope is invalidated by foreign loader");
+      trace.push({ kind: "foreign-loader-commit-completed", ...foreignTransition });
+      return ok;
+    });
+  };
+
+  await app.init();
+  await new Promise(r => setImmediate(r));
+
+  assert.equal(foreignTransition.generation, originScope.generation + 1, "Foreign loader bumped generation +1");
+  assert.equal(foreignTransition.session, originScope.sessionId, "Session remained identical");
+  assert.equal(foreignTransition.mode, originScope.mode, "Mode remained identical");
+
+  const staleNavigations = trace.filter(x => x.kind === "navigation");
+  const staleCoachSyncs = trace.filter(x => x.kind === "coach-sync");
+
+  assert.equal(staleNavigations.length, 0, "Stale init MUST produce 0 navigation calls");
+  assert.equal(staleCoachSyncs.length, 0, "Stale init MUST produce 0 coach-sync calls");
+
+  // Legitimate foreign selection B remains authoritative and confirmed
+  assert.equal(app.beta.teamSeasonId, "TEAM_B", "TEAM_B must remain active in app.beta");
+  assert.equal(app.contextCoordinator.getConfirmedContext().teamSeasonId, "TEAM_B", "TEAM_B must remain confirmed in coordinator");
+  assert.equal(app.contextGeneration, 2, "Generation 2 must remain authoritative");
+});
+

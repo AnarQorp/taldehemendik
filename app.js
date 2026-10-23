@@ -327,8 +327,21 @@ export class TeamAppState {
     const isRoleChanged = targetRole !== undefined && targetRole !== this.currentRole;
     const isSessionChanged = transition.currentSessionId !== undefined && transition.currentSessionId !== this.currentSessionId;
 
+    const currentConfirmedRole = this.contextCoordinator?.confirmedContext?.currentRole;
+    const currentConfirmedTeam = this.contextCoordinator?.confirmedContext?.teamSeasonId;
+    const currentConfirmedMode = this.contextCoordinator?.confirmedContext?.appMode;
+
+    const isConfirmedDivergent = Boolean(
+      this.contextCoordinator && (
+        (targetRole !== undefined && targetRole !== currentConfirmedRole) ||
+        (transition.teamSeasonId !== undefined && transition.teamSeasonId !== currentConfirmedTeam) ||
+        (transition.appMode !== undefined && transition.appMode !== currentConfirmedMode)
+      )
+    );
+
     const isIdentityChange = Boolean(
       transition.forceTransition ||
+      isConfirmedDivergent ||
       (transition.appMode !== undefined && transition.appMode !== this.appMode) ||
       isSessionChanged ||
       isRoleChanged ||
@@ -665,6 +678,10 @@ export class TeamAppState {
       this.currentScreen = "beta_entry_screen";
     }
 
+    if (this.appMode && this.contextCoordinator) {
+      this.contextCoordinator.confirmMode(this.appMode);
+    }
+
     if (this.appMode === "DEMO") {
       document.getElementById("demo-mode-badge")?.classList.remove("hidden");
     } else {
@@ -681,13 +698,27 @@ export class TeamAppState {
       }
       if (!this.isScopeActive(scope)) return;
       contextLoaded = await this.loadUserContext();
+      if (!this.isScopeActive(scope)) return;
       await this.syncCurrentScreen();
+      if (!this.isScopeActive(scope)) return;
     } catch (err) {
       if (err?.status === 401 && err?.wasAuthenticated) {
         this.handleSessionExpired(err);
         return;
       }
       console.warn("Backend auth/sync deferred:", err);
+    }
+
+    if (!this.isScopeActive(scope)) return;
+
+    if (this.appMode !== "DEMO" && !contextLoaded) {
+      this.currentRole = "onboard";
+      this.currentScreen = "beta_entry_screen";
+      this.beta.teamSeasonId = null;
+      if (this.contextCoordinator) {
+        this.contextCoordinator.confirmedContext.currentRole = "onboard";
+        this.contextCoordinator.confirmedContext.teamSeasonId = null;
+      }
     }
 
     const postInitScope = this.createScope();
@@ -2014,7 +2045,7 @@ export class TeamAppState {
     }
 
     if (coachOnlyScreens.includes(screenId) && (this.tokens.coach || this.appMode === "DEMO")) {
-      if (this.currentRole !== "coach") {
+      if (this.currentRole !== "coach" || this.contextCoordinator?.confirmedContext?.currentRole !== "coach") {
         this.applyContextTransition({ role: "coach" });
       }
     }
@@ -2023,7 +2054,7 @@ export class TeamAppState {
       "v2_08_parent_rsvp"
     ];
     if (parentOnlyScreens.includes(screenId) && (this.tokens.parent || this.appMode === "DEMO")) {
-      if (this.currentRole !== "parent") {
+      if (this.currentRole !== "parent" || this.contextCoordinator?.confirmedContext?.currentRole !== "parent") {
         this.applyContextTransition({ role: "parent" });
       }
     }

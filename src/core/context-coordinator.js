@@ -231,6 +231,13 @@ export class ContextCoordinator {
     this._notify(["init"]);
   }
 
+  confirmMode(mode) {
+    if (mode && this.confirmedContext.appMode !== mode) {
+      this.confirmedContext.appMode = mode;
+      this._notify(["appMode"]);
+    }
+  }
+
   /**
    * Puerta 2: Commit atómico de selección de evento.
    * Valida TargetScope e IntentToken frente a la secuencia actual.

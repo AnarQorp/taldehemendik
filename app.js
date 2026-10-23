@@ -356,6 +356,14 @@ export class TeamAppState {
       } else {
         this.contextGeneration++;
       }
+      this._lastContextCommit = {
+        generation: this.contextGeneration,
+        sessionId: transition.currentSessionId !== undefined ? transition.currentSessionId : this.currentSessionId,
+        mode: transition.appMode !== undefined ? transition.appMode : this.appMode,
+        role: targetRole !== undefined ? targetRole : this.currentRole,
+        teamSeasonId: transition.teamSeasonId !== undefined ? transition.teamSeasonId : (this.beta?.teamSeasonId || null),
+        childId: targetChildId
+      };
       this.otpOpSeq++;
       this.abortAllInFlight();
       this.clearAllManagedTimers();
@@ -690,6 +698,8 @@ export class TeamAppState {
     this.bindGlobalEvents();
 
     const initScope = this.createScope();
+    const initGen = this.contextGeneration;
+    this._lastRestoreCommit = null;
     let contextLoaded = false;
     try {
       if (this.currentRole !== "onboard" && this.appMode === "DEMO") {
@@ -706,10 +716,21 @@ export class TeamAppState {
     }
 
     if (contextLoaded) {
-      if (initScope._origin) {
-        if (initScope._origin.sessionId !== this.currentSessionId) return;
-        if (initScope._origin.mode !== this.appMode) return;
-        if (this.contextGeneration !== initScope._origin.generation && this.contextGeneration !== initScope._origin.generation + 1) return;
+      if (this._lastRestoreCommit) {
+        const ownCommit = this._lastRestoreCommit;
+        const isSessionValid = initScope._origin?.sessionId === this.currentSessionId && this.currentSessionId === ownCommit.sessionId;
+        const isModeValid = initScope._origin?.mode === this.appMode && this.appMode === ownCommit.mode;
+        const isGenerationLegitimate = this.contextGeneration === ownCommit.generation && ownCommit.generation === initGen + 1;
+        const isConfirmedRoleValid = this.currentRole === ownCommit.role &&
+          (!this.contextCoordinator || this.contextCoordinator.confirmedContext.currentRole === ownCommit.role);
+        const isConfirmedTeamValid = (this.beta?.teamSeasonId || null) === ownCommit.teamSeasonId &&
+          (!this.contextCoordinator || this.contextCoordinator.confirmedContext.teamSeasonId === ownCommit.teamSeasonId);
+
+        if (!isSessionValid || !isModeValid || !isGenerationLegitimate || !isConfirmedRoleValid || !isConfirmedTeamValid) {
+          return;
+        }
+      } else {
+        if (!this.isScopeActive(initScope)) return;
       }
     } else {
       if (!this.isScopeActive(initScope)) return;
@@ -872,6 +893,8 @@ export class TeamAppState {
   async loadUserContext() {
     if (this.appMode === "DEMO") return false;
     const scope = this.createScope();
+    const commitBefore = this._lastContextCommit;
+    this._lastRestoreCommit = null;
     try {
       const activeRole = localStorage.getItem("talde_active_role") || this.currentRole || "coach";
       const coachToken = this.tokens.coach || localStorage.getItem("talde_token_coach");
@@ -917,6 +940,9 @@ export class TeamAppState {
             tokens: { parent: parentToken }
           }, scope);
           if (!ok) return false;
+          if (this._lastContextCommit && this._lastContextCommit !== commitBefore) {
+            this._lastRestoreCommit = this._lastContextCommit;
+          }
 
           this.cleanInviteTokenFromUrl();
 
@@ -955,6 +981,9 @@ export class TeamAppState {
           tokens: { coach: coachToken || activeToken }
         }, scope);
         if (!ok) return false;
+        if (this._lastContextCommit && this._lastContextCommit !== commitBefore) {
+          this._lastRestoreCommit = this._lastContextCommit;
+        }
 
         const coachBadge = document.getElementById("coach-club-badge");
         if (coachBadge) coachBadge.textContent = coachMem.team_name;
@@ -1007,6 +1036,9 @@ export class TeamAppState {
           tokens: { parent: activeToken }
         }, scope);
         if (!ok) return false;
+        if (this._lastContextCommit && this._lastContextCommit !== commitBefore) {
+          this._lastRestoreCommit = this._lastContextCommit;
+        }
         return true;
       }
     } catch (err) {

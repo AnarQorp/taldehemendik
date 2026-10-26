@@ -612,29 +612,81 @@ export class TeamAppState {
       this.applyCleanUI();
     }
 
-    // Unified session token priority
-    const unifiedToken = localStorage.getItem("talde_session_token");
-    if (unifiedToken) {
-      this.currentSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
-      this.tokens.coach = unifiedToken;
-      this.tokens.parent = unifiedToken;
-      api.client.setToken(unifiedToken);
+    if (api && api.client) {
+      api.client.setAppMode(this.appMode);
+    }
+
+    if (this.appMode === "DEMO") {
+      // Stash real production session in safe storage key to prevent DEMO usage without destroying it
+      const realToken = localStorage.getItem("talde_session_token");
+      if (realToken) {
+        try { localStorage.setItem("talde_saved_session_token", realToken); } catch {}
+        try { localStorage.removeItem("talde_session_token"); } catch {}
+      }
+      const realCoach = localStorage.getItem("talde_token_coach");
+      if (realCoach) {
+        try { localStorage.setItem("talde_saved_token_coach", realCoach); } catch {}
+        try { localStorage.removeItem("talde_token_coach"); } catch {}
+      }
+      const realParent = localStorage.getItem("talde_token_parent");
+      if (realParent) {
+        try { localStorage.setItem("talde_saved_token_parent", realParent); } catch {}
+        try { localStorage.removeItem("talde_token_parent"); } catch {}
+      }
+
+      this.tokens = { coach: null, parent: null };
+      if (api && api.client) {
+        api.client.setToken(null);
+      }
+      this.currentSessionId = "demo_sess_" + Date.now();
       if (this.contextCoordinator) {
-        this.contextCoordinator.initContext(this.currentSessionId, this.appMode);
+        this.contextCoordinator.initContext(this.currentSessionId, "DEMO");
       }
       if (this.sessionManager) {
-        this.sessionManager.setSession(this.currentSessionId, unifiedToken, this.appMode);
+        this.sessionManager.setSession(this.currentSessionId, null, "DEMO");
       }
     } else {
-      if (localStorage.getItem("talde_token_coach")) {
-        this.tokens.coach = localStorage.getItem("talde_token_coach");
+      // BETA_NORMAL mode: restore stashed production session if exiting DEMO
+      const savedToken = localStorage.getItem("talde_saved_session_token") || localStorage.getItem("talde_session_token");
+      if (savedToken) {
+        try { localStorage.setItem("talde_session_token", savedToken); } catch {}
+        try { localStorage.removeItem("talde_saved_session_token"); } catch {}
       }
-      if (localStorage.getItem("talde_token_parent")) {
-        this.tokens.parent = localStorage.getItem("talde_token_parent");
+      const savedCoach = localStorage.getItem("talde_saved_token_coach") || localStorage.getItem("talde_token_coach");
+      if (savedCoach) {
+        try { localStorage.setItem("talde_token_coach", savedCoach); } catch {}
+        try { localStorage.removeItem("talde_saved_token_coach"); } catch {}
       }
-    }
-    if (localStorage.getItem("talde_team_season_id")) {
-      this.beta.teamSeasonId = localStorage.getItem("talde_team_season_id");
+      const savedParent = localStorage.getItem("talde_saved_token_parent") || localStorage.getItem("talde_token_parent");
+      if (savedParent) {
+        try { localStorage.setItem("talde_token_parent", savedParent); } catch {}
+        try { localStorage.removeItem("talde_saved_token_parent"); } catch {}
+      }
+
+      // Unified session token priority
+      const unifiedToken = localStorage.getItem("talde_session_token");
+      if (unifiedToken) {
+        this.currentSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        this.tokens.coach = unifiedToken;
+        this.tokens.parent = unifiedToken;
+        api.client.setToken(unifiedToken);
+        if (this.contextCoordinator) {
+          this.contextCoordinator.initContext(this.currentSessionId, this.appMode);
+        }
+        if (this.sessionManager) {
+          this.sessionManager.setSession(this.currentSessionId, unifiedToken, this.appMode);
+        }
+      } else {
+        if (localStorage.getItem("talde_token_coach")) {
+          this.tokens.coach = localStorage.getItem("talde_token_coach");
+        }
+        if (localStorage.getItem("talde_token_parent")) {
+          this.tokens.parent = localStorage.getItem("talde_token_parent");
+        }
+      }
+      if (localStorage.getItem("talde_team_season_id")) {
+        this.beta.teamSeasonId = localStorage.getItem("talde_team_season_id");
+      }
     }
 
     // Listeners for OTP modal
@@ -1320,30 +1372,84 @@ export class TeamAppState {
     };
 
     this.tokens = { coach: null, parent: null };
-    api.client.setToken(null);
-    localStorage.removeItem("talde_session_token");
-    localStorage.removeItem("talde_token_coach");
-    localStorage.removeItem("talde_token_parent");
-    localStorage.removeItem("talde_active_event_id");
+    if (api && api.client) {
+      api.client.setToken(null);
+      api.client.setAppMode(newMode);
+    }
     this.selectedCandidateId = null;
     this.selectedSubstitute = null;
     this.purgePrivateFormsAndDom();
 
     if (newMode === "DEMO") {
+      // Stash real production session in safe storage key to prevent DEMO usage without destroying it
+      const realToken = localStorage.getItem("talde_session_token");
+      if (realToken) {
+        try { localStorage.setItem("talde_saved_session_token", realToken); } catch {}
+        try { localStorage.removeItem("talde_session_token"); } catch {}
+      }
+      const realCoach = localStorage.getItem("talde_token_coach");
+      if (realCoach) {
+        try { localStorage.setItem("talde_saved_token_coach", realCoach); } catch {}
+        try { localStorage.removeItem("talde_token_coach"); } catch {}
+      }
+      const realParent = localStorage.getItem("talde_token_parent");
+      if (realParent) {
+        try { localStorage.setItem("talde_saved_token_parent", realParent); } catch {}
+        try { localStorage.removeItem("talde_token_parent"); } catch {}
+      }
+
       localStorage.removeItem("talde_team_season_id");
       localStorage.removeItem("talde_active_role");
       this.appMode = "DEMO";
-      localStorage.setItem("talde_app_mode", "DEMO");
+      try { localStorage.setItem("talde_app_mode", "DEMO"); } catch {}
       const demoToolbar = document.getElementById("demo-toolbar");
       const demoStepCard = document.getElementById("demo-step-card");
       if (demoToolbar) demoToolbar.classList.remove("hidden");
       if (demoStepCard) demoStepCard.classList.remove("hidden");
       document.getElementById("demo-mode-badge")?.classList.remove("hidden");
     } else {
+      // BETA_NORMAL mode: restore stashed production session if exiting DEMO
+      const savedToken = localStorage.getItem("talde_saved_session_token") || localStorage.getItem("talde_session_token");
+      if (savedToken) {
+        try { localStorage.setItem("talde_session_token", savedToken); } catch {}
+        try { localStorage.removeItem("talde_saved_session_token"); } catch {}
+      }
+      const savedCoach = localStorage.getItem("talde_saved_token_coach") || localStorage.getItem("talde_token_coach");
+      if (savedCoach) {
+        try { localStorage.setItem("talde_token_coach", savedCoach); } catch {}
+        try { localStorage.removeItem("talde_saved_token_coach"); } catch {}
+      }
+      const savedParent = localStorage.getItem("talde_saved_token_parent") || localStorage.getItem("talde_token_parent");
+      if (savedParent) {
+        try { localStorage.setItem("talde_token_parent", savedParent); } catch {}
+        try { localStorage.removeItem("talde_saved_token_parent"); } catch {}
+      }
+
       this.appMode = "BETA_NORMAL";
-      localStorage.setItem("talde_app_mode", "BETA_NORMAL");
+      try { localStorage.setItem("talde_app_mode", "BETA_NORMAL"); } catch {}
       document.getElementById("demo-mode-badge")?.classList.add("hidden");
       this.applyCleanUI();
+
+      const unifiedToken = localStorage.getItem("talde_session_token");
+      if (unifiedToken) {
+        this.currentSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        this.tokens.coach = unifiedToken;
+        this.tokens.parent = unifiedToken;
+        if (api && api.client) api.client.setToken(unifiedToken);
+        if (this.contextCoordinator) {
+          this.contextCoordinator.initContext(this.currentSessionId, this.appMode);
+        }
+        if (this.sessionManager) {
+          this.sessionManager.setSession(this.currentSessionId, unifiedToken, this.appMode);
+        }
+      } else {
+        if (localStorage.getItem("talde_token_coach")) {
+          this.tokens.coach = localStorage.getItem("talde_token_coach");
+        }
+        if (localStorage.getItem("talde_token_parent")) {
+          this.tokens.parent = localStorage.getItem("talde_token_parent");
+        }
+      }
     }
   }
 
@@ -1956,16 +2062,9 @@ export class TeamAppState {
   async ensureAuth(role) {
     const scope = this.createScope({ role, mode: this.appMode });
     if (this.appMode === "DEMO") {
-      if (role === "coach") {
-        if (!this.tokens.coach) {
-          this.tokens.coach = "demo_token_coach";
-        }
-        api.client.setToken(this.tokens.coach);
-      } else if (role === "parent") {
-        if (!this.tokens.parent) {
-          this.tokens.parent = "demo_token_parent";
-        }
-        api.client.setToken(this.tokens.parent);
+      this.tokens = { coach: null, parent: null };
+      if (api && api.client) {
+        api.client.setToken(null);
       }
       return;
     }
@@ -5027,6 +5126,9 @@ export class TeamAppState {
     localStorage.removeItem("talde_token_coach");
     localStorage.removeItem("talde_token_parent");
     localStorage.removeItem("talde_session_token");
+    localStorage.removeItem("talde_saved_token_coach");
+    localStorage.removeItem("talde_saved_token_parent");
+    localStorage.removeItem("talde_saved_session_token");
     localStorage.removeItem("talde_active_session");
     localStorage.removeItem("talde_team_season_id");
     localStorage.removeItem("talde_join_code");
@@ -5070,6 +5172,21 @@ export class TeamAppState {
     this.showToast("✓ Modo DEMO: Escenario S. D. Indautxu cargado (PostgreSQL sincronizado).");
   }
 
+  exitDemo() {
+    this.setAppMode("BETA_NORMAL");
+    if (typeof window !== "undefined" && window.history && window.history.replaceState) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("demo");
+        url.searchParams.delete("role");
+        url.searchParams.delete("step");
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+      } catch {}
+    }
+    this.goToScreen("v2_00_onboarding_welcome", "onboard");
+    this.showToast("Has salido del modo demostración. Sesión real restaurada.");
+  }
+
   confirmResetBeta() {
     const modal = document.getElementById("reset-beta-modal");
     if (modal) modal.classList.remove("hidden");
@@ -5091,8 +5208,8 @@ export class TeamAppState {
       if (modal) modal.classList.add("hidden");
 
       if (this.appMode === "DEMO") {
-        await api.dev.resetDataset();
-        this.showToast("✓ Entorno DEMO reiniciado (PostgreSQL Indautxu restaurado).");
+        this.resetDemo();
+        this.showToast("✓ Entorno DEMO reiniciado en memoria (sin afectar a producción).");
       } else {
         await api.dev.emptyDatabase();
         this.showToast("✓ Entorno BETA vaciado completamente en PostgreSQL y navegador.");

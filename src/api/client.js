@@ -6,9 +6,25 @@ export class ApiClient {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.token = null;
     this.sessionContext = null;
+    this.appMode = "BETA_NORMAL";
+  }
+
+  setAppMode(mode) {
+    this.appMode = mode || "BETA_NORMAL";
+    if (this.appMode === "DEMO") {
+      this.token = null;
+    }
+  }
+
+  getAppMode() {
+    return this.appMode;
   }
 
   setToken(token) {
+    if (this.appMode === "DEMO") {
+      this.token = null;
+      return;
+    }
     this.token = token;
   }
 
@@ -25,12 +41,43 @@ export class ApiClient {
   }
 
   async request(path, options = {}) {
+    const isDemo = this.appMode === "DEMO" || options.scope?.mode === "DEMO" || options.appMode === "DEMO";
+
+    // Strict DEMO mode isolation:
+    if (isDemo) {
+      if (options.headers) {
+        delete options.headers["Authorization"];
+      }
+
+      // Check simulation operations: local deterministic simulation without backend requests
+      let parsedBody = null;
+      if (options.body) {
+        try {
+          parsedBody = typeof options.body === "string" ? JSON.parse(options.body) : options.body;
+        } catch {}
+      }
+
+      if (path.includes("/publish") && (parsedBody?.expectedVersion === 999 || options.expectedVersion === 999)) {
+        throw new DomainError("CALLUP_VERSION_CONFLICT", "La convocatoria fue modificada por otro usuario o proceso. Actualiza para ver el estado más reciente.", 409);
+      }
+      if (path.includes("/replace")) {
+        throw new DomainError("SUBSTITUTE_NO_LONGER_ELIGIBLE", "El deportista suplente ya no se encuentra disponible para esta convocatoria.", 422);
+      }
+
+      const isPublicAuth = path.includes("/auth/otp/request") || path.includes("/auth/otp/verify") || path.includes("/auth/dev/login");
+      if (!isPublicAuth) {
+        throw new DomainError("DEMO_MODE_BLOCKED", "Petición bloqueada: el modo DEMO no puede realizar peticiones autenticadas o mutaciones contra el backend productivo.", 403);
+      }
+    }
+
     const url = `${this.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
     const headers = {
       ...(options.headers || {})
     };
 
-    if (this.token && !headers["Authorization"]) {
+    if (isDemo) {
+      delete headers["Authorization"];
+    } else if (this.token && !headers["Authorization"]) {
       headers["Authorization"] = `Bearer ${this.token}`;
     }
 

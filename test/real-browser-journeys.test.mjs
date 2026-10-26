@@ -246,6 +246,103 @@ test("Real Browser Verification: Complete Coach and Family Journeys on Chrome 15
     const directMessagesFeedExists = await cdp.eval("Boolean(document.getElementById('parent-direct-messages-container'))");
     assert.equal(directMessagesFeedExists, true, "parent-direct-messages-container must exist on parent home");
 
+    // 8b. BETA 0.2 COACH JOURNEY: Equipo -> Jugador -> Ficha -> Notas Privadas (Validating Root JSON Contract Fix)
+    await cdp.eval(`
+      window.teamApp.appMode = "BETA_NORMAL";
+      window.teamApp.currentRole = "coach";
+      window.teamApp.beta.teamSeasonId = "ts-beta-01";
+      window.teamApp.beta.team = { name: "Talde Gazteak", sport: "FOOTBALL" };
+      window.teamApp.beta.teamSeason = { id: "ts-beta-01", display_label: "Cadete A", category: "CADETE" };
+      window.teamApp.beta.players = [
+        { id: "p-beta-01", first_name: "Aimar", last_name: "Olaizola", shirt_number: 7, position: "Delantero" }
+      ];
+
+      // Mock API returning real backend JSON contract (player object at ROOT, no .item wrapper)
+      window.api.teams.getPlayers = async () => ({
+        items: [
+          { id: "p-beta-01", first_name: "Aimar", last_name: "Olaizola", shirt_number: 7, position: "Delantero" }
+        ]
+      });
+
+      window.api.teams.getPlayer = async (tsId, pId) => ({
+        id: "p-beta-01",
+        first_name: "Aimar",
+        last_name: "Olaizola",
+        short_name: "Aimar",
+        shirt_number: 7,
+        position: "Delantero",
+        team_season_id: "ts-beta-01",
+        guardians: [
+          {
+            id: "u-tutor-01",
+            userId: "u-tutor-01",
+            displayName: "Miren Goikoetxea",
+            email: "miren@example.test",
+            phone: "+34600112233",
+            relationship: "Madre",
+            createdAt: "2026-10-26T18:00:00Z"
+          }
+        ],
+        linked_guardians: [
+          {
+            id: "u-tutor-01",
+            userId: "u-tutor-01",
+            displayName: "Miren Goikoetxea",
+            email: "miren@example.test",
+            phone: "+34600112233",
+            relationship: "Madre",
+            createdAt: "2026-10-26T18:00:00Z"
+          }
+        ]
+      });
+
+      window.api.teams.getPlayerMessages = async (tsId, pId) => ({
+        items: [
+          {
+            id: "msg-01",
+            message: "Por favor confirmar viaje en autobús para el partido del sábado.",
+            author_name: "Entrenador",
+            created_at: new Date().toISOString()
+          }
+        ]
+      });
+
+      window.api.teams.sendPlayerMessage = async (tsId, pId, message) => ({
+        id: "msg-02",
+        message,
+        author_name: "Entrenador",
+        created_at: new Date().toISOString()
+      });
+    `);
+
+    // Step A: Navigate to Equipo (Plantilla)
+    await cdp.eval("window.teamApp.goToScreen('v2_03_coach_roster', 'equipo');");
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Step B: Click on player to open ficha
+    await cdp.eval("window.teamApp.viewPlayerDetail('p-beta-01');");
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Step C: Verify Ficha content in real DOM
+    const dossierHtml = await cdp.eval("document.getElementById('player-detail-coach-dynamic-container').innerHTML");
+    assert.ok(!dossierHtml.includes("Deportista no encontrado"), "Dossier must NOT show 'Deportista no encontrado'");
+    assert.ok(!dossierHtml.includes("Error al cargar la ficha"), "Dossier must NOT show 'Error al cargar la ficha'");
+    assert.ok(dossierHtml.includes("Aimar Olaizola"), "Dossier must render player full name 'Aimar Olaizola'");
+    assert.ok(dossierHtml.includes("#7"), "Dossier must render dorsal '#7'");
+    assert.ok(dossierHtml.includes("Miren Goikoetxea"), "Dossier must render guardian name 'Miren Goikoetxea'");
+    assert.ok(dossierHtml.includes("+34600112233"), "Dossier must render guardian phone '+34600112233'");
+    assert.ok(dossierHtml.includes("Por favor confirmar viaje en autobús"), "Dossier must render direct message");
+
+    // Step D: Open and submit private note to family
+    await cdp.eval("window.teamApp.openPlayerDirectMessageModal('p-beta-01', 'Aimar Olaizola')");
+    const pdmModalActive = await cdp.eval("!document.getElementById('modal-player-direct-message').classList.contains('hidden')");
+    assert.equal(pdmModalActive, true, "Player direct message modal must be visible");
+
+    await cdp.eval("document.getElementById('pdm-input-message').value = 'Confirmado viaje en autobús para Aimar.'");
+    await cdp.eval("window.teamApp.submitPlayerDirectMessage()");
+    await new Promise((r) => setTimeout(r, 200));
+    await cdp.eval("window.teamApp.closePlayerDirectMessageModal()");
+
     // 9. Capture screenshot of real browser view for evidence artifact
     const screenshot = await cdp.send("Page.captureScreenshot", { format: "png" });
     const screenshotPath = path.join(

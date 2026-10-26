@@ -4378,14 +4378,14 @@ export class TeamAppState {
       try {
         const playerRes = await api.teams.getPlayer(teamSeasonId, playerId);
         if (!this.isScopeActive(scope)) return;
-        const player = playerRes?.item;
-        if (!player) throw new Error("Deportista no encontrado");
+        const player = playerRes?.item || playerRes;
+        if (!player || (!player.id && !player.first_name && !player.last_name)) throw new Error("Deportista no encontrado");
 
         const fullName = `${player.first_name || ''} ${player.last_name || ''}`.trim() || "Deportista";
         const dorsal = player.shirt_number !== null && player.shirt_number !== undefined ? `#${player.shirt_number}` : '-';
         const position = player.position || "Deportista";
         const initials = `${(player.first_name || '')[0] || ''}${(player.last_name || '')[0] || ''}`.toUpperCase() || 'TH';
-        const guardians = player.linked_guardians || [];
+        const guardians = player.linked_guardians || player.guardians || [];
 
         let guardiansHtml = "";
         if (!guardians.length) {

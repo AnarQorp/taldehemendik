@@ -1429,7 +1429,7 @@ export class TeamAppState {
 
   // --- Production Email OTP Authentication Methods ---
 
-  openOtpModal({ email = "", displayName = "", role = "coach", showEmailStep = false, onSuccess = null, onCancel = null } = {}) {
+  openOtpModal({ email = "", displayName = "", role = "coach", invitationToken = null, teamCode = null, showEmailStep = false, onSuccess = null, onCancel = null } = {}) {
     const modal = document.getElementById("modal-otp-auth");
     if (!modal) return;
 
@@ -1449,6 +1449,8 @@ export class TeamAppState {
       challengeId: null,
       role,
       displayName: displayName ? String(displayName).trim() : "",
+      invitationToken: invitationToken ? String(invitationToken).trim() : null,
+      teamCode: teamCode ? String(teamCode).trim().toUpperCase() : null,
       countdownTimer: null,
       countdownSeconds: 60,
       onSuccess,
@@ -1530,7 +1532,11 @@ export class TeamAppState {
     this.showOtpStatus("Solicitando código de verificación...", "info");
 
     try {
-      const res = await api.auth.requestOtp(email, { signal: this.otpAbortController.signal });
+      const res = await api.auth.requestOtp(email, {
+        signal: this.otpAbortController.signal,
+        invitationToken: this.otpState.invitationToken || undefined,
+        teamCode: this.otpState.teamCode || undefined
+      });
       if (opId !== this.otpOpSeq || !this.isOtpModalOpen()) {
         return;
       }
@@ -5976,10 +5982,14 @@ export class TeamAppState {
     }
 
     // Otherwise, initiate real OTP authentication
+    const inviteToken = isIndividual ? (this.beta.individualInviteToken || this.beta.verifiedInvitation?.token) : null;
+    const teamJoinCode = !isIndividual ? this.beta.verifiedInvitation?.code : null;
     this.openOtpModal({
       email: tutorEmail,
       displayName: tutorName,
       role: "parent",
+      invitationToken: inviteToken,
+      teamCode: teamJoinCode,
       onSuccess: async () => {
         await this.executeParentJoin({ tutorEmail, tutorName, tutorRelationship, tutorPhone, isIndividual, claimName, claimNumber });
       }

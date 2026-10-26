@@ -18,7 +18,7 @@
     "test:vs01": "npm run seed && vitest run test/integration/invitation.test.ts test/integration/vertical-slice.test.ts --no-file-parallelism",
     "test:vs02": "npm run seed && vitest run test/integration/events-vs02.test.ts test/integration/operations-vs02.test.ts test/integration/dev-reset-cors.test.ts --no-file-parallelism",
     "test:vs03": "npm run db:empty && vitest run test/integration/bootstrap-vs03.test.ts --no-file-parallelism",
-    "test:beta02": "vitest run test/integration/beta-02-functional.test.ts --no-file-parallelism",
+    "test:beta02": "vitest run test/integration/beta-02-functional.test.ts test/integration/zaq-admission-gate.test.ts test/integration/onboarding-admission.test.ts --no-file-parallelism",
     "test:integration": "npm test",
     "demo": "tsx scripts/demo-vs01.ts",
     "demo:vs02": "npm run seed && tsx scripts/demo-vs02.ts",

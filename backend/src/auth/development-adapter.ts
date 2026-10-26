@@ -39,7 +39,11 @@ export class DevelopmentAuthAdapter implements AuthAdapter {
     return { subject: `dev-email:${email.toLowerCase()}`, email: email.toLowerCase() };
   }
 
-  issueAccessToken(userId: string): string {
+  isEmailAllowed(_email: string): boolean {
+    return true;
+  }
+
+  issueAccessToken(userId: string, _email?: string): string {
     const payload = Buffer.from(JSON.stringify({ userId, exp: Date.now() + 8 * 60 * 60_000 })).toString("base64url");
     const signature = createHmac("sha256", config.authSecret).update(payload).digest("base64url");
     return `${payload}.${signature}`;

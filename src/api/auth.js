@@ -5,7 +5,10 @@ export class AuthService {
 
   async requestOtp(email, options = {}) {
     const normalizedEmail = String(email || "").trim().toLowerCase();
-    return this.client.post("/auth/otp/request", { email: normalizedEmail }, options);
+    const payload = { email: normalizedEmail };
+    if (options.invitationToken) payload.invitationToken = options.invitationToken;
+    if (options.teamCode) payload.teamCode = options.teamCode;
+    return this.client.post("/auth/otp/request", payload, options);
   }
 
   async verifyOtp(email, challengeId, otp, displayName, options = {}) {

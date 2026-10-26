@@ -13,6 +13,10 @@ export const config = {
   authSecret: isProduction ? process.env.AUTH_TOKEN_SECRET ?? "" : process.env.DEV_AUTH_TOKEN_SECRET ?? "development-only-secret-change-before-shared-use",
   authTokenIssuer: process.env.AUTH_TOKEN_ISSUER ?? "talde-hemendik",
   authTokenAudience: process.env.AUTH_TOKEN_AUDIENCE ?? "talde-private-api",
+  authAllowedEmails: process.env.TALDE_AUTH_ALLOWED_EMAILS
+    ? process.env.TALDE_AUTH_ALLOWED_EMAILS.split(/[,;\s]+/).map(value => value.trim().toLowerCase()).filter(Boolean)
+    : [],
+  authPolicyRevision: process.env.TALDE_AUTH_POLICY_REVISION?.trim() ?? "",
   allowedOrigins: process.env.ALLOWED_ORIGINS?.split(",").map(value => value.trim()).filter(Boolean) ?? (isProduction ? [] : localOrigins),
   smtp: {
     host: process.env.SMTP_HOST ?? "",

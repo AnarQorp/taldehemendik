@@ -47,6 +47,18 @@ export async function buildApp(options: BuildOptions = {}) {
       }
       if (route.url === "/v1/teams/bootstrap") context.mode = "bootstrap";
       else if (route.url === "/v1/me/memberships") context.mode = "discovery";
+      else if (route.url === "/v1/auth/otp/request") {
+        const body = (request.body ?? {}) as Record<string, unknown>;
+        const capability = typeof body.invitationToken === "string"
+          ? body.invitationToken
+          : typeof body.teamCode === "string"
+            ? body.teamCode.toUpperCase()
+            : "";
+        if (capability) {
+          context.mode = "invite";
+          context.invitationHash = tokenHash(capability);
+        }
+      }
       else if (route.url.startsWith("/v1/invitations/") || route.url.startsWith("/v1/team-join/")) {
         const capability = typeof params.token === "string" ? params.token : typeof params.code === "string" ? params.code.toUpperCase() : "";
         context.mode = "invite"; context.invitationHash = tokenHash(capability);
@@ -129,15 +141,47 @@ export async function buildApp(options: BuildOptions = {}) {
   const otpVerifyLimit = config.devResetEnabled ? 1000 : 100;
 
   app.post("/v1/auth/otp/request", { config: { rateLimit: { max: otpRequestLimit, timeWindow: "5 minutes" } } }, async (request) => {
-    const { email } = z.object({ email: emailSchema }).parse(request.body);
-    return auth.requestOtp(email);
+    const body = z.object({
+      email: emailSchema,
+      invitationToken: z.string().min(6).optional(),
+      teamCode: z.string().min(4).max(32).optional()
+    }).parse(request.body);
+
+    const email = body.email.trim().toLowerCase();
+    const isDirectlyAllowed = auth.isEmailAllowed ? auth.isEmailAllowed(email) : true;
+    let isAdmitted = isDirectlyAllowed;
+
+    if (!isAdmitted && body.invitationToken) {
+      const hash = tokenHash(body.invitationToken);
+      const invite = await pool.query(
+        "SELECT id FROM invitations WHERE token_hash=$1 AND status='ACTIVE' AND expires_at > now()",
+        [hash]
+      );
+      if (!invite.rowCount) throw new DomainError("INVITATION_INVALID", 401, "Invitation token is invalid or expired");
+      isAdmitted = true;
+    } else if (!isAdmitted && body.teamCode) {
+      const code = body.teamCode.trim().toUpperCase();
+      const season = await pool.query(
+        "SELECT id FROM team_seasons WHERE join_code=$1 AND status='ACTIVE'",
+        [code]
+      );
+      if (!season.rowCount) throw new DomainError("GENERAL_JOIN_INVALID", 401, "Team join code is invalid");
+      isAdmitted = true;
+    }
+
+    if (!isAdmitted) {
+      throw new DomainError("AUTH_INVALID", 401, "Email not authorized");
+    }
+
+    return auth.requestOtp(email, { isPrevalidated: true });
   });
 
   app.post("/v1/auth/otp/verify", { config: { rateLimit: { max: otpVerifyLimit, timeWindow: "5 minutes" } } }, async (request) => {
     const body = z.object({ email: emailSchema, challengeId: uuid, otp: z.string().regex(/^\d{6}$/), displayName: z.string().min(1).max(100).optional() }).parse(request.body);
     const identity = await auth.verifyOtp(body.email, body.challengeId, body.otp);
     const result = await resolveAuthUser(identity.subject, identity.email, body.displayName ?? identity.email.split("@")[0]!);
-    return { accessToken: auth.issueAccessToken(result.rows[0].id), user: result.rows[0] };
+    const user = result.rows[0];
+    return { accessToken: auth.issueAccessToken(user.id, user.email), user };
   });
 
   app.post("/v1/teams/bootstrap", async(request,reply)=>{

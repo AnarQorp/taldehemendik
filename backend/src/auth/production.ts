@@ -6,15 +6,28 @@ import { authPool } from "../db/pool.js";
 import { DomainError } from "../domain/errors.js";
 import type { AuthAdapter, AuthIdentity } from "./adapter.js";
 import { DevelopmentAuthAdapter } from "./development-adapter.js";
+import type { OnboardingAdmissionProof } from "./policy.js";
+import { AuthPolicy } from "./policy.js";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const invalid = () => new DomainError("AUTH_INVALID", 401, "Invalid or expired authentication credential");
 export type OtpDelivery = { sendMail(message: { from: string; to: string; subject: string; text: string }): Promise<unknown> };
-type Options = { pool?: pg.Pool; delivery?: OtpDelivery; secret?: string; issuer?: string; audience?: string; from?: string; now?: () => number };
+type Options = {
+  pool?: pg.Pool;
+  delivery?: OtpDelivery;
+  secret?: string;
+  issuer?: string;
+  audience?: string;
+  from?: string;
+  now?: () => number;
+  allowedEmails?: string[] | Set<string>;
+  policyRevision?: string;
+};
 
 /** Production-only email OTP: delivery via SMTP, hashed challenges in PostgreSQL. */
 export class ProductionAuthAdapter implements AuthAdapter {
   readonly productionSafe = true;
+  readonly policy: AuthPolicy;
   private readonly db: pg.Pool;
   private readonly delivery: OtpDelivery;
   private readonly secret: string;
@@ -31,12 +44,19 @@ export class ProductionAuthAdapter implements AuthAdapter {
     this.audience = options.audience ?? config.authTokenAudience;
     this.from = options.from ?? config.smtp.from;
     this.now = options.now ?? Date.now;
+    this.policy = new AuthPolicy(
+      options.allowedEmails ?? config.authAllowedEmails,
+      options.policyRevision ?? config.authPolicyRevision
+    );
     this.delivery = options.delivery ?? nodemailer.createTransport({
       host: config.smtp.host, port: config.smtp.port, secure: config.smtp.secure,
       requireTLS: true, tls: { rejectUnauthorized: true, minVersion: "TLSv1.2" },
       connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
       ...(config.smtp.user ? { auth: { user: config.smtp.user, pass: config.smtp.pass } } : {})
     });
+  }
+  isEmailAllowed(email: string): boolean {
+    return this.policy.isEmailAllowed(email);
   }
   private digest(value: string) { return createHmac("sha256", this.secret).update(value).digest("hex"); }
   private async tx<T>(fn: (db: pg.PoolClient) => Promise<T>): Promise<T> {
@@ -45,9 +65,15 @@ export class ProductionAuthAdapter implements AuthAdapter {
     catch (error) { await db.query("ROLLBACK"); throw error; }
     finally { db.release(); }
   }
-  async requestOtp(input: string) {
+  async requestOtp(input: string, onboarding?: OnboardingAdmissionProof) {
     const email = input.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) throw invalid();
+
+    // 1. Admission Gate: verify authorization BEFORE DB connection or SMTP calls
+    if (!this.policy.isAdmitted(email, onboarding)) {
+      throw invalid();
+    }
+
     const challengeId = randomUUID();
     const otp = randomInt(0, 1_000_000).toString().padStart(6, "0");
     await this.tx(async db => {
@@ -82,13 +108,30 @@ export class ProductionAuthAdapter implements AuthAdapter {
     if (!accepted) throw invalid();
     return { subject: `email:${email}`, email };
   }
-  issueAccessToken(userId: string) {
+  issueAccessToken(userId: string, email?: string) {
     if (!uuid.test(userId)) throw invalid();
     const iat = Math.floor(this.now() / 1000);
-    const payload = Buffer.from(JSON.stringify({ sub: userId, iss: this.issuer, aud: this.audience, iat, exp: iat + 3600 })).toString("base64url");
+    const claims: Record<string, unknown> = {
+      sub: userId,
+      iss: this.issuer,
+      aud: this.audience,
+      iat,
+      exp: iat + 3600
+    };
+    if (email) {
+      claims.email = email.trim().toLowerCase();
+    }
+    if (this.policy.policyRevision) {
+      claims.policyRevision = this.policy.policyRevision;
+      claims.pol = this.policy.policyRevision;
+      if (!claims.email) {
+        claims.email = `user-${userId}@talde.internal`;
+      }
+    }
+    const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
     return `${payload}.${createHmac("sha256", this.secret).update(payload).digest("base64url")}`;
   }
-  verifyAccessToken(token: string): { userId: string } {
+  verifyAccessToken(token: string): { userId: string; email?: string } {
     try {
       if (token.length > 2048) throw invalid();
       const parts = token.split(".");
@@ -100,7 +143,7 @@ export class ProductionAuthAdapter implements AuthAdapter {
       const claims = JSON.parse(Buffer.from(payload, "base64url").toString());
       const now = Math.floor(this.now() / 1000);
       if (typeof claims.sub !== "string" || !uuid.test(claims.sub) || claims.iss !== this.issuer || claims.aud !== this.audience || !Number.isSafeInteger(claims.exp) || !Number.isSafeInteger(claims.iat) || claims.exp <= now || claims.iat > now + 30 || claims.exp <= claims.iat || claims.exp - claims.iat > 3600) throw invalid();
-      return { userId: claims.sub };
+      return this.policy.validateTokenClaims(claims);
     } catch { throw invalid(); }
   }
 }

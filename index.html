@@ -109,10 +109,10 @@
   </style>
 </head>
 
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center select-none overflow-x-hidden p-0 sm:p-2">
+<body class="bg-surface text-on-surface min-h-screen flex flex-col items-center select-none overflow-x-hidden p-0">
 
-  <!-- Botón discreto flotante para herramientas demo (fuera del viewport móvil) -->
-  <div class="fixed top-2.5 right-2.5 sm:top-4 sm:right-4 z-50">
+  <!-- Botón discreto flotante para herramientas demo (Visible únicamente en ?demo=1) -->
+  <div id="demo-tools-wrapper" class="hidden fixed top-2.5 right-2.5 sm:top-4 sm:right-4 z-50">
     <button id="btn-toggle-demo-tools" onclick="teamApp.toggleDemoTools()" class="px-3 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-xl backdrop-blur-sm cursor-pointer transition-all active:scale-95" title="Abrir / ocultar panel de herramientas demo (Reset BD, simulaciones y roles)">
       <span class="material-symbols-outlined text-[15px] text-amber-400">handyman</span>
       <span class="hidden xs:inline">Herramientas demo</span>
@@ -129,7 +129,7 @@
 
   <!-- Modal de confirmación destructiva para Reiniciar entorno beta -->
   <div id="reset-beta-modal" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-white text-slate-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200">
+    <div class="bg-white text-slate-900 rounded-2xl max-w-sm sm:max-w-md w-full p-5 shadow-2xl border border-slate-200 max-h-[90dvh] overflow-y-auto">
       <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
         <span class="material-symbols-outlined text-[28px]">warning</span>
       </div>
@@ -150,7 +150,7 @@
 
   <!-- Modal de alta de deportista en plantilla activa -->
   <div id="modal-add-player" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-white text-slate-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+    <div class="bg-white text-slate-900 rounded-2xl max-w-sm sm:max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 max-h-[90dvh] overflow-y-auto">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center">
@@ -198,7 +198,7 @@
 
   <!-- Modal de invitación individual de familia -->
   <div id="modal-player-invite" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-white text-slate-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+    <div class="bg-white text-slate-900 rounded-2xl max-w-sm sm:max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 max-h-[90dvh] overflow-y-auto">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center">
@@ -235,7 +235,7 @@
 
   <!-- Modal de Verificación OTP (Autenticación Real de Producción) -->
   <div id="modal-otp-auth" class="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-otp-title">
-    <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-sm sm:max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative max-h-[90dvh] overflow-y-auto">
       <!-- Header -->
       <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <div class="flex items-center gap-2.5">
@@ -336,7 +336,7 @@
 
   <!-- Modal: Crear Nuevo Aviso del Entrenador -->
   <div id="modal-create-notice" class="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-notice-title">
-    <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-sm sm:max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative max-h-[90dvh] overflow-y-auto">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-xl bg-primary-container text-on-primary flex items-center justify-center shadow-xs">
@@ -396,7 +396,7 @@
 
   <!-- Modal: Mensajes / Notas Directas con la Familia -->
   <div id="modal-player-direct-message" class="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="pdm-modal-title">
-    <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative flex flex-col max-h-[90vh]">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-sm sm:max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative flex flex-col max-h-[90dvh]">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100 shrink-0">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-xs">
@@ -437,7 +437,7 @@
 
   <!-- Modal: Selector de Rol / Perfil / Cuenta -->
   <div id="modal-role-switcher" class="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="switcher-modal-title">
-    <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-sm sm:max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative max-h-[90dvh] overflow-y-auto">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shadow-xs">
@@ -477,14 +477,14 @@
   <!-- ======================================================== -->
   <aside id="demo-toolbar" class="hidden w-full max-w-xl mx-auto bg-slate-900 border-b sm:border border-slate-800 sm:rounded-2xl p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-lg z-40 shrink-0">
     <!-- Brand & Role Switcher -->
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <div class="flex items-center gap-1.5 font-black text-sm tracking-tight text-blue-400">
         <span class="material-symbols-outlined text-[20px]">sports_soccer</span>
         <span class="hidden xs:inline">Talde Hemendik!</span>
       </div>
 
       <!-- Multi-team / Multi-role switcher: USUARIO -> EQUIPO -> ROL -->
-      <div class="bg-slate-950 p-0.5 rounded-xl border border-slate-800 flex items-center gap-0.5">
+      <div class="bg-slate-950 p-0.5 rounded-xl border border-slate-800 flex flex-wrap items-center gap-0.5">
         <button id="role-btn-onboard" onclick="teamApp.switchMembership('onboard')" class="px-2 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all cursor-pointer">
           Acceso
         </button>
@@ -498,7 +498,7 @@
     </div>
 
     <!-- Tour Navigation -->
-    <div class="flex items-center gap-1.5">
+    <div class="flex flex-wrap items-center gap-1.5">
       <button onclick="teamApp.prevStep()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-0.5 transition-colors cursor-pointer" title="Paso anterior">
         <span class="material-symbols-outlined text-[14px]">arrow_back</span>
         <span class="hidden sm:inline">Ant.</span>
@@ -578,30 +578,17 @@
   </div>
 
   <!-- ======================================================== -->
-  <!-- MOBILE DEVICE VIEWPORT CONTAINER (Capacitor Ready) -->
+  <!-- MAIN APPLICATION ROOT CONTAINER (Responsive Mobile-First) -->
   <!-- ======================================================== -->
-  <div class="w-full flex-1 flex items-center justify-center p-0 sm:p-4 my-auto overflow-hidden">
-    <div class="mockup-wrapper w-full sm:max-w-[390px] h-[calc(100dvh-125px)] sm:h-[844px] bg-surface rounded-none sm:rounded-[40px] border-0 sm:border-[6px] border-slate-900 flex flex-col relative overflow-hidden text-on-surface shadow-none sm:shadow-2xl">
-      
-      <!-- Top Smartphone Notch (Only on desktop preview) -->
-      <div class="hidden sm:flex w-full h-8 bg-surface-container-lowest items-center justify-between px-6 shrink-0 z-50 select-none border-b border-outline-variant/30 pointer-events-none">
-        <span class="text-[12px] font-bold text-on-surface tracking-tight">18:00</span>
-        <div class="w-20 h-4 bg-slate-950 rounded-full mx-auto"></div>
-        <div class="flex items-center gap-1.5 text-on-surface text-[12px]">
-          <span class="material-symbols-outlined text-[14px]">signal_cellular_4_bar</span>
-          <span class="material-symbols-outlined text-[14px]">wifi</span>
-          <span class="material-symbols-outlined text-[16px] text-secondary">battery_full</span>
-        </div>
-      </div>
+  <div id="app-root" class="w-full min-h-screen flex flex-col bg-surface relative text-on-surface">
+    <!-- Main Scrollable App Viewport for Screens -->
+    <div id="phone-viewport" class="w-full flex-1 relative bg-surface pb-24">
 
-      <!-- Main Scrollable App Viewport for Screens -->
-      <div id="phone-viewport" class="w-full flex-1 overflow-y-auto overflow-x-hidden relative bg-surface pb-16">
-
-        <!-- SCREEN BETA: ENTRADA PRINCIPAL BETA -->
-        <section id="beta_entry_screen" class="app-screen-view w-full">
-          <main class="w-full max-w-[420px] min-h-screen bg-background flex flex-col justify-between relative shadow-2xl md:my-4 md:rounded-3xl md:min-h-[844px] md:overflow-hidden md:border md:border-outline-variant/30">
-            <!-- Top App Bar -->
-            <header class="bg-surface-container-lowest text-primary shadow-sm border-b border-outline-variant/20 flex justify-between items-center w-full px-margin-mobile h-14 sticky top-0 z-30">
+      <!-- SCREEN BETA: ENTRADA PRINCIPAL BETA -->
+      <section id="beta_entry_screen" class="app-screen-view w-full">
+        <main class="w-full max-w-xl mx-auto min-h-screen bg-background flex flex-col justify-between relative shadow-sm border-x border-outline-variant/20">
+          <!-- Top App Bar -->
+          <header class="bg-surface-container-lowest text-primary shadow-sm border-b border-outline-variant/20 flex justify-between items-center w-full px-4 sm:px-6 h-14 sticky top-0 z-30">
               <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center shadow-xs">
                   <span class="material-symbols-outlined text-[20px]">sports_soccer</span>
@@ -703,9 +690,9 @@
         <!-- SCREEN 0: V2 ONBOARDING - ACCESO INICIAL Y SELECCIÓN DE ROL -->
         <section id="v2_00_onboarding_welcome" class="app-screen-view w-full hidden">
           <!-- Mobile Viewport Canvas Container (390px base frame) -->
-<main class="w-full max-w-[420px] min-h-screen bg-background flex flex-col justify-between relative shadow-2xl md:my-4 md:rounded-3xl md:min-h-[844px] md:overflow-hidden md:border md:border-outline-variant/30">
+<main class="w-full max-w-xl mx-auto min-h-screen bg-background flex flex-col justify-between relative shadow-sm border-x border-outline-variant/20">
 <!-- Top App Bar / Identity Navigation (JSON Blueprint mapping) -->
-<header class="bg-surface-container-lowest text-primary shadow-sm border-b border-outline-variant/20 flex justify-between items-center w-full px-margin-mobile h-14 sticky top-0 z-30">
+<header class="bg-surface-container-lowest text-primary shadow-sm border-b border-outline-variant/20 flex justify-between items-center w-full px-4 sm:px-6 h-14 sticky top-0 z-30">
 <div class="flex items-center gap-2">
   <button aria-label="Volver a inicio beta" onclick="teamApp.goToScreen('beta_entry_screen')" class="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface cursor-pointer -ml-1" type="button">
     <span class="material-symbols-outlined text-[20px]">arrow_back</span>
@@ -881,9 +868,9 @@
         <!-- SCREEN 0a: V2 ONBOARDING ENTRENADOR - CREAR EQUIPO & CÓDIGO INDA16 -->
         <section id="v2_00_coach_create_team" class="app-screen-view w-full hidden">
           <!-- Mobile Screen Wrapper (390px Max) -->
-<main class="w-full max-w-[390px] bg-background min-h-screen flex flex-col shadow-2xl relative pb-12">
+<main class="w-full max-w-2xl mx-auto bg-background min-h-screen flex flex-col shadow-sm relative pb-12 border-x border-outline-variant/20">
 <!-- Top Navigation Bar (Task-focused onboarding screen: Shell bottom nav suppressed per rules) -->
-<header class="bg-surface-container-lowest sticky top-0 z-40 px-margin-mobile h-14 flex items-center justify-between shadow-sm border-b border-outline-variant">
+<header class="bg-surface-container-lowest sticky top-0 z-40 px-4 sm:px-6 h-14 flex items-center justify-between shadow-sm border-b border-outline-variant">
 <div class="flex items-center gap- space-sm">
 <button aria-label="Volver" onclick="teamApp.goToScreen('v2_00_onboarding_welcome')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-container active:scale-[0.98] transition-transform text-on-surface cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[22px]" data-icon="arrow_back">arrow_back</span>
@@ -1142,9 +1129,9 @@
         <!-- SCREEN 0b: V2 ONBOARDING FAMILIA - UNIRSE AL EQUIPO & VINCULAR MENOR -->
         <section id="v2_00_parent_join_team" class="app-screen-view w-full hidden">
           <!-- Mobile Shell Wrapper (Simulating Mobile Phone Frame 390px) -->
-<div class="w-full max-w-[420px] min-h-screen bg-background relative flex flex-col pb-36 shadow-2xl">
+<div class="w-full max-w-2xl mx-auto min-h-screen bg-background relative flex flex-col pb-36 shadow-sm border-x border-outline-variant/20">
 <!-- Top Step & Context Status Header -->
-<header class="sticky top-0 z-40 bg-surface-container-lowest/95 backdrop-blur px-margin-mobile pt-4 pb-3 border-b border-outline-variant/60">
+<header class="sticky top-0 z-40 bg-surface-container-lowest/95 backdrop-blur px-4 sm:px-6 pt-4 pb-3 border-b border-outline-variant/60">
 <div class="flex items-center justify-between gap-3 mb-2">
 <button aria-label="Volver" onclick="teamApp.goToScreen('v2_00_onboarding_welcome')" class="inline-flex items-center gap-1 text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors py-1 -ml-1 active:scale-[0.98] cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="arrow_back">arrow_back</span>
@@ -1445,7 +1432,7 @@
 </div>
 </header>
 <!-- MAIN SCROLLABLE CONTENT CANVAS -->
-<main class="flex-1 w-full max-w-lg mx-auto px-margin-mobile pt-5 pb-28 space-y-6">
+<main class="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 pt-5 pb-28 space-y-6">
 <!-- HEADER / CONCEPT SECTION -->
 <section class="space-y-1.5">
 <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high text-primary border border-outline-variant/50">
@@ -1549,73 +1536,80 @@
   </div>
 </section>
 
-<!-- SECTION 1: 'HOY' (Immediate operational focus) -->
-<section class="space-y-3">
-<div class="flex items-center justify-between">
-<div class="flex items-center gap-2">
-<span class="w-2.5 h-2.5 rounded-full bg-primary-container"></span>
-<h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Hoy</h2>
-</div>
-<span id="coach-home-today-badge" class="font-label-sm text-label-sm font-bold px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed">Sesión en Campo</span>
-</div>
-<div id="coach-home-today-container">
-  <!-- Dynamic: Rendered by syncCoachHome() -->
-</div>
-</section>
+<!-- RESPONSIVE 2-COLUMN DASHBOARD GRID ON TABLET / DESKTOP -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div class="space-y-6">
+    <!-- SECTION 1: 'HOY' (Immediate operational focus) -->
+    <section class="space-y-3">
+    <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+    <span class="w-2.5 h-2.5 rounded-full bg-primary-container"></span>
+    <h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Hoy</h2>
+    </div>
+    <span id="coach-home-today-badge" class="font-label-sm text-label-sm font-bold px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed">Sesión en Campo</span>
+    </div>
+    <div id="coach-home-today-container">
+      <!-- Dynamic: Rendered by syncCoachHome() -->
+    </div>
+    </section>
 
-<!-- SECTION 2: 'PENDIENTE DE TI' (High priority actionable triage container) -->
-<section class="space-y-3">
-<div class="flex items-center justify-between">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-tertiary text-[20px]" data-icon="assignment_late" style="font-variation-settings: 'FILL' 1;">assignment_late</span>
-<h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Pendiente de ti</h2>
-</div>
-<span id="coach-pending-count-badge" class="font-label-sm text-label-sm font-extrabold px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-fixed-dim">
-  0 tareas
-</span>
-</div>
-<div id="coach-pending-items-container" class="space-y-3">
-  <!-- Dynamic: Rendered by syncCoachHome() -->
-</div>
-</section>
+    <!-- SECTION 2: 'PENDIENTE DE TI' (High priority actionable triage container) -->
+    <section class="space-y-3">
+    <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+    <span class="material-symbols-outlined text-tertiary text-[20px]" data-icon="assignment_late" style="font-variation-settings: 'FILL' 1;">assignment_late</span>
+    <h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Pendiente de ti</h2>
+    </div>
+    <span id="coach-pending-count-badge" class="font-label-sm text-label-sm font-extrabold px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-fixed-dim">
+      0 tareas
+    </span>
+    </div>
+    <div id="coach-pending-items-container" class="space-y-3">
+      <!-- Dynamic: Rendered by syncCoachHome() -->
+    </div>
+    </section>
+  </div>
 
-<!-- SECTION 3: 'ESTA SEMANA' (Compact chronological preview with calendar rhythm) -->
-<section class="space-y-3">
-<div class="flex items-center justify-between">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-[20px]" data-icon="date_range">date_range</span>
-<h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Esta Semana</h2>
-</div>
-<span class="font-label-sm text-label-sm text-on-surface-variant">Próximas 72 horas</span>
-</div>
-<div id="coach-week-events-container" class="bg-surface-container-lowest rounded-xl border border-outline-variant/70 shadow-sm overflow-hidden">
-  <!-- Dynamic: Rendered by syncCoachHome() -->
-</div>
-</section>
+  <div class="space-y-6">
+    <!-- SECTION 3: 'ESTA SEMANA' (Compact chronological preview with calendar rhythm) -->
+    <section class="space-y-3">
+    <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+    <span class="material-symbols-outlined text-primary text-[20px]" data-icon="date_range">date_range</span>
+    <h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Esta Semana</h2>
+    </div>
+    <span class="font-label-sm text-label-sm text-on-surface-variant">Próximas 72 horas</span>
+    </div>
+    <div id="coach-week-events-container" class="bg-surface-container-lowest rounded-xl border border-outline-variant/70 shadow-sm overflow-hidden">
+      <!-- Dynamic: Rendered by syncCoachHome() -->
+    </div>
+    </section>
 
-<!-- SECTION 4: 'CAMBIOS RECIENTES' (Operational change log / audit feed) -->
-<section class="space-y-3">
-<div class="flex items-center justify-between">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-on-surface-variant text-[20px]" data-icon="history">history</span>
-<h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Cambios Recientes</h2>
+    <!-- SECTION 4: 'CAMBIOS RECIENTES' (Operational change log / audit feed) -->
+    <section class="space-y-3">
+    <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+    <span class="material-symbols-outlined text-on-surface-variant text-[20px]" data-icon="history">history</span>
+    <h2 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface font-extrabold">Cambios Recientes</h2>
+    </div>
+    <span class="font-label-sm text-label-sm text-on-surface-variant">Registro del equipo</span>
+    </div>
+    <div id="coach-recent-changes-container" class="bg-surface-container-lowest rounded-xl border border-outline-variant/70 p-4 space-y-3.5 shadow-sm">
+      <!-- Dynamic: Rendered by syncCoachHome() -->
+    </div>
+    </section>
+  </div>
 </div>
-<span class="font-label-sm text-label-sm text-on-surface-variant">Registro del equipo</span>
-</div>
-<div id="coach-recent-changes-container" class="bg-surface-container-lowest rounded-xl border border-outline-variant/70 p-4 space-y-3.5 shadow-sm">
-  <!-- Dynamic: Rendered by syncCoachHome() -->
-</div>
-</section>
 </main>
 <!-- BOTTOM NAVIGATION BAR (Strict JSON execution & Style guidance) -->
         </section>
 
         <!-- SCREEN 2: V2 AGENDA - EL TIEMPO DEL EQUIPO -->
         <section id="v2_02_coach_agenda" class="app-screen-view w-full hidden">
-          <!-- Mobile Screen Wrapper Container (Max 430px for authentic smartphone preview, centered on larger displays) -->
-<div class="w-full max-w-[430px] mx-auto min-h-screen flex flex-col bg-surface shadow-xl relative pb-28">
+          <!-- Screen Wrapper Container (Responsive Mobile-First) -->
+<div class="w-full max-w-4xl mx-auto min-h-screen flex flex-col bg-surface relative pb-28">
 <!-- TopAppBar (Shared Component verbatim execution) -->
-<header class="sticky top-0 z-40 flex items-center justify-between px-margin-mobile py-space-sm w-full bg-surface-container-lowest border-b border-outline-variant shadow-sm">
+<header class="sticky top-0 z-40 flex items-center justify-between px-4 sm:px-6 py-space-sm w-full bg-surface-container-lowest border-b border-outline-variant shadow-sm">
 <div class="flex items-center gap-2.5">
 <!-- Leading Crest Avatar -->
 <div id="agenda-team-crest" class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold text-xs shadow-inner ring-2 ring-primary-fixed">
@@ -1634,7 +1628,7 @@
 </button>
 </header>
 <!-- Main Content Canvas -->
-<main class="flex-1 px-margin-mobile pt-4 flex flex-col gap-4">
+<main class="flex-1 px-4 sm:px-6 pt-4 flex flex-col gap-4">
 <!-- Header Section: Main Title & Action Button -->
 <section class="flex items-start justify-between gap-2">
 <div class="flex flex-col">
@@ -1868,9 +1862,9 @@
         <!-- SCREEN 3: V2 EQUIPO - LAS PERSONAS (18 JUGADORES) -->
         <section id="v2_03_coach_roster" class="app-screen-view w-full hidden">
           <!-- Mobile Layout Viewport Constrained to 390px Form Factor -->
-<div class="w-full max-w-[390px] bg-background min-h-screen relative flex flex-col pb-36 shadow-2xl">
+<div class="w-full max-w-5xl mx-auto bg-background min-h-screen relative flex flex-col pb-36">
 <!-- TopAppBar (Shared Component Execution) -->
-<header class="sticky top-0 z-40 flex items-center justify-between px-margin-mobile py-space-sm w-full bg-surface-container-lowest border-b border-outline-variant shadow-sm">
+<header class="sticky top-0 z-40 flex items-center justify-between px-4 sm:px-6 py-space-sm w-full bg-surface-container-lowest border-b border-outline-variant shadow-sm">
 <div class="flex items-center gap-2.5">
 <!-- Team Crest Badge / Leading Avatar -->
 <div id="roster-team-crest" class="w-9 h-9 rounded-lg bg-primary-container flex items-center justify-center text-on-primary font-headline-sm text-headline-sm shadow-sm font-bold border border-primary">
@@ -1888,7 +1882,7 @@
 </button>
 </header>
 <!-- Main Canvas Content Area -->
-<main class="flex-1 px-margin-mobile pt-4 space-y-4">
+<main class="flex-1 px-4 sm:px-6 pt-4 space-y-4">
 <!-- Header Title & Quick Action -->
 <div class="flex items-center justify-between gap-2">
 <div>
@@ -1967,7 +1961,7 @@
   </button>
 </div>
 <!-- Roster Card Rows -->
-<div id="roster-players-list-container" class="space-y-2">
+<div id="roster-players-list-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 <!-- #9 Ibai Aranguren -->
 <article class="bg-red-50/20 border border-tertiary-container/30 rounded-xl p-3 shadow-sm active:scale-[0.99] transition-all flex items-center justify-between gap-3 cursor-pointer roster-player-row" onclick="teamApp.goToScreen('v2_04_player_detail', 'equipo')" data-status="baja" data-convocado="false">
 <div class="flex items-center gap-3 min-w-0">
@@ -2369,9 +2363,9 @@
         <!-- SCREEN 4: V2 DETALLE DE JUGADOR (IBAI #9) -->
         <section id="v2_04_player_detail" class="app-screen-view w-full hidden">
           <!-- Mobile Viewport Shell (Max 430px, optimized for 390px iPhone/Pixel canvas) -->
-<main class="w-full max-w-[430px] min-h-screen bg-background flex flex-col pb-28 relative shadow-xl">
+<main class="w-full max-w-4xl mx-auto min-h-screen bg-background flex flex-col pb-28 relative">
 <!-- 1. Header / Navigation Bar (Subpage: Contextual task flow with Back to Squad) -->
-<header class="sticky top-0 z-40 bg-surface-container-lowest border-b border-outline-variant/40 px-margin-mobile py-space-sm flex items-center justify-between shadow-sm">
+<header class="sticky top-0 z-40 bg-surface-container-lowest border-b border-outline-variant/40 px-4 sm:px-6 py-space-sm flex items-center justify-between shadow-sm">
 <button id="player-detail-back-btn" onclick="teamApp.handlePlayerDetailBack()" class="flex items-center gap-1 text-primary active:scale-[0.98] transition-transform py-1 px-1 -ml-1 rounded-lg cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[20px] font-bold">arrow_back_ios_new</span>
 <span id="player-detail-back-label" class="font-label-lg text-label-lg font-bold tracking-tight">Plantilla</span>
@@ -2391,7 +2385,7 @@
 </div>
 </header>
 <!-- Main Content Container -->
-<div id="player-detail-demo-container" class="px-margin-mobile flex flex-col gap-space-md pt-space-md">
+<div id="player-detail-demo-container" class="px-4 sm:px-6 flex flex-col gap-space-md pt-space-md">
 <!-- 2. Hero Card del Jugador -->
 <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm relative overflow-hidden">
 <!-- Accent top border stripe -->
@@ -2628,26 +2622,28 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </div>
 
 <!-- Dynamic Coach View Container (Real Dossier for Beta mode) -->
-<div id="player-detail-coach-dynamic-container" class="hidden px-margin-mobile flex flex-col gap-space-md pt-space-md">
+<div id="player-detail-coach-dynamic-container" class="hidden px-4 sm:px-6 flex flex-col gap-space-md pt-space-md">
   <!-- Dynamic content will be injected by syncPlayerDetail() -->
 </div>
 
 <!-- Parent / Dynamic Child View Container (Strict Clean View for GuardianLink) -->
-<div id="player-detail-parent-container" class="hidden px-margin-mobile flex flex-col gap-space-md pt-space-md">
+<div id="player-detail-parent-container" class="hidden px-4 sm:px-6 flex flex-col gap-space-md pt-space-md">
   <!-- Dynamic content will be injected by syncPlayerDetail() -->
 </div>
 <!-- 7. Fixed Sideline Action Bar (One-handed Ergonomics for Coaches) -->
-<div id="player-detail-coach-bar" class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50 bg-surface-container-lowest/95 backdrop-blur-md px-margin-mobile py-2.5 border-t border-outline-variant/40 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] flex items-center gap-2.5">
-<!-- Quick Call Primary Parent -->
-<a class="h-[50px] flex-1 px-4 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform border border-outline-variant/50" href="tel:620445566">
-<span class="material-symbols-outlined text-primary text-[20px]">phone_in_talk</span>
-<span>Llamar Familia</span>
-</a>
-<!-- Acción de Disponibilidad -->
-<button class="h-[50px] flex-1 px-4 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg font-extrabold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" onclick="alert('Abriendo selector de disponibilidad para Ibai Aranguren')" type="button">
-<span class="material-symbols-outlined text-[20px]">edit_note</span>
-<span>Actualizar Estado</span>
-</button>
+<div id="player-detail-coach-bar" class="fixed bottom-0 left-0 right-0 z-50 bg-surface-container-lowest/95 backdrop-blur-md py-2.5 border-t border-outline-variant/40 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] flex justify-center">
+  <div class="w-full max-w-4xl px-4 flex items-center gap-2.5">
+    <!-- Quick Call Primary Parent -->
+    <a class="h-[50px] flex-1 px-4 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform border border-outline-variant/50" href="tel:620445566">
+      <span class="material-symbols-outlined text-primary text-[20px]">phone_in_talk</span>
+      <span>Llamar Familia</span>
+    </a>
+    <!-- Acción de Disponibilidad -->
+    <button class="h-[50px] flex-1 px-4 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg font-extrabold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" onclick="alert('Abriendo selector de disponibilidad para Ibai Aranguren')" type="button">
+      <span class="material-symbols-outlined text-[20px]">edit_note</span>
+      <span>Actualizar Estado</span>
+    </button>
+  </div>
 </div>
 </main>
         </section>
@@ -2655,9 +2651,9 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
         <!-- SCREEN 5: V2 EVENT HUB NORMAL (DISPONIBILIDAD) -->
         <section id="v2_05_event_hub_normal" class="app-screen-view w-full hidden">
           <!-- Mobile Viewport Container (390px Max Standard) -->
-<div class="w-full max-w-[390px] min-h-screen bg-surface flex flex-col relative pb-28 shadow-xl">
+<div class="w-full max-w-4xl mx-auto min-h-screen bg-surface flex flex-col relative pb-28">
 <!-- Top Navigation Bar (Task-Focused Sub-page navigation) -->
-<header class="sticky top-0 z-40 flex items-center justify-between px-margin-mobile py-space-sm w-full bg-surface-container-lowest border-b border-outline-variant/30 shadow-sm">
+<header class="sticky top-0 z-40 flex items-center justify-between px-4 sm:px-6 py-space-sm w-full bg-surface-container-lowest border-b border-outline-variant/30 shadow-sm">
 <a class="inline-flex items-center gap-0.5 text-primary hover:text-primary-container active:scale-[0.98] transition-transform" href="#agenda">
 <span class="material-symbols-outlined text-[20px]" data-icon="chevron_left">chevron_left</span>
 <span class="font-label-md text-label-md font-bold">Agenda</span>
@@ -2864,8 +2860,8 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </section>
 </main>
 <!-- Bottom Sticky Action Bar (Sidebar / Bottom Navigation Container optimized for Sideline Coach) -->
-<footer class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] z-50 bg-surface-container-lowest/95 backdrop-blur-md px-margin-mobile py-2.5 border-t border-outline-variant/40 shadow-[0_-4px_16px_rgba(15,23,42,0.08)]">
-<div class="flex items-center gap-2">
+<footer class="fixed bottom-0 left-0 right-0 z-50 bg-surface-container-lowest/95 backdrop-blur-md py-2.5 border-t border-outline-variant/40 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] flex justify-center">
+<div class="w-full max-w-4xl px-4 flex items-center gap-2">
 <button id="hub-btn-send-notice" onclick="teamApp.openCreateNoticeModal()" class="flex-1 h-[48px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="forward_to_inbox">forward_to_inbox</span>
 <span>Enviar aviso a familias</span>
@@ -2890,10 +2886,10 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
               <strong>Ane Mintegi (#16)</strong> ha sido incorporada como sustituta de Ibai. Se ha emitido el aviso al grupo de familias.
             </p>
           </div>
-          <!-- Outer Mobile Container Simulator (Strict 390px Viewport) -->
-<div class="mx-auto w-full max-w-[390px] min-h-screen bg-background flex flex-col relative pb-28 shadow-xl">
+          <!-- Screen Container (Responsive Mobile-First) -->
+<div class="mx-auto w-full max-w-4xl min-h-screen bg-background flex flex-col relative pb-28">
 <!-- TOP APP BAR & SUB-NAVIGATION HEADER -->
-<header class="sticky top-0 z-40 bg-surface-container-lowest border-b border-outline-variant shadow-sm px-margin-mobile py-2.5">
+<header class="sticky top-0 z-40 bg-surface-container-lowest border-b border-outline-variant shadow-sm px-4 sm:px-6 py-2.5">
 <div class="flex items-center justify-between">
 <!-- Back action -->
 <button aria-label="Volver a la Agenda" class="flex items-center gap-1 text-primary active:scale-[0.97] transition-transform" type="button">
@@ -3340,10 +3336,9 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 
         <!-- SCREEN 7: V2 INICIO FAMILIAR (ELENA GÓMEZ / IBAI #9) -->
         <section id="v2_07_parent_home" class="app-screen-view w-full hidden">
-          <!-- Mobile Viewport Container: 390px canonical reference -->
-<main class="w-full max-w-[430px] min-h-screen bg-background flex flex-col relative pb-28 shadow-xl">
+<main class="w-full max-w-4xl mx-auto min-h-screen bg-background flex flex-col relative pb-28 px-4 sm:px-6">
 <!-- Top Bar with Player Switcher & Trailing Notification -->
-<header class="sticky top-0 z-40 flex items-center justify-between px-margin-mobile py-space-sm w-full bg-surface-container-lowest border-b border-outline-variant/50 shadow-sm">
+<header class="sticky top-0 z-40 flex items-center justify-between -mx-4 sm:-mx-6 px-4 sm:px-6 py-space-sm bg-surface-container-lowest border-b border-outline-variant/50 shadow-sm">
 <!-- Child Context Switcher Pill -->
 <button id="parent-home-child-switcher" class="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-surface-container-low border border-outline-variant/60 active:scale-[0.98] transition-all hover:bg-surface-container" type="button">
 <!-- Jersey Badge -->
@@ -3588,9 +3583,9 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
         <!-- SCREEN 8: V2 RESPONDER DISPONIBILIDAD EN 3s -->
         <section id="v2_08_parent_rsvp" class="app-screen-view w-full hidden">
           <!-- Mobile Viewport Container (~390px width) -->
-<div class="w-full max-w-[420px] bg-background min-h-screen flex flex-col relative shadow-xl">
+<div class="w-full max-w-2xl mx-auto bg-background min-h-screen flex flex-col relative shadow-sm border-x border-outline-variant/20">
 <!-- Sub-page Focused Header (Navigation Shell Suppressed as per Task-Focused Flow) -->
-<header class="sticky top-0 z-30 bg-surface-container-lowest/95 backdrop-blur-md px-margin-mobile py-space-sm flex items-center justify-between shadow-sm">
+<header class="sticky top-0 z-30 bg-surface-container-lowest/95 backdrop-blur-md px-4 sm:px-6 py-space-sm flex items-center justify-between shadow-sm">
 <div class="flex items-center gap-2">
 <button aria-label="Volver atrás" onclick="teamApp.goToScreen('v2_07_parent_home', 'inicio')" class="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="arrow_back">arrow_back</span>
@@ -3606,7 +3601,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </div>
 </header>
 <!-- Main Content Flow -->
-<main class="flex-1 px-margin-mobile pt-3 space-y-4">
+<main class="flex-1 px-4 sm:px-6 pt-3 space-y-4">
 <!-- Hero Event Summary Card -->
 <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-[0_1px_3px_rgba(15,23,42,0.06)] overflow-hidden">
 <!-- Player Identity Bar -->
@@ -3966,10 +3961,10 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
         <!-- AUXILIARY SCREEN: CREAR CONVOCATORIA -->
         <section id="screen_e_create_squad" class="app-screen-view w-full hidden">
           <!-- Mobile Screen Container -->
-<div class="w-full max-w-md min-h-screen bg-surface flex flex-col pb-44 relative">
+<div class="w-full max-w-3xl mx-auto min-h-screen bg-surface flex flex-col pb-44 relative">
 <!-- Top Navigation Bar (Task-Focused Subpage with Back Navigation) -->
 <header class="sticky top-0 z-40 bg-surface-container-lowest border-b border-outline-variant shadow-sm w-full">
-<div class="flex items-center justify-between px-margin-mobile h-14">
+<div class="flex items-center justify-between px-4 sm:px-6 h-14">
 <div class="flex items-center gap-2">
 <button aria-label="Volver" class="w-10 h-10 -ml-2 rounded-xl flex items-center justify-center text-on-surface hover:bg-surface-container active:scale-[0.98] transition-transform" type="button">
 <span class="material-symbols-outlined text-[24px]">arrow_back</span>
@@ -4346,7 +4341,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </main>
 <!-- Bottom Docked Container (Elevated Level 2 Sheet for Sideline Execution) -->
 <footer class="fixed bottom-0 left-0 right-0 z-50 flex justify-center bg-transparent pointer-events-none">
-<div class="w-full max-w-md bg-surface-container-lowest border-t border-outline-variant p-4 shadow-xl pointer-events-auto space-y-3">
+<div class="w-full max-w-3xl bg-surface-container-lowest border-t border-outline-variant p-4 shadow-xl pointer-events-auto space-y-3">
 <!-- Quick Option: Family Notification Checkbox -->
 <label class="flex items-center gap-3 cursor-pointer select-none py-0.5">
 <input checked="" class="w-5 h-5 rounded text-primary-container border-outline-variant focus:ring-0 focus:ring-offset-0 transition-colors" type="checkbox"/>
@@ -4409,7 +4404,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <!-- Sticky Operational Filter Bar -->
 
 <!-- Feed Container: High Legibility Broadcast Stream -->
-<main class="px-margin-mobile py-space-md space-y-space-md max-w-lg mx-auto">
+<main class="px-4 sm:px-6 py-space-md space-y-space-md max-w-3xl mx-auto pb-28">
 <!-- Empty State Container for clean BETA -->
 <div id="notices-empty-container" class="hidden py-16 px-4 text-center bg-surface-container-lowest rounded-2xl border border-dashed border-outline-variant flex flex-col items-center gap-3 shadow-xs">
   <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center text-primary-container">
@@ -4589,39 +4584,35 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
       <!-- ======================================================== -->
       <!-- UNIFIED PERSISTENT BOTTOM NAVIGATION BAR -->
       <!-- ======================================================== -->
-      <nav id="master-bottom-nav" aria-label="Navegación principal de la app" class="w-full bg-surface-container-lowest border-t border-outline-variant/70 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] flex items-center justify-around px-2 py-1 shrink-0 z-40">
-        <button id="nav-tab-inicio" onclick="teamApp.goToTab('inicio')" class="flex-1 flex flex-col items-center justify-center py-1 text-primary font-bold transition-colors cursor-pointer">
-          <span class="material-symbols-outlined text-[24px]">home</span>
-          <span class="text-[11px] font-bold tracking-tight text-primary">Inicio</span>
-        </button>
-        <button id="nav-tab-agenda" onclick="teamApp.goToTab('agenda')" class="flex-1 flex flex-col items-center justify-center py-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
-          <span class="material-symbols-outlined text-[24px]">calendar_month</span>
-          <span class="text-[11px] font-medium tracking-tight">Agenda</span>
-        </button>
-        <button id="nav-tab-equipo" onclick="teamApp.goToTab('equipo')" class="flex-1 flex flex-col items-center justify-center py-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
-          <span id="nav-icon-equipo" class="material-symbols-outlined text-[24px]">groups</span>
-          <span id="nav-label-equipo" class="text-[11px] font-medium tracking-tight">Equipo</span>
-        </button>
-        <button id="nav-tab-avisos" onclick="teamApp.goToTab('avisos')" class="flex-1 flex flex-col items-center justify-center py-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer relative">
-          <span class="material-symbols-outlined text-[24px]">campaign</span>
-          <span class="text-[11px] font-medium tracking-tight">Avisos</span>
-          <span class="absolute top-1.5 right-6 w-2 h-2 bg-red-500 rounded-full"></span>
-        </button>
+      <nav id="master-bottom-nav" aria-label="Navegación principal de la app" class="fixed bottom-0 left-0 right-0 bg-surface-container-lowest/95 backdrop-blur-md border-t border-outline-variant/70 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] flex justify-center px-2 py-1 shrink-0 z-40">
+        <div class="w-full max-w-xl flex items-center justify-around">
+          <button id="nav-tab-inicio" onclick="teamApp.goToTab('inicio')" class="flex-1 flex flex-col items-center justify-center py-1 text-primary font-bold transition-colors cursor-pointer">
+            <span class="material-symbols-outlined text-[24px]">home</span>
+            <span class="text-[11px] font-bold tracking-tight text-primary">Inicio</span>
+          </button>
+          <button id="nav-tab-agenda" onclick="teamApp.goToTab('agenda')" class="flex-1 flex flex-col items-center justify-center py-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+            <span class="material-symbols-outlined text-[24px]">calendar_month</span>
+            <span class="text-[11px] font-medium tracking-tight">Agenda</span>
+          </button>
+          <button id="nav-tab-equipo" onclick="teamApp.goToTab('equipo')" class="flex-1 flex flex-col items-center justify-center py-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+            <span id="nav-icon-equipo" class="material-symbols-outlined text-[24px]">groups</span>
+            <span id="nav-label-equipo" class="text-[11px] font-medium tracking-tight">Equipo</span>
+          </button>
+          <button id="nav-tab-avisos" onclick="teamApp.goToTab('avisos')" class="flex-1 flex flex-col items-center justify-center py-1 text-on-surface-variant hover:text-primary transition-colors cursor-pointer relative">
+            <span class="material-symbols-outlined text-[24px]">campaign</span>
+            <span class="text-[11px] font-medium tracking-tight">Avisos</span>
+            <span class="absolute top-1.5 right-6 w-2 h-2 bg-red-500 rounded-full"></span>
+          </button>
+        </div>
       </nav>
 
-      <!-- Bottom Smartphone Home Indicator Bar -->
-      <div class="w-full h-4 bg-surface-container-lowest flex items-center justify-center shrink-0 z-50 border-t border-outline-variant/20 pointer-events-none">
-        <div class="w-32 h-1 bg-slate-300 rounded-full"></div>
-      </div>
-
-    </div>
   </div>
 
   <!-- ======================================================== -->
   <!-- MODAL: FICHA PROTEGIDA DE JUGADOR (RGPD / MINIMIZACIÓN) -->
   <!-- ======================================================== -->
   <div id="player-detail-sheet" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
-    <div class="bg-white text-slate-900 rounded-t-3xl sm:rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
+    <div class="bg-white text-slate-900 rounded-t-3xl sm:rounded-2xl max-w-sm sm:max-w-md w-full p-5 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200 max-h-[90dvh] overflow-y-auto">
       <div class="flex items-center justify-between pb-3 border-b border-slate-100">
         <div class="flex items-center gap-2.5">
           <span id="sheet-player-num" class="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-extrabold flex items-center justify-center text-sm">#1</span>

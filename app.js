@@ -589,19 +589,27 @@ export class TeamAppState {
     const inviteToken = params.get("inviteToken");
     const joinCode = params.get("join");
 
+    const demoToolsWrapper = document.getElementById("demo-tools-wrapper");
     const demoToolbar = document.getElementById("demo-toolbar");
     const demoStepCard = document.getElementById("demo-step-card");
+    const demoBadge = document.getElementById("demo-mode-badge");
+
     if (isDemoRequested) {
+      this.appMode = "DEMO";
+      try { localStorage.setItem("talde_app_mode", "DEMO"); } catch {}
+      if (demoToolsWrapper) demoToolsWrapper.classList.remove("hidden");
       if (demoToolbar) demoToolbar.classList.remove("hidden");
       if (demoStepCard) demoStepCard.classList.remove("hidden");
-    }
-
-    const savedMode = localStorage.getItem("talde_app_mode");
-    if (savedMode === "BETA_NORMAL") {
+      if (demoBadge) demoBadge.classList.remove("hidden");
+    } else {
+      // Normal production access: always start in BETA_NORMAL regardless of stale demo preference
       this.appMode = "BETA_NORMAL";
+      try { localStorage.setItem("talde_app_mode", "BETA_NORMAL"); } catch {}
+      if (demoToolsWrapper) demoToolsWrapper.classList.add("hidden");
+      if (demoToolbar) demoToolbar.classList.add("hidden");
+      if (demoStepCard) demoStepCard.classList.add("hidden");
+      if (demoBadge) demoBadge.classList.add("hidden");
       this.applyCleanUI();
-    } else if (savedMode === "DEMO") {
-      this.appMode = "DEMO";
     }
 
     // Unified session token priority
@@ -667,19 +675,19 @@ export class TeamAppState {
     } else if (roleParam === "parent" || (!roleParam && savedRole === "parent")) {
       this.currentRole = "parent";
       if (isDemoRequested) this.appMode = "DEMO";
-      else if (!this.appMode) this.appMode = savedMode || "DEMO";
+      else this.appMode = "BETA_NORMAL";
     } else if (roleParam === "coach" || (!roleParam && savedRole === "coach")) {
       this.currentRole = "coach";
       if (isDemoRequested) this.appMode = "DEMO";
-      else if (!this.appMode) this.appMode = savedMode || "DEMO";
+      else this.appMode = "BETA_NORMAL";
     } else if (screenParam?.startsWith("v2_07_") || screenParam?.startsWith("v2_08_")) {
       this.currentRole = "parent";
       if (isDemoRequested) this.appMode = "DEMO";
-      else if (!this.appMode) this.appMode = savedMode || "DEMO";
+      else this.appMode = "BETA_NORMAL";
     } else if (screenParam?.startsWith("v2_01_") || screenParam?.startsWith("v2_02_") || screenParam?.startsWith("v2_05_") || screenParam?.startsWith("v2_06_")) {
       this.currentRole = "coach";
       if (isDemoRequested) this.appMode = "DEMO";
-      else if (!this.appMode) this.appMode = savedMode || "DEMO";
+      else this.appMode = "BETA_NORMAL";
     } else {
       this.currentRole = "onboard";
     }
@@ -4469,69 +4477,75 @@ export class TeamAppState {
         }
 
         coachDynamicContainer.innerHTML = `
-          <!-- Hero Card del Jugador -->
-          <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm relative overflow-hidden">
-            <div class="absolute top-0 left-0 right-0 h-1 bg-primary-container"></div>
-            <div class="flex items-start gap-4">
-              <div class="relative flex-shrink-0">
-                <div class="w-16 h-16 rounded-full bg-surface-container-highest border-2 border-primary-container flex items-center justify-center text-primary font-headline-lg text-headline-lg font-extrabold shadow-sm">
-                  ${escapeHtml(initials)}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-4">
+              <!-- Hero Card del Jugador -->
+              <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm relative overflow-hidden">
+                <div class="absolute top-0 left-0 right-0 h-1 bg-primary-container"></div>
+                <div class="flex items-start gap-4">
+                  <div class="relative flex-shrink-0">
+                    <div class="w-16 h-16 rounded-full bg-surface-container-highest border-2 border-primary-container flex items-center justify-center text-primary font-headline-lg text-headline-lg font-extrabold shadow-sm">
+                      ${escapeHtml(initials)}
+                    </div>
+                    <div class="absolute -bottom-1 -right-1 bg-primary-container text-on-primary font-headline-sm text-headline-sm font-black px-2 py-0.5 rounded-md border-2 border-surface-container-lowest shadow-sm">
+                      ${escapeHtml(dorsal)}
+                    </div>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                      <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-primary">${escapeHtml(this.beta.team?.name || 'Equipo')}</span>
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                        Activo
+                      </span>
+                    </div>
+                    <h1 class="font-headline-lg text-headline-lg font-extrabold text-on-surface truncate leading-tight mt-0.5">
+                      ${escapeHtml(fullName)}
+                    </h1>
+                    <p class="font-label-md text-label-md font-semibold text-on-surface-variant flex items-center gap-1 mt-0.5">
+                      <span class="material-symbols-outlined text-[16px] text-primary">sports_soccer</span>
+                      ${escapeHtml(position)}
+                    </p>
+                  </div>
                 </div>
-                <div class="absolute -bottom-1 -right-1 bg-primary-container text-on-primary font-headline-sm text-headline-sm font-black px-2 py-0.5 rounded-md border-2 border-surface-container-lowest shadow-sm">
-                  ${escapeHtml(dorsal)}
-                </div>
-              </div>
-              <div class="flex-1 min-w-0">
+              </section>
+
+              <!-- Contacto Directo de Familia / Tutores -->
+              <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-primary">${escapeHtml(this.beta.team?.name || 'Equipo')}</span>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                    Activo
+                  <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary text-[20px]">contacts</span>
+                    <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Contacto Directo de Familia</h3>
+                  </div>
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-secondary-fixed text-on-secondary-fixed">
+                    ${guardians.length} ${guardians.length === 1 ? 'Tutor' : 'Tutores'}
                   </span>
                 </div>
-                <h1 class="font-headline-lg text-headline-lg font-extrabold text-on-surface truncate leading-tight mt-0.5">
-                  ${escapeHtml(fullName)}
-                </h1>
-                <p class="font-label-md text-label-md font-semibold text-on-surface-variant flex items-center gap-1 mt-0.5">
-                  <span class="material-symbols-outlined text-[16px] text-primary">sports_soccer</span>
-                  ${escapeHtml(position)}
-                </p>
-              </div>
+                <div class="space-y-3">
+                  ${guardiansHtml}
+                </div>
+              </section>
             </div>
-          </section>
 
-          <!-- Contacto Directo de Familia / Tutores -->
-          <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm space-y-3">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-[20px]">contacts</span>
-                <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Contacto Directo de Familia</h3>
-              </div>
-              <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-secondary-fixed text-on-secondary-fixed">
-                ${guardians.length} ${guardians.length === 1 ? 'Tutor' : 'Tutores'}
-              </span>
+            <!-- Notas Privadas del Entrenador -->
+            <div>
+              <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-emerald-600 text-[20px]">chat</span>
+                    <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Notas a la Familia</h3>
+                  </div>
+                  <button onclick="teamApp.openPlayerDirectMessageModal('${escapeHtml(player.id)}', '${escapeHtml(fullName)}')" class="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-xs">
+                    <span class="material-symbols-outlined text-[15px]">add_comment</span>
+                    <span>Nueva nota</span>
+                  </button>
+                </div>
+                <div class="space-y-2">
+                  ${messagesHtml}
+                </div>
+              </section>
             </div>
-            <div class="space-y-3">
-              ${guardiansHtml}
-            </div>
-          </section>
-
-          <!-- Notas Privadas del Entrenador -->
-          <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm space-y-3">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-emerald-600 text-[20px]">chat</span>
-                <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Notas a la Familia</h3>
-              </div>
-              <button onclick="teamApp.openPlayerDirectMessageModal('${escapeHtml(player.id)}', '${escapeHtml(fullName)}')" class="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-xs">
-                <span class="material-symbols-outlined text-[15px]">add_comment</span>
-                <span>Nueva nota</span>
-              </button>
-            </div>
-            <div class="space-y-2">
-              ${messagesHtml}
-            </div>
-          </section>
+          </div>
         `;
       } catch (err) {
         console.error("Error loading coach player dossier:", err);
@@ -5314,6 +5328,11 @@ export class TeamAppState {
   // --- Reset y Pruebas de Conflicto en Vivo ---
 
   async resetBackendDataset(silent = false) {
+    if (this.appMode === "DEMO") {
+      this.resetDemo();
+      if (!silent) this.showToast("✓ Entorno demo reiniciado en memoria (sin afectar a producción).");
+      return;
+    }
     try {
       await api.dev.resetDataset();
       this.tokens = { coach: null, parent: null };

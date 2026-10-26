@@ -334,6 +334,144 @@
     </div>
   </div>
 
+  <!-- Modal: Crear Nuevo Aviso del Entrenador -->
+  <div id="modal-create-notice" class="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-notice-title">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-primary-container text-on-primary flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[20px]">campaign</span>
+          </div>
+          <div>
+            <h3 id="modal-notice-title" class="text-base font-bold text-slate-900 leading-tight">Nuevo Aviso Oficial</h3>
+            <span class="text-[11px] font-bold text-primary bg-primary-fixed/40 px-2 py-0.5 rounded-full">Comunicado a familias</span>
+          </div>
+        </div>
+        <button type="button" onclick="teamApp.closeCreateNoticeModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Cerrar modal">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <form onsubmit="event.preventDefault(); teamApp.submitCreateNotice();" class="space-y-3">
+        <div>
+          <label for="notice-category" class="block text-xs font-bold text-slate-700 mb-1">Categoría del aviso</label>
+          <select id="notice-category" class="w-full h-10 px-3 rounded-xl border border-slate-300 text-xs bg-slate-50 focus:outline-none focus:border-primary-container focus:bg-white focus:ring-1 focus:ring-primary-container">
+            <option value="GENERAL">General / Informativo</option>
+            <option value="SCHEDULE_CHANGE">Cambio de horario / Campo</option>
+            <option value="CALLUP_NOTICE">Convocatoria de partido</option>
+            <option value="KIT">Equipación y material</option>
+            <option value="URGENT">Urgente / Importante</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="notice-title" class="block text-xs font-bold text-slate-700 mb-1">Título del aviso *</label>
+          <input id="notice-title" type="text" placeholder="Ej: Cambio de hora entrenamiento" required class="w-full h-10 px-3.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container" />
+        </div>
+
+        <div>
+          <label for="notice-body" class="block text-xs font-bold text-slate-700 mb-1">Mensaje para las familias *</label>
+          <textarea id="notice-body" rows="3" placeholder="Escribe el comunicado oficial..." required class="w-full p-3 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container resize-none"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+          <input id="notice-urgent" type="checkbox" class="w-4 h-4 rounded text-primary focus:ring-primary-container border-slate-300 cursor-pointer" />
+          <label for="notice-urgent" class="text-xs text-amber-900 font-semibold cursor-pointer">
+            Marcar como prioritario / urgente
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5 pt-2">
+          <button type="button" onclick="teamApp.closeCreateNoticeModal()" class="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer">
+            Cancelar
+          </button>
+          <button id="btn-submit-notice" type="submit" class="h-11 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]">
+            <span class="material-symbols-outlined text-[18px]">send</span>
+            <span>Publicar aviso</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Mensajes / Notas Directas con la Familia -->
+  <div id="modal-player-direct-message" class="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="pdm-modal-title">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[20px]">chat</span>
+          </div>
+          <div>
+            <h3 id="pdm-modal-title" class="text-base font-bold text-slate-900 leading-tight">Nota a la Familia</h3>
+            <span id="pdm-modal-subtitle" class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Comunicación individual</span>
+          </div>
+        </div>
+        <button type="button" onclick="teamApp.closePlayerDirectMessageModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Cerrar modal">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[140px] max-h-[220px]" id="pdm-history-container">
+        <p class="text-xs text-slate-400 italic text-center py-6">No hay notas previas con esta familia.</p>
+      </div>
+
+      <form onsubmit="event.preventDefault(); teamApp.submitPlayerDirectMessage();" class="space-y-3 shrink-0 pt-2 border-t border-slate-100">
+        <div>
+          <label for="pdm-input-message" class="block text-xs font-bold text-slate-700 mb-1">Nueva nota para la familia</label>
+          <textarea id="pdm-input-message" rows="2" placeholder="Escribe un mensaje privado o indicación..." required class="w-full p-3 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container resize-none"></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <button type="button" onclick="teamApp.closePlayerDirectMessageModal()" class="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer">
+            Cerrar
+          </button>
+          <button id="pdm-btn-send" type="submit" class="h-10 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]">
+            <span class="material-symbols-outlined text-[18px]">send</span>
+            <span>Enviar nota</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Selector de Rol / Perfil / Cuenta -->
+  <div id="modal-role-switcher" class="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="switcher-modal-title">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 relative">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[20px]">account_circle</span>
+          </div>
+          <div>
+            <h3 id="switcher-modal-title" class="text-base font-bold text-slate-900 leading-tight">Tu Cuenta</h3>
+            <span id="modal-switcher-email" class="text-[11px] font-medium text-slate-500 font-mono">usuario@ejemplo.com</span>
+          </div>
+        </div>
+        <button type="button" onclick="teamApp.closeRoleSwitcherModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Cerrar modal">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-xs font-bold text-slate-700">Tus equipos y funciones:</p>
+        <div id="modal-switcher-items" class="space-y-2 max-h-56 overflow-y-auto">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-100 space-y-2">
+        <button type="button" onclick="teamApp.logoutSession()" class="w-full h-10 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
+          <span>Cerrar sesión en este dispositivo</span>
+        </button>
+        <button type="button" onclick="teamApp.closeRoleSwitcherModal()" class="w-full h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer">
+          Continuar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================================================== -->
   <!-- DEMO TOOLBAR & GUIDED TOUR (Ocultos por defecto, visibles con ?demo=1 o botón) -->
   <!-- ======================================================== -->
@@ -1194,18 +1332,19 @@
 </div>
 <!-- Parentesco Selector Pill -->
 <div>
+<input type="hidden" id="tutor-relationship" value="Madre" />
 <label class="block font-label-md text-label-md text-on-surface-variant mb-1.5">
               Parentesco / Rol Familiar
             </label>
 <div class="grid grid-cols-3 gap-2">
-<button class="h-10 rounded-lg font-label-md text-label-md border-2 border-primary-container bg-primary-fixed/40 text-on-primary-fixed font-bold flex items-center justify-center gap-1" type="button">
+<button id="rel-btn-madre" onclick="teamApp.selectRelationship('Madre')" class="h-10 rounded-lg font-label-md text-label-md border-2 border-primary-container bg-primary-fixed/40 text-on-primary-fixed font-bold flex items-center justify-center gap-1 cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[16px]" data-icon="check">check</span>
                 Madre
               </button>
-<button class="h-10 rounded-lg font-label-md text-label-md border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container transition-colors flex items-center justify-center" type="button">
+<button id="rel-btn-padre" onclick="teamApp.selectRelationship('Padre')" class="h-10 rounded-lg font-label-md text-label-md border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container transition-colors flex items-center justify-center cursor-pointer" type="button">
                 Padre
               </button>
-<button class="h-10 rounded-lg font-label-md text-label-md border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container transition-colors flex items-center justify-center" type="button">
+<button id="rel-btn-tutor" onclick="teamApp.selectRelationship('Tutor')" class="h-10 rounded-lg font-label-md text-label-md border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container transition-colors flex items-center justify-center cursor-pointer" type="button">
                 Tutor / Familiar
               </button>
 </div>
@@ -1296,12 +1435,13 @@
 </div>
 <!-- Coach Profile Indicator strictly NO settings/gear -->
 <div class="flex items-center gap-2">
-<div class="flex items-center gap-2 bg-surface-container-low pl-2 pr-3 py-1 rounded-full border border-outline-variant/40">
-<div class="w-7 h-7 rounded-full bg-primary text-on-primary font-label-md text-label-md flex items-center justify-center font-bold">
-          MK
-        </div>
-<span id="coach-home-user-name" class="font-label-md text-label-md text-on-surface font-bold">Mikel</span>
+<button type="button" aria-label="Cambiar perfil o cerrar sesión" onclick="teamApp.openRoleSwitcherModal()" class="flex items-center gap-2 bg-surface-container-low pl-2 pr-3 py-1 rounded-full border border-outline-variant/40 hover:bg-surface-container active:scale-[0.98] transition-all cursor-pointer">
+<div id="coach-home-avatar" class="w-7 h-7 rounded-full bg-primary text-on-primary font-label-md text-label-md flex items-center justify-center font-bold">
+  MK
 </div>
+<span id="coach-home-user-name" class="font-label-md text-label-md text-on-surface font-bold">Mikel</span>
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span>
+</button>
 </div>
 </header>
 <!-- MAIN SCROLLABLE CONTENT CANVAS -->
@@ -2487,6 +2627,11 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </section>
 </div>
 
+<!-- Dynamic Coach View Container (Real Dossier for Beta mode) -->
+<div id="player-detail-coach-dynamic-container" class="hidden px-margin-mobile flex flex-col gap-space-md pt-space-md">
+  <!-- Dynamic content will be injected by syncPlayerDetail() -->
+</div>
+
 <!-- Parent / Dynamic Child View Container (Strict Clean View for GuardianLink) -->
 <div id="player-detail-parent-container" class="hidden px-margin-mobile flex flex-col gap-space-md pt-space-md">
   <!-- Dynamic content will be injected by syncPlayerDetail() -->
@@ -2721,7 +2866,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <!-- Bottom Sticky Action Bar (Sidebar / Bottom Navigation Container optimized for Sideline Coach) -->
 <footer class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] z-50 bg-surface-container-lowest/95 backdrop-blur-md px-margin-mobile py-2.5 border-t border-outline-variant/40 shadow-[0_-4px_16px_rgba(15,23,42,0.08)]">
 <div class="flex items-center gap-2">
-<button id="hub-btn-send-notice" class="flex-1 h-[48px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" type="button">
+<button id="hub-btn-send-notice" onclick="teamApp.openCreateNoticeModal()" class="flex-1 h-[48px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="forward_to_inbox">forward_to_inbox</span>
 <span>Enviar aviso a familias</span>
 </button>
@@ -3211,12 +3356,15 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </div>
 <span class="material-symbols-outlined text-outline text-[18px] ml-0.5" data-icon="expand_more">expand_more</span>
 </button>
-<!-- Trailing Action: Notification Bell with Badge -->
-<div class="relative flex items-center">
-<button aria-label="Notificaciones" class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container active:scale-[0.95] transition-transform" type="button">
+<!-- Trailing Action: Notification Bell with Badge & Role Switcher -->
+<div class="relative flex items-center gap-1">
+<button aria-label="Avisos del equipo" onclick="teamApp.goToScreen('screen_k_notices', 'avisos')" class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container active:scale-[0.95] transition-transform cursor-pointer relative" type="button">
 <span class="material-symbols-outlined text-[24px]" data-icon="notifications">notifications</span>
 <!-- Unread Dot Badge -->
 <span class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-tertiary-container rounded-full ring-2 ring-surface-container-lowest"></span>
+</button>
+<button aria-label="Cambiar perfil o cerrar sesión" onclick="teamApp.openRoleSwitcherModal()" class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container active:scale-[0.95] transition-transform cursor-pointer" type="button">
+<span class="material-symbols-outlined text-[24px]">account_circle</span>
 </button>
 </div>
 </header>
@@ -3387,8 +3535,12 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <section class="flex flex-col gap-2.5 mb-2">
 <div class="flex items-center justify-between">
 <h2 class="font-label-lg text-label-lg text-on-surface font-extrabold tracking-wide uppercase">Avisos del Club y Cuerpo Técnico</h2>
-<span class="material-symbols-outlined text-outline text-[18px]" data-icon="campaign">campaign</span>
+<button type="button" onclick="teamApp.goToScreen('screen_k_notices', 'avisos')" class="text-xs font-bold text-primary hover:underline cursor-pointer flex items-center gap-0.5">
+  Ver todos
+  <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
 </div>
+<div id="parent-notices-container">
 <article class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 p-4 shadow-sm flex flex-col gap-2.5">
 <div class="flex items-center justify-between">
 <span class="inline-flex items-center gap-1 font-label-sm text-[11px] font-extrabold uppercase tracking-wider text-primary bg-primary-fixed/40 px-2 py-0.5 rounded">
@@ -3412,6 +3564,20 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <span class="font-label-sm text-[11px] text-on-surface-variant">· Entrenador</span>
 </div>
 </article>
+</div>
+</section>
+
+<!-- Section 4: NOTAS PRIVADAS DEL ENTRENADOR -->
+<section id="parent-direct-messages-section" class="flex flex-col gap-2.5 mb-4">
+<div class="flex items-center justify-between">
+<h2 class="font-label-lg text-label-lg text-on-surface font-extrabold tracking-wide uppercase">Notas del Entrenador</h2>
+<span class="material-symbols-outlined text-emerald-600 text-[18px]">lock</span>
+</div>
+<div id="parent-direct-messages-container" class="space-y-2">
+  <div class="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/50 text-xs text-on-surface-variant italic">
+    No hay notas privadas recientes del cuerpo técnico para este deportista.
+  </div>
+</div>
 </section>
 </div>
 <!-- Bottom Navigation Bar (Docked full-width, 4 destinations, Inicio ACTIVE) -->
@@ -4212,7 +4378,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 <button aria-label="Buscar avisos" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-container active:scale-[0.98] transition-transform text-on-surface-variant" type="button">
 <span class="material-symbols-outlined text-xl" data-icon="search">search</span>
 </button>
-<button aria-label="Perfil" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-container active:scale-[0.98] transition-transform text-on-surface-variant" type="button">
+<button aria-label="Perfil" onclick="teamApp.openRoleSwitcherModal()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-container active:scale-[0.98] transition-transform text-on-surface-variant cursor-pointer" type="button">
 <span class="material-symbols-outlined text-2xl" data-icon="account_circle">account_circle</span>
 </button>
 </div>
@@ -4410,7 +4576,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </main>
 <!-- Coach Operational FAB (Hidden: creation not supported by current contracts) -->
 <aside id="notices-coach-fab" class="hidden fixed bottom-20 right-4 z-40">
-<button aria-label="Crear nuevo aviso operativo" class="h-12 px-4 rounded-full bg-primary-container text-on-primary flex items-center gap-2 shadow-lg border border-primary hover:bg-primary active:scale-[0.98] transition-all" type="button">
+<button aria-label="Crear nuevo aviso operativo" onclick="teamApp.openCreateNoticeModal()" class="h-12 px-4 rounded-full bg-primary-container text-on-primary flex items-center gap-2 shadow-lg border border-primary hover:bg-primary active:scale-[0.98] transition-all cursor-pointer" type="button">
 <span class="material-symbols-outlined text-xl" data-icon="campaign">campaign</span>
 <span class="font-label-lg text-label-lg font-bold">+ Nuevo aviso</span>
 </button>

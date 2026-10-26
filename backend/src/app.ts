@@ -5,9 +5,11 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { z } from "zod";
-import { requestPool as pool, inTransaction, withDbContext, resolveAuthUser, type DbContext } from "./db/pool.js";
+import { requestPool as pool, rawPool, inTransaction, withDbContext, resolveAuthUser, type DbContext } from "./db/pool.js";
 import { createAuthAdapter, assertProductionAuthAdapter } from "./auth/production.js";
 import type { AuthAdapter } from "./auth/adapter.js";
+import { NotificationService } from "./notifications/service.js";
+import { createDefaultMailDelivery, type MailDelivery } from "./notifications/delivery.js";
 import { config } from "./config.js";
 import { DomainError } from "./domain/errors.js";
 import { requireGuardianPlayerAccess, requirePlayerInSeason, requireRole } from "./policy/authorization.js";
@@ -17,11 +19,13 @@ const emailSchema = z.string().email().max(254).transform((v) => v.toLowerCase()
 const uuid = z.string().uuid();
 const availability = z.enum(["CAN_ATTEND", "CANNOT_ATTEND", "UNSURE"]);
 
-type BuildOptions = { authAdapter?: AuthAdapter; enableDevReset?: boolean };
+type BuildOptions = { authAdapter?: AuthAdapter; enableDevReset?: boolean; notificationDelivery?: MailDelivery };
 
 export async function buildApp(options: BuildOptions = {}) {
   const auth = options.authAdapter ?? createAuthAdapter();
   assertProductionAuthAdapter(auth);
+  const notificationDelivery = options.notificationDelivery ?? createDefaultMailDelivery();
+  const notificationService = new NotificationService(rawPool, notificationDelivery);
   if (config.isProduction && options.enableDevReset) throw new Error("Development endpoints forbidden in production");
   const app = Fastify({ logger: false });
   // AsyncLocalStorage carries verified identity and the selected tenant/capability.
@@ -269,7 +273,12 @@ export async function buildApp(options: BuildOptions = {}) {
   });
 
   async function createGuardianRequest(token:string,userId:string,input:unknown){
-    const claim=z.object({claimedPlayerName:z.string().trim().min(1).max(200).optional(),claimedShirtNumber:z.number().int().min(0).max(999).optional()}).parse(input??{});
+    const claim=z.object({
+      claimedPlayerName:z.string().trim().min(1).max(200).optional(),
+      claimedShirtNumber:z.number().int().min(0).max(999).optional(),
+      relationship:z.string().trim().max(50).optional(),
+      contactPhone:z.string().trim().max(30).optional()
+    }).parse(input??{});
     return inTransaction(async(db)=>{
       const invitation=await db.query(`SELECT * FROM invitations WHERE token_hash=$1 FOR UPDATE`,[tokenHash(token)]);
       if(!invitation.rowCount||invitation.rows[0].status!=="ACTIVE") throw new DomainError("INVITATION_INVALID",404,"Invitation is invalid");
@@ -277,10 +286,13 @@ export async function buildApp(options: BuildOptions = {}) {
       const row=invitation.rows[0];
       if(!row.player_id&&!claim.claimedPlayerName) throw new DomainError("PLAYER_CLAIM_REQUIRED",422,"General invitation requires a manually entered player name");
       const created=await db.query(
-        `INSERT INTO guardian_link_requests(invitation_id,requester_user_id,team_season_id,player_id,claimed_player_name,claimed_shirt_number)
-         VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status,created_at,player_id,claimed_player_name,claimed_shirt_number`,
-        [row.id,userId,row.team_season_id,row.player_id,row.player_id?null:claim.claimedPlayerName??null,row.player_id?null:claim.claimedShirtNumber??null]
+        `INSERT INTO guardian_link_requests(invitation_id,requester_user_id,team_season_id,player_id,claimed_player_name,claimed_shirt_number,relationship,contact_phone)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,status,created_at,player_id,claimed_player_name,claimed_shirt_number,relationship,contact_phone`,
+        [row.id,userId,row.team_season_id,row.player_id,row.player_id?null:claim.claimedPlayerName??null,row.player_id?null:claim.claimedShirtNumber??null,claim.relationship??null,claim.contactPhone??null]
       );
+      if(claim.contactPhone){
+        await db.query(`UPDATE users SET phone=COALESCE(phone,$2) WHERE id=$1`,[userId,claim.contactPhone]);
+      }
       await db.query(`INSERT INTO audit_events(actor_user_id,team_season_id,action,entity_type,entity_id,metadata) VALUES($1,$2,'GUARDIAN_LINK_REQUEST_CREATED','GuardianLinkRequest',$3,$4)`,[userId,row.team_season_id,created.rows[0].id,JSON.stringify({invitationScope:row.player_id?"INDIVIDUAL":"GENERAL"})]);
       return created.rows[0];
     });
@@ -310,7 +322,8 @@ export async function buildApp(options: BuildOptions = {}) {
     const { teamSeasonId } = z.object({ teamSeasonId: uuid }).parse(request.params);
     await requireRole(pool, userId, teamSeasonId, ["COACH"]);
     const result = await pool.query(
-      `SELECT r.id,r.status,r.created_at,r.claimed_player_name,r.claimed_shirt_number,u.id guardian_user_id,u.email,u.display_name,
+      `SELECT r.id,r.status,r.created_at,r.claimed_player_name,r.claimed_shirt_number,r.relationship,COALESCE(r.contact_phone,u.phone) contact_phone,
+              u.id guardian_user_id,u.email,u.display_name,
               p.id player_id,p.first_name,p.last_name
        FROM guardian_link_requests r JOIN users u ON u.id=r.requester_user_id LEFT JOIN players p ON p.id=r.player_id
        WHERE r.team_season_id=$1 AND r.status='PENDING' ORDER BY r.created_at`, [teamSeasonId]
@@ -335,8 +348,17 @@ export async function buildApp(options: BuildOptions = {}) {
       const approvedPlayerId=row.player_id??body.playerId;
       if(!approvedPlayerId) throw new DomainError("PLAYER_CLAIM_REQUIRED",422,"Coach must select the claimed player when approving a general request");
       await requirePlayerInSeason(db,row.team_season_id,approvedPlayerId);
+      if(row.contact_phone){
+        await db.query(`UPDATE users SET phone=COALESCE(phone,$2) WHERE id=$1`,[row.requester_user_id,row.contact_phone]);
+      }
       await db.query(`INSERT INTO memberships(user_id,team_season_id,role,status) VALUES($1,$2,'GUARDIAN','ACTIVE') ON CONFLICT(user_id,team_season_id,role) DO UPDATE SET status='ACTIVE'`, [row.requester_user_id, row.team_season_id]);
-      const link = await db.query(`INSERT INTO guardian_links(guardian_user_id,player_id,status) VALUES($1,$2,'ACTIVE') ON CONFLICT(guardian_user_id,player_id) DO UPDATE SET status='ACTIVE' RETURNING id`, [row.requester_user_id,approvedPlayerId]);
+      const link = await db.query(
+        `INSERT INTO guardian_links(guardian_user_id,player_id,status,relationship)
+         VALUES($1,$2,'ACTIVE',$3)
+         ON CONFLICT(guardian_user_id,player_id) DO UPDATE SET status='ACTIVE', relationship=COALESCE(EXCLUDED.relationship, guardian_links.relationship)
+         RETURNING id`,
+        [row.requester_user_id,approvedPlayerId,row.relationship??null]
+      );
       await db.query(`UPDATE guardian_link_requests SET status='APPROVED',player_id=$3,reviewed_by_user_id=$2,reviewed_at=now() WHERE id=$1`, [requestId,userId,approvedPlayerId]);
       if(row.invitation_player_id) await db.query(`UPDATE invitations SET status='USED' WHERE id=$1`, [row.invitation_id]);
       await db.query(`INSERT INTO audit_events(actor_user_id,team_season_id,action,entity_type,entity_id) VALUES
@@ -364,15 +386,158 @@ export async function buildApp(options: BuildOptions = {}) {
   app.get("/v1/team-seasons/:teamSeasonId/players/:playerId", async (request) => {
     const { userId } = await actor(request);
     const params = z.object({ teamSeasonId: uuid, playerId: uuid }).parse(request.params);
-    try { await requireRole(pool, userId, params.teamSeasonId, ["COACH", "STAFF"]); }
-    catch { await requireGuardianPlayerAccess(pool, userId, params.teamSeasonId, params.playerId); }
+    let isStaff = false;
+    try {
+      await requireRole(pool, userId, params.teamSeasonId, ["COACH", "STAFF"]);
+      isStaff = true;
+    } catch {
+      await requireGuardianPlayerAccess(pool, userId, params.teamSeasonId, params.playerId);
+    }
     const result = await pool.query(
       `SELECT p.id,p.first_name,p.last_name,p.short_name,re.shirt_number,re.position,ts.id team_season_id
        FROM players p JOIN roster_entries re ON re.player_id=p.id JOIN team_seasons ts ON ts.id=re.team_season_id
        WHERE p.id=$1 AND ts.id=$2 AND re.status='ACTIVE'`, [params.playerId, params.teamSeasonId]
     );
     if (!result.rowCount) throw new DomainError("PLAYER_NOT_ACCESSIBLE", 404, "Player is not accessible");
-    return result.rows[0];
+    const player = result.rows[0];
+    let guardians: unknown[] = [];
+    if (isStaff) {
+      const gRes = await pool.query(
+        `SELECT u.id user_id, u.display_name, u.email, u.phone, gl.relationship, gl.created_at
+         FROM guardian_links gl
+         JOIN users u ON u.id = gl.guardian_user_id
+         WHERE gl.player_id = $1 AND gl.status = 'ACTIVE'
+         ORDER BY gl.created_at ASC`,
+        [params.playerId]
+      );
+      guardians = gRes.rows.map(g => ({
+        id: g.user_id,
+        userId: g.user_id,
+        displayName: g.display_name,
+        email: g.email,
+        phone: g.phone,
+        relationship: g.relationship,
+        createdAt: g.created_at
+      }));
+    }
+    return {
+      ...player,
+      guardians,
+      linked_guardians: guardians
+    };
+  });
+
+  // --- Team Notices ---
+  app.post("/v1/team-seasons/:teamSeasonId/notices", async (request, reply) => {
+    const { userId } = await actor(request);
+    const { teamSeasonId } = z.object({ teamSeasonId: uuid }).parse(request.params);
+    await requireRole(pool, userId, teamSeasonId, ["COACH", "STAFF"]);
+    const body = z.object({
+      title: z.string().trim().min(1).max(120),
+      body: z.string().trim().min(1).max(2000),
+      category: z.enum(["GENERAL", "SCHEDULE_CHANGE", "CALLUP_NOTICE", "KIT", "URGENT"]).default("GENERAL"),
+      urgent: z.boolean().optional(),
+      isUrgent: z.boolean().optional()
+    }).parse(request.body);
+    const isUrgent = body.urgent ?? body.isUrgent ?? false;
+    const notice = await inTransaction(async (db) => {
+      const inserted = await db.query(
+        `INSERT INTO team_notices(team_season_id, author_user_id, category, title, body, urgent)
+         VALUES($1, $2, $3, $4, $5, $6)
+         RETURNING id, team_season_id, author_user_id, category, title, body, urgent, created_at`,
+        [teamSeasonId, userId, body.category, body.title, body.body, isUrgent]
+      );
+      const row = inserted.rows[0];
+      await db.query(
+        `INSERT INTO audit_events(actor_user_id, team_season_id, action, entity_type, entity_id, metadata)
+         VALUES($1, $2, 'TEAM_NOTICE_CREATED', 'TeamNotice', $3, $4)`,
+        [userId, teamSeasonId, row.id, JSON.stringify({ category: body.category, urgent: isUrgent })]
+      );
+      await db.query(
+        `INSERT INTO outbox_events(aggregate_type, aggregate_id, event_type, payload)
+         VALUES('TeamNotice', $1, 'NoticePublished', $2)`,
+        [row.id, JSON.stringify({ teamSeasonId, noticeId: row.id, title: body.title, category: body.category, urgent: isUrgent })]
+      );
+      return row;
+    });
+    await notificationService.notifyTeamNotice(teamSeasonId, userId, body.title, isUrgent).catch((err) => {
+      console.error("Notice notification error:", err);
+    });
+    return reply.code(201).send(notice);
+  });
+
+  app.get("/v1/team-seasons/:teamSeasonId/notices", async (request) => {
+    const { userId } = await actor(request);
+    const { teamSeasonId } = z.object({ teamSeasonId: uuid }).parse(request.params);
+    await requireRole(pool, userId, teamSeasonId, ["COACH", "STAFF", "GUARDIAN"]);
+    const result = await pool.query(
+      `SELECT n.id, n.team_season_id, n.author_user_id, n.category, n.title, n.body, n.urgent, n.created_at,
+              u.display_name author_name
+       FROM team_notices n
+       JOIN users u ON u.id = n.author_user_id
+       WHERE n.team_season_id = $1
+       ORDER BY n.created_at DESC
+       LIMIT 50`,
+      [teamSeasonId]
+    );
+    return { items: result.rows };
+  });
+
+  // --- Player Direct Messages ---
+  app.post("/v1/team-seasons/:teamSeasonId/players/:playerId/messages", async (request, reply) => {
+    const { userId } = await actor(request);
+    const params = z.object({ teamSeasonId: uuid, playerId: uuid }).parse(request.params);
+    await requireRole(pool, userId, params.teamSeasonId, ["COACH", "STAFF"]);
+    await requirePlayerInSeason(pool, params.teamSeasonId, params.playerId);
+    const body = z.object({
+      message: z.string().trim().min(1).max(1000)
+    }).parse(request.body);
+    const msg = await inTransaction(async (db) => {
+      const inserted = await db.query(
+        `INSERT INTO player_direct_messages(team_season_id, player_id, author_user_id, message)
+         VALUES($1, $2, $3, $4)
+         RETURNING id, team_season_id, player_id, author_user_id, message, created_at`,
+        [params.teamSeasonId, params.playerId, userId, body.message]
+      );
+      const row = inserted.rows[0];
+      await db.query(
+        `INSERT INTO audit_events(actor_user_id, team_season_id, action, entity_type, entity_id, metadata)
+         VALUES($1, $2, 'PLAYER_DIRECT_MESSAGE_CREATED', 'PlayerDirectMessage', $3, $4)`,
+        [userId, params.teamSeasonId, row.id, JSON.stringify({ playerId: params.playerId })]
+      );
+      await db.query(
+        `INSERT INTO outbox_events(aggregate_type, aggregate_id, event_type, payload)
+         VALUES('PlayerDirectMessage', $1, 'DirectMessageCreated', $2)`,
+        [row.id, JSON.stringify({ teamSeasonId: params.teamSeasonId, playerId: params.playerId, messageId: row.id })]
+      );
+      return row;
+    });
+    await notificationService.notifyPlayerDirectMessage(params.teamSeasonId, params.playerId).catch((err) => {
+      console.error("Direct message notification error:", err);
+    });
+    return reply.code(201).send(msg);
+  });
+
+  app.get("/v1/team-seasons/:teamSeasonId/players/:playerId/messages", async (request) => {
+    const { userId } = await actor(request);
+    const params = z.object({ teamSeasonId: uuid, playerId: uuid }).parse(request.params);
+    let isStaff = false;
+    try {
+      await requireRole(pool, userId, params.teamSeasonId, ["COACH", "STAFF"]);
+      isStaff = true;
+    } catch {
+      await requireGuardianPlayerAccess(pool, userId, params.teamSeasonId, params.playerId);
+    }
+    const result = await pool.query(
+      `SELECT m.id, m.team_season_id, m.player_id, m.author_user_id, m.message, m.created_at,
+              u.display_name author_name
+       FROM player_direct_messages m
+       JOIN users u ON u.id = m.author_user_id
+       WHERE m.team_season_id = $1 AND m.player_id = $2
+       ORDER BY m.created_at ASC`,
+      [params.teamSeasonId, params.playerId]
+    );
+    return { items: result.rows };
   });
 
   async function eventContext(eventId: string, playerId: string, db: typeof pool | import("pg").PoolClient = pool) {

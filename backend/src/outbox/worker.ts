@@ -7,7 +7,8 @@ const aggregateForEvent: Record<string, string> = {
   AvailabilityChanged: "AvailabilityResponse", CalledPlayerBecameUnavailable: "ActionItem",
   ActionItemCreated: "ActionItem", ActionItemResolved: "ActionItem",
   EventCreated: "Event", EventUpdated: "Event", EventCancelled: "Event", EventCompleted: "Event",
-  CallupPublished: "Callup", CallupRevised: "Callup", CallupCancelled: "Callup", CallupPlayerReplaced: "Callup"
+  CallupPublished: "Callup", CallupRevised: "Callup", CallupCancelled: "Callup", CallupPlayerReplaced: "Callup",
+  NoticePublished: "TeamNotice", DirectMessageCreated: "PlayerDirectMessage"
 };
 export interface OutboxEvent {
   id: string; team_season_id: string | null; actor_user_id: string | null;

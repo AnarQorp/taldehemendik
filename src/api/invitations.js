@@ -10,8 +10,8 @@ export class InvitationsService {
     return this.client.get(`/invitations/${token}`);
   }
 
-  async requestIndividualLink(token) {
-    return this.client.post(`/invitations/${token}/guardian-link-requests`, {});
+  async requestIndividualLink(token, payload = {}) {
+    return this.client.post(`/invitations/${token}/guardian-link-requests`, payload);
   }
 
   async getTeamJoinInfo(code) {

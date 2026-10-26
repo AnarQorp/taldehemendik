@@ -9,6 +9,7 @@ import { PendingService } from "./pending.js";
 import { DevService } from "./dev.js";
 import { TeamsService } from "./teams.js";
 import { InvitationsService } from "./invitations.js";
+import { NoticesService } from "./notices.js";
 import { MASTER_DATASET, API_BASE_URL, resolveApiBaseUrl, setApiBaseUrl } from "./config.js";
 import { escapeHtml } from "../utils/sanitize.js";
 
@@ -33,6 +34,7 @@ export function createApi(baseUrl = API_BASE_URL) {
     pending: new PendingService(client),
     teams: new TeamsService(client),
     invitations: new InvitationsService(client),
+    notices: new NoticesService(client),
     dev: new DevService(client),
     idempotency: new IdempotencyManager()
   };
@@ -47,6 +49,7 @@ export const api = {
   pending: new PendingService(defaultClient),
   teams: new TeamsService(defaultClient),
   invitations: new InvitationsService(defaultClient),
+  notices: new NoticesService(defaultClient),
   dev: new DevService(defaultClient),
   idempotency: idempotencyManager
 };
@@ -69,6 +72,7 @@ export {
   PendingService,
   TeamsService,
   InvitationsService,
+  NoticesService,
   DevService,
   escapeHtml
 };

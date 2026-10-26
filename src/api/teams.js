@@ -42,4 +42,12 @@ export class TeamsService {
   async getPlayers(teamSeasonId) {
     return this.client.get(`/team-seasons/${teamSeasonId}/players`);
   }
+
+  async sendPlayerMessage(teamSeasonId, playerId, message) {
+    return this.client.post(`/team-seasons/${teamSeasonId}/players/${playerId}/messages`, { message });
+  }
+
+  async getPlayerMessages(teamSeasonId, playerId) {
+    return this.client.get(`/team-seasons/${teamSeasonId}/players/${playerId}/messages`);
+  }
 }

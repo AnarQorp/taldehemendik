@@ -988,20 +988,46 @@ export class TeamAppState {
       const items = res?.items || [];
       if (!items.length) return false;
 
-      const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
-      if (coachMem) {
+      this.beta.memberships = items;
+      const savedSeasonId = localStorage.getItem("talde_team_season_id");
+      const savedRole = localStorage.getItem("talde_active_role");
+
+      // Match preferred membership if stored in localStorage
+      let selectedMem = null;
+      if (savedSeasonId && savedRole) {
+        selectedMem = items.find(m => m.team_season_id === savedSeasonId && m.role.toLowerCase() === savedRole.toLowerCase() && m.status === "ACTIVE");
+      }
+      if (!selectedMem && savedSeasonId) {
+        selectedMem = items.find(m => m.team_season_id === savedSeasonId && m.status === "ACTIVE");
+      }
+      if (!selectedMem && savedRole === "parent") {
+        selectedMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0);
+      }
+      if (!selectedMem) {
+        // Fallback: active coach, or active guardian with players, or first active membership
+        selectedMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE")
+          || items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0)
+          || items[0];
+      }
+
+      if (!selectedMem) return false;
+
+      if (selectedMem.role === "COACH") {
+        this.currentRole = "coach";
+        localStorage.setItem("talde_active_role", "coach");
+        localStorage.setItem("talde_team_season_id", selectedMem.team_season_id);
         const ok = this.applyContextTransition({
-          role: activeRole === "coach" ? "coach" : this.currentRole,
-          teamSeasonId: coachMem.team_season_id,
-          team: { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport },
+          role: "coach",
+          teamSeasonId: selectedMem.team_season_id,
+          team: { id: selectedMem.team_id, name: selectedMem.team_name, sport: selectedMem.sport },
           teamSeason: {
-            id: coachMem.team_season_id,
-            display_label: coachMem.display_label,
-            season_label: coachMem.season_label,
-            category: coachMem.category,
-            join_code: coachMem.join_code
+            id: selectedMem.team_season_id,
+            display_label: selectedMem.display_label,
+            season_label: selectedMem.season_label,
+            category: selectedMem.category,
+            join_code: selectedMem.join_code
           },
-          joinCode: coachMem.join_code,
+          joinCode: selectedMem.join_code,
           tokens: { coach: coachToken || activeToken }
         }, scope);
         if (!ok) return false;
@@ -1010,17 +1036,17 @@ export class TeamAppState {
         }
 
         const coachBadge = document.getElementById("coach-club-badge");
-        if (coachBadge) coachBadge.textContent = coachMem.team_name;
+        if (coachBadge) coachBadge.textContent = selectedMem.team_name;
         const teamNameInput = document.getElementById("team-name");
-        if (teamNameInput) teamNameInput.value = coachMem.display_label || "";
+        if (teamNameInput) teamNameInput.value = selectedMem.display_label || "";
         const clubNameInput = document.getElementById("club-name");
-        if (clubNameInput) clubNameInput.value = coachMem.team_name || "";
+        if (clubNameInput) clubNameInput.value = selectedMem.team_name || "";
         const coachCodeSection = document.getElementById("coach-code-section");
         const rosterMgmtSection = document.getElementById("coach-roster-management-section");
         if (coachCodeSection) coachCodeSection.classList.remove("hidden");
         if (rosterMgmtSection) rosterMgmtSection.classList.remove("hidden");
 
-        this.beta.joinCode = coachMem.join_code || localStorage.getItem("talde_join_code");
+        this.beta.joinCode = selectedMem.join_code || localStorage.getItem("talde_join_code");
         if (this.beta.joinCode) {
           localStorage.setItem("talde_join_code", this.beta.joinCode);
           const codeDisplay = document.getElementById("coach-code-display");
@@ -1041,27 +1067,35 @@ export class TeamAppState {
         return true;
       }
 
-      const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || m.guardianPlayers || []).length > 0);
-      if (guardianMem) {
-        const guardianPlayers = guardianMem.guardian_players || guardianMem.guardianPlayers || [];
+      if (selectedMem.role === "GUARDIAN") {
+        this.currentRole = "parent";
+        localStorage.setItem("talde_active_role", "parent");
+        localStorage.setItem("talde_team_season_id", selectedMem.team_season_id);
+        const guardianPlayers = selectedMem.guardian_players || selectedMem.guardianPlayers || [];
         const guardianPlayer = guardianPlayers[0] || null;
         const ok = this.applyContextTransition({
           role: "parent",
-          teamSeasonId: guardianMem.team_season_id,
-          team: { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport },
+          teamSeasonId: selectedMem.team_season_id,
+          team: { id: selectedMem.team_id, name: selectedMem.team_name, sport: selectedMem.sport },
           teamSeason: {
-            id: guardianMem.team_season_id,
-            display_label: guardianMem.display_label,
-            season_label: guardianMem.season_label,
-            category: guardianMem.category
+            id: selectedMem.team_season_id,
+            display_label: selectedMem.display_label,
+            season_label: selectedMem.season_label,
+            category: selectedMem.category
           },
           guardianPlayers,
           guardianPlayer,
-          tokens: { parent: activeToken }
+          tokens: { parent: parentToken || activeToken }
         }, scope);
         if (!ok) return false;
         if (this._lastContextCommit && this._lastContextCommit !== commitBefore) {
           this._recordRestoreCommit(opId, this._lastContextCommit);
+        }
+        const urlParams = new URLSearchParams(window.location.search);
+        const screenParam = urlParams.get("screen");
+        if (!screenParam && (this.currentScreen === "beta_entry_screen" || this.currentScreen === "v2_00_onboarding_welcome")) {
+          const lastScreen = localStorage.getItem("talde_last_screen");
+          this.currentScreen = (lastScreen && document.getElementById(lastScreen)) ? lastScreen : "v2_07_parent_home";
         }
         return true;
       }
@@ -1716,57 +1750,46 @@ export class TeamAppState {
       onSuccess: async (authRes) => {
         const scope = this.createScope();
         try {
+          if (authRes?.accessToken) {
+            this.tokens.coach = authRes.accessToken;
+            this.tokens.parent = authRes.accessToken;
+            localStorage.setItem("talde_auth_token", authRes.accessToken);
+            api.client.setToken(authRes.accessToken);
+          }
+          if (authRes?.user?.email) {
+            localStorage.setItem("talde_auth_email", authRes.user.email);
+            this.currentUser = authRes.user;
+          }
+
           const res = await api.teams.getMyMemberships();
           if (!this.isScopeActive(scope)) return;
           const items = res?.items || [];
+          this.beta.memberships = items;
+
           if (!items.length) {
             this.showToast("✓ Sesión iniciada. No tienes equipos asociados todavía.");
             await this.goToScreen("v2_00_onboarding_welcome", "onboard");
             return;
           }
-          const coachMem = items.find(m => m.role === "COACH" && m.status === "ACTIVE");
-          const guardianMem = items.find(m => m.role === "GUARDIAN" && m.status === "ACTIVE" && (m.guardian_players || []).length > 0);
 
-          if (coachMem) {
-            this.currentRole = "coach";
-            this.tokens.coach = authRes.accessToken;
-            this.beta.teamSeasonId = coachMem.team_season_id;
-            localStorage.setItem("talde_team_season_id", coachMem.team_season_id);
-            localStorage.setItem("talde_active_role", "coach");
-            this.beta.team = { id: coachMem.team_id, name: coachMem.team_name, sport: coachMem.sport };
-            this.beta.teamSeason = {
-              id: coachMem.team_season_id,
-              display_label: coachMem.display_label,
-              season_label: coachMem.season_label,
-              category: coachMem.category,
-              join_code: coachMem.join_code
-            };
-            this.beta.joinCode = coachMem.join_code;
-            this.showToast(`✓ Bienvenido, entrenador: ${coachMem.team_name}`);
+          // If user has multiple memberships and no stored preference, open role switcher
+          const savedSeasonId = localStorage.getItem("talde_team_season_id");
+          const hasMultiple = items.length > 1;
+
+          await this.loadUserContext();
+
+          if (hasMultiple && !savedSeasonId) {
+            this.showToast("✓ Sesión iniciada. Selecciona tu equipo y función.");
+            this.openRoleSwitcherModal();
+            return;
+          }
+
+          if (this.currentRole === "coach") {
+            this.showToast(`✓ Bienvenido, entrenador: ${this.beta.team?.name || 'Equipo'}`);
             await this.goToScreen("v2_01_coach_home", "inicio");
-          } else if (guardianMem) {
-            this.currentRole = "parent";
-            this.tokens.parent = authRes.accessToken;
-            this.beta.teamSeasonId = guardianMem.team_season_id;
-            localStorage.setItem("talde_team_season_id", guardianMem.team_season_id);
-            localStorage.setItem("talde_active_role", "parent");
-            this.beta.team = { id: guardianMem.team_id, name: guardianMem.team_name, sport: guardianMem.sport };
-            this.beta.teamSeason = {
-              id: guardianMem.team_season_id,
-              display_label: guardianMem.display_label,
-              season_label: guardianMem.season_label,
-              category: guardianMem.category,
-              join_code: guardianMem.join_code
-            };
-            this.beta.guardianPlayers = guardianMem.guardian_players || [];
-            this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+          } else {
             this.showToast(`✓ Sesión familiar iniciada: ${this.beta.guardianPlayer?.firstName || 'Familia'}`);
             await this.goToScreen("v2_07_parent_home", "inicio");
-          } else {
-            this.currentRole = "parent";
-            localStorage.setItem("talde_active_role", "parent");
-            this.showToast("✓ Sesión iniciada. Solicitud pendiente de validación.");
-            await this.goToScreen("v2_00_parent_join_team");
           }
         } catch (err) {
           if (!this.isScopeActive(scope)) return;
@@ -1779,6 +1802,128 @@ export class TeamAppState {
         }
       }
     });
+  }
+
+  openRoleSwitcherModal() {
+    const modal = document.getElementById("modal-role-switcher");
+    if (!modal) return;
+    const emailEl = document.getElementById("modal-switcher-email");
+    if (emailEl) {
+      emailEl.textContent = this.currentUser?.email || localStorage.getItem("talde_auth_email") || "Usuario activo";
+    }
+
+    const itemsContainer = document.getElementById("modal-switcher-items");
+    if (itemsContainer) {
+      const memberships = this.beta.memberships || [];
+      if (!memberships.length) {
+        itemsContainer.innerHTML = `<p class="text-xs text-slate-500 italic p-3 bg-slate-50 rounded-xl text-center">No hay otros perfiles o equipos vinculados a esta cuenta.</p>`;
+      } else {
+        itemsContainer.innerHTML = memberships.map(m => {
+          const isCoach = m.role === "COACH";
+          const isActive = (m.team_season_id === this.beta.teamSeasonId && (isCoach ? this.currentRole === "coach" : this.currentRole === "parent"));
+          const roleLabel = isCoach ? "Entrenador / Staff" : "Familia / Tutor";
+          const roleBadgeColor = isCoach ? "bg-primary-container text-on-primary" : "bg-emerald-100 text-emerald-800";
+          const teamName = escapeHtml(m.team_name || "Equipo");
+          const seasonLabel = escapeHtml(m.display_label || m.season_label || "Temporada");
+
+          return `
+            <div class="p-3 rounded-2xl border ${isActive ? 'border-primary bg-primary-fixed/20' : 'border-slate-200 bg-slate-50'} flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-xs text-slate-900 truncate">${teamName}</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${roleBadgeColor}">${roleLabel}</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5">${seasonLabel}</p>
+              </div>
+              <div>
+                ${isActive ? `
+                  <span class="inline-flex items-center gap-1 text-[11px] font-bold text-primary px-2.5 py-1 rounded-lg bg-white border border-primary/30">
+                    <span class="material-symbols-outlined text-[14px]">check</span> Activo
+                  </span>
+                ` : `
+                  <button type="button" onclick="teamApp.selectActiveMembership('${escapeHtml(m.team_season_id)}', '${escapeHtml(m.role)}')" class="px-2.5 py-1 rounded-lg bg-primary-container hover:bg-primary text-on-primary text-xs font-bold cursor-pointer transition-colors shadow-xs">
+                    Cambiar
+                  </button>
+                `}
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    modal.classList.remove("hidden");
+  }
+
+  closeRoleSwitcherModal() {
+    const modal = document.getElementById("modal-role-switcher");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  async selectActiveMembership(teamSeasonId, role) {
+    this.closeRoleSwitcherModal();
+    const isCoach = role.toUpperCase() === "COACH";
+    const targetRole = isCoach ? "coach" : "parent";
+    this.currentRole = targetRole;
+    localStorage.setItem("talde_active_role", targetRole);
+    localStorage.setItem("talde_team_season_id", teamSeasonId);
+
+    const mem = (this.beta.memberships || []).find(m => m.team_season_id === teamSeasonId && m.role.toUpperCase() === role.toUpperCase());
+    if (mem) {
+      if (isCoach) {
+        this.beta.teamSeasonId = mem.team_season_id;
+        this.beta.team = { id: mem.team_id, name: mem.team_name, sport: mem.sport };
+        this.beta.teamSeason = {
+          id: mem.team_season_id,
+          display_label: mem.display_label,
+          season_label: mem.season_label,
+          category: mem.category,
+          join_code: mem.join_code
+        };
+        this.beta.joinCode = mem.join_code;
+        this.showToast(`✓ Cambiado a modo Entrenador: ${mem.team_name}`);
+        await this.goToScreen("v2_01_coach_home", "inicio");
+      } else {
+        this.beta.teamSeasonId = mem.team_season_id;
+        this.beta.team = { id: mem.team_id, name: mem.team_name, sport: mem.sport };
+        this.beta.teamSeason = {
+          id: mem.team_season_id,
+          display_label: mem.display_label,
+          season_label: mem.season_label,
+          category: mem.category,
+          join_code: mem.join_code
+        };
+        this.beta.guardianPlayers = mem.guardian_players || mem.guardianPlayers || [];
+        this.beta.guardianPlayer = this.beta.guardianPlayers[0] || null;
+        this.showToast(`✓ Cambiado a modo Familia: ${mem.team_name}`);
+        await this.goToScreen("v2_07_parent_home", "inicio");
+      }
+    } else {
+      await this.loadUserContext();
+      this.syncCurrentScreen();
+    }
+  }
+
+  logoutSession() {
+    this.closeRoleSwitcherModal();
+    localStorage.removeItem("talde_auth_token");
+    localStorage.removeItem("talde_coach_token");
+    localStorage.removeItem("talde_parent_token");
+    localStorage.removeItem("talde_session_token");
+    localStorage.removeItem("talde_active_role");
+    localStorage.removeItem("talde_team_season_id");
+    localStorage.removeItem("talde_auth_email");
+    localStorage.removeItem("talde_players");
+    localStorage.removeItem("talde_join_code");
+    localStorage.removeItem("talde_last_screen");
+
+    this.tokens = { coach: null, parent: null };
+    this.beta = { players: [], memberships: [] };
+    this.currentRole = "coach";
+    api.client.setToken(null);
+
+    this.showToast("✓ Sesión cerrada en este dispositivo");
+    this.goToScreen("v2_00_onboarding_welcome", "onboard");
   }
 
   toggleDemoTools() {
@@ -3262,8 +3407,9 @@ export class TeamAppState {
             const num = p.shirt_number !== null && p.shirt_number !== undefined ? `#${p.shirt_number}` : '-';
             const pos = p.position || 'Deportista';
             const safeName = `${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}`;
+            const safeId = escapeHtml(p.id);
             return `
-              <article class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-3 shadow-sm flex items-center justify-between gap-3">
+              <article class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-3 shadow-sm flex items-center justify-between gap-3 hover:border-primary transition-colors cursor-pointer" onclick="teamApp.viewPlayerDetail('${safeId}')">
                 <div class="flex items-center gap-3 min-w-0">
                   <div class="w-11 h-11 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-bold text-sm shrink-0">
                     <span>${escapeHtml(num)}</span>
@@ -3275,12 +3421,12 @@ export class TeamAppState {
                     <p class="font-body-sm text-body-sm text-outline mb-1">${escapeHtml(pos)}</p>
                     <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                       <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                      <span class="font-label-sm text-label-sm font-bold">En regla</span>
+                      <span class="font-label-sm text-label-sm font-bold">Ver ficha</span>
                     </div>
                   </div>
                 </div>
-                <div class="flex items-center gap-1 shrink-0">
-                  <button id="btn-invite-family-${escapeHtml(p.id)}" data-player-id="${escapeHtml(p.id)}" class="btn-invite-family-action px-2.5 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-primary font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer">
+                <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+                  <button id="btn-invite-family-${safeId}" data-player-id="${safeId}" class="btn-invite-family-action px-2.5 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container text-primary font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer">
                     <span class="material-symbols-outlined text-[16px]">share</span>
                     <span>Invitar familia</span>
                   </button>
@@ -3315,6 +3461,71 @@ export class TeamAppState {
     }
   }
 
+  openCreateNoticeModal() {
+    const modal = document.getElementById("modal-create-notice");
+    if (!modal) return;
+    const titleInput = document.getElementById("notice-title");
+    const bodyInput = document.getElementById("notice-body");
+    const categorySelect = document.getElementById("notice-category");
+    const urgentCheck = document.getElementById("notice-urgent");
+
+    if (titleInput) titleInput.value = "";
+    if (bodyInput) bodyInput.value = "";
+    if (categorySelect) categorySelect.value = "GENERAL";
+    if (urgentCheck) urgentCheck.checked = false;
+
+    modal.classList.remove("hidden");
+  }
+
+  closeCreateNoticeModal() {
+    const modal = document.getElementById("modal-create-notice");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  async submitCreateNotice() {
+    const title = document.getElementById("notice-title")?.value?.trim();
+    const body = document.getElementById("notice-body")?.value?.trim();
+    const category = document.getElementById("notice-category")?.value || "GENERAL";
+    const isUrgent = document.getElementById("notice-urgent")?.checked || false;
+
+    if (!title || !body) {
+      this.showToast("⚠️ Por favor completa el título y el mensaje del aviso.");
+      return;
+    }
+
+    const teamSeasonId = this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+    if (!teamSeasonId) {
+      this.showToast("⚠️ No se ha identificado el equipo activo.");
+      return;
+    }
+
+    const submitBtn = document.getElementById("btn-submit-notice");
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Publicando...</span>`;
+    }
+
+    try {
+      await api.notices.createNotice(teamSeasonId, {
+        title,
+        body,
+        category,
+        isUrgent
+      });
+      this.closeCreateNoticeModal();
+      this.showToast("✓ Aviso oficial publicado para las familias");
+      await this.syncNotices();
+    } catch (err) {
+      console.error("Error creating notice:", err);
+      this.showToast(`⚠️ Error al publicar aviso: ${err?.message || "comprueba los permisos"}`);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">send</span><span>Publicar aviso</span>`;
+      }
+    }
+  }
+
   async syncNotices() {
     const isDemo = this.appMode === "DEMO";
     const teamTitle = document.getElementById("notices-team-title");
@@ -3322,6 +3533,15 @@ export class TeamAppState {
     const badgePill = document.getElementById("notices-badge-pill");
     const emptyContainer = document.getElementById("notices-empty-container");
     const feedContainer = document.getElementById("notices-feed-container");
+    const coachFab = document.getElementById("notices-coach-fab");
+
+    if (coachFab) {
+      if (this.currentRole === "coach") {
+        coachFab.classList.remove("hidden");
+      } else {
+        coachFab.classList.add("hidden");
+      }
+    }
 
     if (isDemo) {
       if (teamTitle) teamTitle.textContent = "S. D. Indautxu · Infantil A";
@@ -3332,12 +3552,75 @@ export class TeamAppState {
       return;
     }
 
-    // BETA_NORMAL: Authentically empty
-    if (teamTitle) teamTitle.textContent = `${this.beta.team?.name || 'Equipo'}`;
-    if (badgeCount) badgeCount.textContent = "0 avisos";
-    if (badgePill) badgePill.classList.add("hidden");
-    if (emptyContainer) emptyContainer.classList.remove("hidden");
-    if (feedContainer) feedContainer.classList.add("hidden");
+    const activeTeamSeasonId = this.beta?.teamSeasonId || localStorage.getItem("talde_team_season_id");
+    if (teamTitle) teamTitle.textContent = `${this.beta.team?.name || 'Equipo'} · ${this.beta.teamSeason?.display_label || 'Avisos'}`;
+
+    if (!activeTeamSeasonId) {
+      if (badgeCount) badgeCount.textContent = "0 avisos";
+      if (badgePill) badgePill.classList.add("hidden");
+      if (emptyContainer) emptyContainer.classList.remove("hidden");
+      if (feedContainer) feedContainer.classList.add("hidden");
+      return;
+    }
+
+    try {
+      const res = await api.notices.getNotices(activeTeamSeasonId);
+      const items = res?.items || [];
+
+      if (!items.length) {
+        if (badgeCount) badgeCount.textContent = "0 avisos";
+        if (badgePill) badgePill.classList.add("hidden");
+        if (emptyContainer) emptyContainer.classList.remove("hidden");
+        if (feedContainer) feedContainer.classList.add("hidden");
+      } else {
+        if (badgeCount) badgeCount.textContent = `${items.length} ${items.length === 1 ? 'aviso' : 'avisos'}`;
+        if (badgePill) badgePill.classList.remove("hidden");
+        if (emptyContainer) emptyContainer.classList.add("hidden");
+        if (feedContainer) {
+          feedContainer.classList.remove("hidden");
+          feedContainer.innerHTML = items.map(notice => {
+            const isUrgent = notice.is_urgent;
+            const categoryLabels = {
+              GENERAL: { label: "GENERAL", bg: "bg-surface-container text-primary border-outline-variant", icon: "info" },
+              SCHEDULE_CHANGE: { label: "CAMBIO DE HORA", bg: "bg-secondary-fixed text-on-secondary-fixed border-secondary-container", icon: "update" },
+              CALLUP_NOTICE: { label: "CONVOCATORIA", bg: "bg-primary-container text-on-primary border-primary", icon: "assignment" },
+              KIT: { label: "EQUIPACIÓN", bg: "bg-surface-container-high text-on-surface-variant border-outline-variant", icon: "checkroom" },
+              URGENT: { label: "URGENTE", bg: "bg-error-container text-error border-error/30", icon: "error" }
+            };
+            const cat = categoryLabels[notice.category] || categoryLabels.GENERAL;
+            const d = new Date(notice.created_at);
+            const dateStr = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+            return `
+              <article class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm relative overflow-hidden transition-transform active:scale-[0.995]">
+                ${isUrgent ? '<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-error"></div>' : ''}
+                <div class="p-4 ${isUrgent ? 'pl-5' : ''}">
+                  <div class="flex items-center justify-between gap-2 mb-2">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm text-label-sm border font-bold ${cat.bg}">
+                      <span class="material-symbols-outlined text-[13px]">${cat.icon}</span>
+                      ${cat.label}
+                    </span>
+                    <div class="flex items-center text-on-surface-variant text-label-sm font-label-sm">
+                      <span class="material-symbols-outlined text-[14px] mr-1">schedule</span>
+                      ${dateStr}
+                    </div>
+                  </div>
+                  <h2 class="font-headline-sm text-headline-sm text-on-surface font-bold mb-1">${escapeHtml(notice.title)}</h2>
+                  <div class="flex items-center space-x-1.5 mb-2.5 text-on-surface-variant text-body-sm font-body-sm">
+                    <span class="material-symbols-outlined text-primary text-base">sports</span>
+                    <span class="font-bold text-on-surface">${escapeHtml(notice.author_name || 'Cuerpo Técnico')}</span>
+                    <span class="text-outline">(Entrenador)</span>
+                  </div>
+                  <p class="font-body-md text-body-md text-on-surface-variant leading-snug mb-2 whitespace-pre-wrap">${escapeHtml(notice.body)}</p>
+                </div>
+              </article>
+            `;
+          }).join("");
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching notices:", err);
+    }
   }
 
   async syncEventHubNormal() {
@@ -3525,7 +3808,10 @@ export class TeamAppState {
 
     if (!isDemo) {
       if (nudgeBtn) nudgeBtn.classList.add("hidden");
-      if (sendNoticeBtn) sendNoticeBtn.classList.add("hidden");
+      if (sendNoticeBtn) {
+        sendNoticeBtn.classList.remove("hidden");
+        sendNoticeBtn.onclick = () => this.openCreateNoticeModal();
+      }
     } else {
       if (nudgeBtn) {
         nudgeBtn.classList.remove("hidden");
@@ -3535,7 +3821,7 @@ export class TeamAppState {
       }
       if (sendNoticeBtn) {
         sendNoticeBtn.classList.remove("hidden");
-        sendNoticeBtn.onclick = () => this.showToast("Simulación DEMO: Aviso a familias enviado.");
+        sendNoticeBtn.onclick = () => this.openCreateNoticeModal();
       }
     }
 
@@ -3811,6 +4097,92 @@ export class TeamAppState {
           }
         }
       }
+
+      // Sync official team notices in Parent Home
+      const parentNoticesContainer = document.getElementById("parent-notices-container");
+      if (parentNoticesContainer && this.beta.teamSeasonId) {
+        try {
+          const noticesRes = await api.notices.getNotices(this.beta.teamSeasonId);
+          if (!this.isScopeActive(scope)) return;
+          const notices = noticesRes?.items || [];
+          if (!notices.length) {
+            parentNoticesContainer.innerHTML = `
+              <div class="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/40 text-xs text-on-surface-variant italic">
+                No hay avisos recientes del cuerpo técnico.
+              </div>
+            `;
+          } else {
+            const latest = notices[0];
+            const d = new Date(latest.created_at);
+            const dateStr = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+            parentNoticesContainer.innerHTML = `
+              <article class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 p-4 shadow-sm flex flex-col gap-2.5 relative overflow-hidden">
+                ${latest.is_urgent ? '<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-error"></div>' : ''}
+                <div class="flex items-center justify-between">
+                  <span class="inline-flex items-center gap-1 font-label-sm text-[11px] font-extrabold uppercase tracking-wider text-primary bg-primary-fixed/40 px-2 py-0.5 rounded">
+                    ${escapeHtml(latest.category || 'AVISO')}
+                  </span>
+                  <span class="font-label-sm text-[11px] text-on-surface-variant font-medium">${dateStr}</span>
+                </div>
+                <div class="flex flex-col gap-1">
+                  <h3 class="font-headline-sm text-headline-sm text-on-surface font-bold leading-tight">
+                    ${escapeHtml(latest.title)}
+                  </h3>
+                  <p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap">
+                    ${escapeHtml(latest.body)}
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 pt-2 border-t border-outline-variant/30">
+                  <div class="w-6 h-6 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-label-sm text-[10px] font-bold">
+                    ${escapeHtml((latest.author_name || 'E').slice(0, 2).toUpperCase())}
+                  </div>
+                  <span class="font-label-sm text-label-sm text-on-surface font-semibold">${escapeHtml(latest.author_name || 'Cuerpo Técnico')}</span>
+                  <span class="font-label-sm text-[11px] text-on-surface-variant">· Entrenador</span>
+                </div>
+              </article>
+            `;
+          }
+        } catch (e) {
+          console.warn("Could not fetch notices for parent home:", e);
+        }
+      }
+
+      // Sync private coach direct messages for this child
+      const parentDmContainer = document.getElementById("parent-direct-messages-container");
+      const childId = activePlayer ? (activePlayer.id || activePlayer.playerId) : null;
+      if (parentDmContainer && this.beta.teamSeasonId && childId) {
+        try {
+          const dmRes = await api.teams.getPlayerMessages(this.beta.teamSeasonId, childId);
+          if (!this.isScopeActive(scope)) return;
+          const messages = dmRes?.items || [];
+          if (!messages.length) {
+            parentDmContainer.innerHTML = `
+              <div class="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/50 text-xs text-on-surface-variant italic">
+                No hay notas privadas recientes del cuerpo técnico para este deportista.
+              </div>
+            `;
+          } else {
+            parentDmContainer.innerHTML = messages.map(m => {
+              const d = new Date(m.created_at);
+              const dateStr = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+              return `
+                <article class="bg-surface-container-lowest rounded-xl border border-emerald-200 p-3.5 shadow-xs space-y-1.5 bg-gradient-to-br from-white to-emerald-50/20">
+                  <div class="flex items-center justify-between text-[11px]">
+                    <div class="flex items-center gap-1.5 font-bold text-emerald-800">
+                      <span class="material-symbols-outlined text-[15px]">chat</span>
+                      <span>${escapeHtml(m.author_name || 'Entrenador')}</span>
+                    </div>
+                    <span class="text-on-surface-variant font-medium">${dateStr}</span>
+                  </div>
+                  <p class="text-xs text-on-surface leading-relaxed whitespace-pre-wrap">${escapeHtml(m.message)}</p>
+                </article>
+              `;
+            }).join("");
+          }
+        } catch (e) {
+          console.warn("Could not fetch player direct messages for parent home:", e);
+        }
+      }
     } catch (err) {
       if (!this.isScopeActive(scope)) return;
       if (err?.status === 401 && err?.wasAuthenticated) {
@@ -3848,11 +4220,105 @@ export class TeamAppState {
     }
   }
 
+  async viewPlayerDetail(playerId) {
+    this.beta.selectedPlayerId = playerId;
+    await this.goToScreen("v2_04_player_detail", "equipo");
+  }
+
+  openPlayerDirectMessageModal(playerId, playerName = "") {
+    this.activeDirectMessagePlayerId = playerId;
+    const modal = document.getElementById("modal-player-direct-message");
+    if (!modal) return;
+    const title = document.getElementById("pdm-modal-title");
+    if (title) title.textContent = playerName ? `Nota para la familia de ${playerName}` : "Nota a la Familia";
+    const input = document.getElementById("pdm-input-message");
+    if (input) input.value = "";
+    this.loadPlayerDirectMessages(playerId);
+    modal.classList.remove("hidden");
+  }
+
+  closePlayerDirectMessageModal() {
+    const modal = document.getElementById("modal-player-direct-message");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  async loadPlayerDirectMessages(playerId) {
+    const container = document.getElementById("pdm-history-container");
+    if (!container) return;
+    const teamSeasonId = this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+    if (!teamSeasonId || !playerId) return;
+
+    try {
+      const res = await api.teams.getPlayerMessages(teamSeasonId, playerId);
+      const items = res?.items || [];
+      if (!items.length) {
+        container.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-6">No hay notas previas con esta familia.</p>`;
+        return;
+      }
+      container.innerHTML = items.map(m => {
+        const d = new Date(m.created_at);
+        const timeStr = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+        return `
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+            <div class="flex items-center justify-between text-[11px] text-slate-500">
+              <span class="font-bold text-slate-700">${escapeHtml(m.author_name || 'Entrenador')}</span>
+              <span>${timeStr}</span>
+            </div>
+            <p class="text-slate-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(m.message)}</p>
+          </div>
+        `;
+      }).join("");
+    } catch (err) {
+      console.error("Error loading direct messages:", err);
+      container.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Error al cargar notas anteriores.</p>`;
+    }
+  }
+
+  async submitPlayerDirectMessage() {
+    const message = document.getElementById("pdm-input-message")?.value?.trim();
+    if (!message) {
+      this.showToast("⚠️ Escribe un mensaje antes de enviar.");
+      return;
+    }
+    const teamSeasonId = this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+    const playerId = this.activeDirectMessagePlayerId || this.beta.selectedPlayerId;
+    if (!teamSeasonId || !playerId) {
+      this.showToast("⚠️ No se ha identificado el deportista o equipo.");
+      return;
+    }
+
+    const sendBtn = document.getElementById("pdm-btn-send");
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Enviando...</span>`;
+    }
+
+    try {
+      await api.teams.sendPlayerMessage(teamSeasonId, playerId, message);
+      this.showToast("✓ Nota privada enviada a la familia");
+      const input = document.getElementById("pdm-input-message");
+      if (input) input.value = "";
+      await this.loadPlayerDirectMessages(playerId);
+      if (this.currentScreen === "v2_04_player_detail") {
+        await this.syncPlayerDetail();
+      }
+    } catch (err) {
+      console.error("Error sending player message:", err);
+      this.showToast(`⚠️ Error al enviar nota: ${err?.message || "comprueba los permisos"}`);
+    } finally {
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">send</span><span>Enviar nota</span>`;
+      }
+    }
+  }
+
   async syncPlayerDetail() {
     let scope = this.createScope({ role: this.currentRole });
     const isDemo = this.appMode === "DEMO";
     const demoContainer = document.getElementById("player-detail-demo-container");
     const parentContainer = document.getElementById("player-detail-parent-container");
+    const coachDynamicContainer = document.getElementById("player-detail-coach-dynamic-container");
     const coachBar = document.getElementById("player-detail-coach-bar");
     const coachActions = document.getElementById("player-detail-coach-actions");
     const backLabel = document.getElementById("player-detail-back-label");
@@ -3861,13 +4327,214 @@ export class TeamAppState {
     if (this.currentRole === "coach") {
       if (backLabel) backLabel.textContent = "Plantilla";
       if (coachActions) coachActions.classList.remove("hidden");
-      if (coachBar) coachBar.classList.remove("hidden");
       if (parentContainer) parentContainer.classList.add("hidden");
-      if (demoContainer) demoContainer.classList.remove("hidden");
+
+      if (isDemo) {
+        if (coachBar) coachBar.classList.remove("hidden");
+        if (coachDynamicContainer) coachDynamicContainer.classList.add("hidden");
+        if (demoContainer) demoContainer.classList.remove("hidden");
+        if (categoryBadge) categoryBadge.textContent = "Infantil A";
+        return;
+      }
+
+      // Coach in BETA_NORMAL mode: Real dossier
+      if (demoContainer) demoContainer.classList.add("hidden");
+      if (coachBar) coachBar.classList.add("hidden");
+      if (!coachDynamicContainer) return;
+      coachDynamicContainer.classList.remove("hidden");
+
+      await this.ensureAuth("coach");
+      if (!this.isScopeActive(scope)) return;
+
+      const teamSeasonId = this.beta.teamSeasonId || localStorage.getItem("talde_team_season_id");
+      let playerId = this.beta.selectedPlayerId;
+      if (!playerId && this.beta.players?.length) {
+        playerId = this.beta.players[0].id;
+        this.beta.selectedPlayerId = playerId;
+      }
+
       if (categoryBadge) {
-        categoryBadge.textContent = isDemo
-          ? "Infantil A"
-          : (this.beta.teamSeason?.display_label || this.beta.teamSeason?.category || "Equipo");
+        categoryBadge.textContent = this.beta.teamSeason?.display_label || this.beta.teamSeason?.category || "Equipo";
+      }
+
+      if (!teamSeasonId || !playerId) {
+        coachDynamicContainer.innerHTML = `
+          <div class="p-6 bg-surface-container-lowest rounded-2xl border border-dashed border-outline-variant text-center space-y-2">
+            <p class="font-label-lg font-bold text-on-surface">Selecciona un deportista de la plantilla</p>
+            <button onclick="teamApp.goToScreen('v2_03_coach_roster', 'equipo')" class="px-4 py-2 bg-primary-container text-on-primary font-bold text-xs rounded-xl shadow-xs cursor-pointer">
+              Volver a plantilla
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      try {
+        const playerRes = await api.teams.getPlayer(teamSeasonId, playerId);
+        if (!this.isScopeActive(scope)) return;
+        const player = playerRes?.item;
+        if (!player) throw new Error("Deportista no encontrado");
+
+        const fullName = `${player.first_name || ''} ${player.last_name || ''}`.trim() || "Deportista";
+        const dorsal = player.shirt_number !== null && player.shirt_number !== undefined ? `#${player.shirt_number}` : '-';
+        const position = player.position || "Deportista";
+        const initials = `${(player.first_name || '')[0] || ''}${(player.last_name || '')[0] || ''}`.toUpperCase() || 'TH';
+        const guardians = player.linked_guardians || [];
+
+        let guardiansHtml = "";
+        if (!guardians.length) {
+          guardiansHtml = `
+            <div class="p-4 rounded-xl border border-dashed border-outline-variant bg-surface-container-lowest space-y-2 text-center">
+              <p class="text-xs text-on-surface-variant font-medium">No hay tutores o familiares vinculados a este deportista todavía.</p>
+              <button onclick="teamApp.openPlayerInviteModal('${escapeHtml(player.id)}', '${escapeHtml(fullName)}')" class="px-3.5 py-1.5 rounded-xl bg-primary-container hover:bg-primary text-on-primary font-bold text-xs shadow-xs cursor-pointer inline-flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">share</span>
+                <span>Generar invitación para la familia</span>
+              </button>
+            </div>
+          `;
+        } else {
+          guardiansHtml = guardians.map((g, idx) => {
+            const gName = escapeHtml(g.displayName || g.email);
+            const gRel = escapeHtml(g.relationship || (idx === 0 ? "Tutor Principal" : "Familiar"));
+            const gPhone = g.phone ? escapeHtml(g.phone) : "";
+            const cleanPhone = g.phone ? g.phone.replace(/[^0-9]/g, '') : '';
+            const phoneActionHtml = gPhone ? `
+              <div class="grid grid-cols-2 gap-2 mt-2">
+                <a class="h-[48px] px-3 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] transition-transform" href="tel:${escapeHtml(g.phone)}">
+                  <span class="material-symbols-outlined text-[18px]">call</span>
+                  <span>Llamar</span>
+                </a>
+                <a class="h-[48px] px-3 rounded-xl bg-[#059669] text-white font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] transition-transform" href="https://wa.me/${cleanPhone.startsWith('34') ? cleanPhone : '34' + cleanPhone}?text=Hola%20${encodeURIComponent(g.displayName || '')},%20te%20escribo%20del%20equipo%20sobre%20${encodeURIComponent(fullName)}" rel="noopener noreferrer" target="_blank">
+                  <span class="material-symbols-outlined text-[18px]">chat</span>
+                  <span>WhatsApp</span>
+                </a>
+              </div>
+              <p class="text-[11px] text-center text-on-surface-variant font-medium mt-2">Tel: <strong class="text-on-surface">${gPhone}</strong></p>
+            ` : `
+              <div class="mt-2 text-center">
+                <a href="mailto:${escapeHtml(g.email)}" class="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline py-1">
+                  <span class="material-symbols-outlined text-[16px]">mail</span>
+                  <span>${escapeHtml(g.email)}</span>
+                </a>
+              </div>
+            `;
+
+            return `
+              <div class="p-3.5 rounded-xl border-2 border-primary-container/30 bg-surface-container-low/50 relative">
+                <div class="flex items-center justify-between mb-1.5">
+                  <div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-label-lg text-label-lg font-black text-on-surface">${gName}</span>
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-black uppercase bg-primary text-on-primary">${gRel}</span>
+                    </div>
+                    <span class="font-body-sm text-[12px] text-on-surface-variant font-medium">${escapeHtml(g.email)}</span>
+                  </div>
+                  <span class="material-symbols-outlined text-primary text-[24px]">verified_user</span>
+                </div>
+                ${phoneActionHtml}
+              </div>
+            `;
+          }).join("");
+        }
+
+        let messagesHtml = "";
+        try {
+          const msgRes = await api.teams.getPlayerMessages(teamSeasonId, playerId);
+          const msgs = msgRes?.items || [];
+          if (!msgs.length) {
+            messagesHtml = `<p class="text-xs text-on-surface-variant italic py-2">No hay notas previas enviadas a esta familia.</p>`;
+          } else {
+            messagesHtml = msgs.slice(0, 3).map(m => {
+              const d = new Date(m.created_at);
+              const dStr = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+              return `
+                <div class="p-2.5 bg-surface-container-low rounded-xl border border-outline-variant/40 text-xs space-y-1">
+                  <div class="flex items-center justify-between text-[11px] text-on-surface-variant">
+                    <span class="font-bold text-on-surface">${escapeHtml(m.author_name || 'Entrenador')}</span>
+                    <span>${dStr}</span>
+                  </div>
+                  <p class="text-on-surface whitespace-pre-wrap">${escapeHtml(m.message)}</p>
+                </div>
+              `;
+            }).join("");
+          }
+        } catch (e) {
+          console.warn("Could not load player messages for dossier:", e);
+        }
+
+        coachDynamicContainer.innerHTML = `
+          <!-- Hero Card del Jugador -->
+          <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm relative overflow-hidden">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-primary-container"></div>
+            <div class="flex items-start gap-4">
+              <div class="relative flex-shrink-0">
+                <div class="w-16 h-16 rounded-full bg-surface-container-highest border-2 border-primary-container flex items-center justify-center text-primary font-headline-lg text-headline-lg font-extrabold shadow-sm">
+                  ${escapeHtml(initials)}
+                </div>
+                <div class="absolute -bottom-1 -right-1 bg-primary-container text-on-primary font-headline-sm text-headline-sm font-black px-2 py-0.5 rounded-md border-2 border-surface-container-lowest shadow-sm">
+                  ${escapeHtml(dorsal)}
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between">
+                  <span class="font-label-sm text-label-sm uppercase tracking-wider font-extrabold text-primary">${escapeHtml(this.beta.team?.name || 'Equipo')}</span>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                    Activo
+                  </span>
+                </div>
+                <h1 class="font-headline-lg text-headline-lg font-extrabold text-on-surface truncate leading-tight mt-0.5">
+                  ${escapeHtml(fullName)}
+                </h1>
+                <p class="font-label-md text-label-md font-semibold text-on-surface-variant flex items-center gap-1 mt-0.5">
+                  <span class="material-symbols-outlined text-[16px] text-primary">sports_soccer</span>
+                  ${escapeHtml(position)}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Contacto Directo de Familia / Tutores -->
+          <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-[20px]">contacts</span>
+                <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Contacto Directo de Familia</h3>
+              </div>
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-secondary-fixed text-on-secondary-fixed">
+                ${guardians.length} ${guardians.length === 1 ? 'Tutor' : 'Tutores'}
+              </span>
+            </div>
+            <div class="space-y-3">
+              ${guardiansHtml}
+            </div>
+          </section>
+
+          <!-- Notas Privadas del Entrenador -->
+          <section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/50 p-space-md shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-emerald-600 text-[20px]">chat</span>
+                <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Notas a la Familia</h3>
+              </div>
+              <button onclick="teamApp.openPlayerDirectMessageModal('${escapeHtml(player.id)}', '${escapeHtml(fullName)}')" class="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-xs">
+                <span class="material-symbols-outlined text-[15px]">add_comment</span>
+                <span>Nueva nota</span>
+              </button>
+            </div>
+            <div class="space-y-2">
+              ${messagesHtml}
+            </div>
+          </section>
+        `;
+      } catch (err) {
+        console.error("Error loading coach player dossier:", err);
+        coachDynamicContainer.innerHTML = `
+          <div class="p-6 bg-surface-container-lowest rounded-2xl border border-red-200 text-center space-y-2 text-red-900">
+            <p class="font-label-lg font-bold">Error al cargar la ficha del deportista</p>
+            <p class="text-xs">${escapeHtml(err?.message || "Comprueba tu conexión o permisos")}</p>
+          </div>
+        `;
       }
       return;
     }
@@ -5276,6 +5943,8 @@ export class TeamAppState {
 
     const tutorName = document.getElementById("tutor-name")?.value?.trim() || "Tutor Familia";
     const tutorEmail = document.getElementById("tutor-email")?.value?.trim() || "tutor@beta.test";
+    const tutorRelationship = document.getElementById("tutor-relationship")?.value?.trim() || "Madre";
+    const tutorPhone = document.getElementById("tutor-phone")?.value?.trim() || "";
 
     if (!tutorEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tutorEmail)) {
       this.showToast("⚠️ Introduce un correo electrónico de tutor válido.");
@@ -5302,7 +5971,7 @@ export class TeamAppState {
     const currentToken = this.tokens.parent || localStorage.getItem("talde_session_token");
     if (currentToken) {
       api.client.setToken(currentToken);
-      await this.executeParentJoin({ tutorEmail, tutorName, isIndividual, claimName, claimNumber });
+      await this.executeParentJoin({ tutorEmail, tutorName, tutorRelationship, tutorPhone, isIndividual, claimName, claimNumber });
       return;
     }
 
@@ -5312,12 +5981,39 @@ export class TeamAppState {
       displayName: tutorName,
       role: "parent",
       onSuccess: async () => {
-        await this.executeParentJoin({ tutorEmail, tutorName, isIndividual, claimName, claimNumber });
+        await this.executeParentJoin({ tutorEmail, tutorName, tutorRelationship, tutorPhone, isIndividual, claimName, claimNumber });
       }
     });
   }
 
-  async executeParentJoin({ tutorEmail, tutorName, isIndividual, claimName, claimNumber }) {
+  selectRelationship(rel) {
+    const hiddenInput = document.getElementById("tutor-relationship");
+    if (hiddenInput) hiddenInput.value = rel;
+
+    const btnMadre = document.getElementById("rel-btn-madre");
+    const btnPadre = document.getElementById("rel-btn-padre");
+    const btnTutor = document.getElementById("rel-btn-tutor");
+
+    const activeClasses = "border-2 border-primary-container bg-primary-fixed/40 text-on-primary-fixed font-bold";
+    const inactiveClasses = "border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container";
+
+    [
+      { btn: btnMadre, name: "Madre" },
+      { btn: btnPadre, name: "Padre" },
+      { btn: btnTutor, name: "Tutor" }
+    ].forEach(({ btn, name }) => {
+      if (!btn) return;
+      if (rel.toLowerCase().startsWith(name.toLowerCase())) {
+        btn.className = `h-10 rounded-lg font-label-md text-label-md flex items-center justify-center gap-1 cursor-pointer ${activeClasses}`;
+        btn.innerHTML = `<span class="material-symbols-outlined text-[16px]">check</span> ${name === "Tutor" ? "Tutor / Familiar" : name}`;
+      } else {
+        btn.className = `h-10 rounded-lg font-label-md text-label-md flex items-center justify-center cursor-pointer transition-colors ${inactiveClasses}`;
+        btn.textContent = name === "Tutor" ? "Tutor / Familiar" : name;
+      }
+    });
+  }
+
+  async executeParentJoin({ tutorEmail, tutorName, tutorRelationship, tutorPhone, isIndividual, claimName, claimNumber }) {
     const scope = this.createScope();
     const btn = document.getElementById("btn-submit");
     if (btn) {
@@ -5333,7 +6029,10 @@ export class TeamAppState {
           throw new Error("Falta el token de invitación individual.");
         }
         if (!this.isScopeActive(scope)) return;
-        res = await api.invitations.requestIndividualLink(token);
+        res = await api.invitations.requestIndividualLink(token, {
+          relationship: tutorRelationship,
+          contactPhone: tutorPhone
+        });
         if (!this.isScopeActive(scope)) {
           console.warn("executeParentJoin: Stale individual link response discarded due to context switch.");
           return;
@@ -5346,7 +6045,9 @@ export class TeamAppState {
         if (!this.isScopeActive(scope)) return;
         res = await api.invitations.requestGeneralLink(this.beta.verifiedInvitation.code, {
           claimedPlayerName: claimName,
-          claimedShirtNumber: claimNumber
+          claimedShirtNumber: claimNumber,
+          relationship: tutorRelationship,
+          contactPhone: tutorPhone
         });
         if (!this.isScopeActive(scope)) {
           console.warn("executeParentJoin: Stale general link response discarded due to context switch.");

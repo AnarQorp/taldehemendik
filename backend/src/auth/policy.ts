@@ -21,8 +21,13 @@ export class AuthPolicy {
 
   isEmailAllowed(email: string): boolean {
     const normalized = email.trim().toLowerCase();
-    if (this.allowedEmails.size === 0) return true;
-    return this.allowedEmails.has(normalized);
+    if (this.allowedEmails.size === 0) return false;
+    if (this.allowedEmails.has(normalized)) return true;
+    for (const pattern of this.allowedEmails) {
+      if (pattern.startsWith("@") && normalized.endsWith(pattern)) return true;
+      if (pattern.startsWith("*@") && normalized.endsWith(pattern.slice(1))) return true;
+    }
+    return false;
   }
 
   isAdmitted(email: string, onboarding?: OnboardingAdmissionProof): boolean {
@@ -33,18 +38,16 @@ export class AuthPolicy {
   }
 
   validateTokenClaims(claims: Record<string, unknown>): { userId: string; email?: string } {
-    if (typeof claims.sub !== "string") throw invalid();
+    if (typeof claims.sub !== "string" || !claims.sub) throw invalid();
 
-    if (this.policyRevision.length > 0) {
-      if (typeof claims.email !== "string" || !claims.email || !claims.email.includes("@")) {
-        throw invalid();
-      }
-      const tokenRevision = claims.policyRevision ?? claims.pol;
-      if (typeof tokenRevision !== "string" || tokenRevision !== this.policyRevision) {
-        throw invalid();
-      }
+    if (typeof claims.email !== "string" || !claims.email || !claims.email.includes("@")) {
+      throw invalid();
+    }
+    const tokenRevision = claims.policyRevision ?? claims.pol;
+    if (typeof tokenRevision !== "string" || !this.policyRevision || tokenRevision !== this.policyRevision) {
+      throw invalid();
     }
 
-    return { userId: claims.sub };
+    return { userId: claims.sub, email: claims.email.trim().toLowerCase() };
   }
 }

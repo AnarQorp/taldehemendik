@@ -32,6 +32,8 @@ export function assertProductionConfiguration() {
   if (!config.isProduction) return;
   if (!process.env.DATABASE_URL || !process.env.AUTH_DATABASE_URL) throw new Error("Production requires separate DATABASE_URL and AUTH_DATABASE_URL");
   if (config.authSecret.length < 32 || /development|change.?me|example|dev.only/i.test(config.authSecret)) throw new Error("AUTH_TOKEN_SECRET must be a unique random secret of at least 32 characters");
+  if (!config.authAllowedEmails || config.authAllowedEmails.length === 0) throw new Error("Production requires a non-empty TALDE_AUTH_ALLOWED_EMAILS allowlist");
+  if (!config.authPolicyRevision || config.authPolicyRevision.trim().length === 0) throw new Error("Production requires TALDE_AUTH_POLICY_REVISION to be configured");
   if (!config.smtp.host || !config.smtp.from || !Number.isInteger(config.smtp.port) || config.smtp.port < 1 || config.smtp.port > 65535) throw new Error("Production requires valid SMTP_HOST, SMTP_PORT and SMTP_FROM");
   if (Boolean(config.smtp.user) !== Boolean(config.smtp.pass)) throw new Error("SMTP_USER and SMTP_PASSWORD must be configured together");
   if (process.env.DEV_AUTH_EXPOSE_OTP === "true" || process.env.DEV_RESET_ENABLED === "true") throw new Error("Development authentication/endpoints cannot be enabled in production");

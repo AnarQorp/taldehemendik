@@ -97,7 +97,7 @@ describe("ZaQ Admission Gate & Policy Verification (Offline Probe)", () => {
 
     // Valid under v1
     const verified = adapterV1.verifyAccessToken(tokenV1);
-    expect(verified).toEqual({ userId });
+    expect(verified).toEqual({ userId, email: "user@fixture.invalid" });
 
     // When policy is rotated to v2:
     const adapterV2 = new ProductionAuthAdapter({
@@ -120,6 +120,81 @@ describe("ZaQ Admission Gate & Policy Verification (Offline Probe)", () => {
 
     const token = adapter.issueAccessToken("f244153e-e7d3-4b7c-81d5-ef96585de752", "allowed@fixture.invalid");
     const decoded = adapter.verifyAccessToken(token);
-    expect(decoded).toEqual({ userId: "f244153e-e7d3-4b7c-81d5-ef96585de752" });
+    expect(decoded).toEqual({ userId: "f244153e-e7d3-4b7c-81d5-ef96585de752", email: "allowed@fixture.invalid" });
+  });
+
+  it("reproduces ZaQ lifecycle probe: rejects startup when allowedEmails is empty", () => {
+    expect(() => {
+      new ProductionAuthAdapter({
+        secret: env.AUTH_TOKEN_SECRET,
+        allowedEmails: [],
+        policyRevision: env.TALDE_AUTH_POLICY_REVISION
+      });
+    }).toThrow(/allowlist/i);
+  });
+
+  it("reproduces ZaQ lifecycle probe: rejects startup when policyRevision is missing or empty", () => {
+    expect(() => {
+      new ProductionAuthAdapter({
+        secret: env.AUTH_TOKEN_SECRET,
+        allowedEmails: [env.TALDE_AUTH_ALLOWED_EMAILS],
+        policyRevision: ""
+      });
+    }).toThrow(/TALDE_AUTH_POLICY_REVISION/i);
+  });
+
+  it("reproduces ZaQ lifecycle probe: invalidates pending OTP challenges when policy revision changes", async () => {
+    let capturedChallenge: any = null;
+    let deliveredOtp: string | null = null;
+
+    const client = {
+      query: async (sql: string, args: any[] = []) => {
+        if (sql.includes("count(*)")) return { rows: [{ count: 0, latest: null }] };
+        if (sql.startsWith("INSERT INTO auth_challenges")) {
+          capturedChallenge = { id: args[0], email: args[1], otp_hash: args[2], attempts: 0, consumed_at: null, unexpired: true };
+        }
+        if (sql.startsWith("SELECT *, expires_at")) {
+          return { rows: capturedChallenge ? [capturedChallenge] : [] };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+      release() {}
+    };
+    const pool = {
+      connect: async () => client as any
+    };
+    const delivery = {
+      sendMail: async (msg: any) => {
+        deliveredOtp = msg.text.match(/\b[0-9]{6}\b/)?.[0] ?? null;
+        return {};
+      }
+    };
+
+    // Old adapter under policy-v1
+    const oldAdapter = new ProductionAuthAdapter({
+      pool: pool as any,
+      delivery,
+      secret: env.AUTH_TOKEN_SECRET,
+      allowedEmails: [env.TALDE_AUTH_ALLOWED_EMAILS],
+      policyRevision: "policy-v1"
+    });
+
+    const { challengeId } = await oldAdapter.requestOtp("allowed@fixture.invalid");
+    expect(challengeId).toBeDefined();
+    expect(deliveredOtp).toBeDefined();
+
+    // New adapter under policy-v2
+    const newAdapter = new ProductionAuthAdapter({
+      pool: pool as any,
+      delivery,
+      secret: env.AUTH_TOKEN_SECRET,
+      allowedEmails: [env.TALDE_AUTH_ALLOWED_EMAILS],
+      policyRevision: "policy-v2"
+    });
+
+    // Verification of the old challenge under the new policy revision MUST fail
+    await expect(
+      newAdapter.verifyOtp("allowed@fixture.invalid", challengeId, deliveredOtp!)
+    ).rejects.toThrow();
   });
 });

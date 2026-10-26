@@ -36,7 +36,6 @@ export class ProductionAuthAdapter implements AuthAdapter {
   private readonly from: string;
   private readonly now: () => number;
   constructor(options: Options = {}) {
-    if (config.isProduction) assertProductionConfiguration();
     this.db = options.pool ?? authPool;
     this.secret = options.secret ?? config.authSecret;
     if (this.secret.length < 32) throw new Error("Production auth requires a secret of at least 32 characters");
@@ -44,10 +43,29 @@ export class ProductionAuthAdapter implements AuthAdapter {
     this.audience = options.audience ?? config.authTokenAudience;
     this.from = options.from ?? config.smtp.from;
     this.now = options.now ?? Date.now;
-    this.policy = new AuthPolicy(
-      options.allowedEmails ?? config.authAllowedEmails,
-      options.policyRevision ?? config.authPolicyRevision
-    );
+
+    const rawAllowed = options.allowedEmails !== undefined
+      ? options.allowedEmails
+      : (process.env.TALDE_AUTH_ALLOWED_EMAILS !== undefined
+          ? process.env.TALDE_AUTH_ALLOWED_EMAILS.split(/[,;\s]+/).map(v => v.trim().toLowerCase()).filter(Boolean)
+          : config.authAllowedEmails);
+
+    const rawRevision = options.policyRevision !== undefined
+      ? options.policyRevision
+      : (process.env.TALDE_AUTH_POLICY_REVISION !== undefined
+          ? process.env.TALDE_AUTH_POLICY_REVISION.trim()
+          : config.authPolicyRevision);
+
+    this.policy = new AuthPolicy(rawAllowed, rawRevision);
+
+    if (this.policy.allowedEmails.size === 0) {
+      throw new Error("Production auth requires a non-empty TALDE_AUTH_ALLOWED_EMAILS allowlist");
+    }
+    if (!this.policy.policyRevision || this.policy.policyRevision.length === 0) {
+      throw new Error("Production auth requires TALDE_AUTH_POLICY_REVISION to be configured");
+    }
+
+    if (config.isProduction) assertProductionConfiguration();
     this.delivery = options.delivery ?? nodemailer.createTransport({
       host: config.smtp.host, port: config.smtp.port, secure: config.smtp.secure,
       requireTLS: true, tls: { rejectUnauthorized: true, minVersion: "TLSv1.2" },
@@ -82,7 +100,10 @@ export class ProductionAuthAdapter implements AuthAdapter {
       const recent = await db.query("SELECT count(*)::int AS count, max(created_at) AS latest FROM auth_challenges WHERE email=$1 AND created_at > now()-interval '1 hour'", [email]);
       if (recent.rows[0].count >= 5 || (recent.rows[0].latest && Date.now() - new Date(recent.rows[0].latest).getTime() < 60000)) throw new DomainError("AUTH_INVALID", 429, "Please wait before requesting another code");
       await db.query("UPDATE auth_challenges SET consumed_at=now() WHERE email=$1 AND consumed_at IS NULL", [email]);
-      await db.query("INSERT INTO auth_challenges(id,email,otp_hash,expires_at) VALUES($1,$2,$3,now()+interval '5 minutes')", [challengeId, email, this.digest(`${challengeId}:${email}:${otp}`)]);
+      await db.query(
+        "INSERT INTO auth_challenges(id,email,otp_hash,expires_at) VALUES($1,$2,$3,now()+interval '5 minutes')",
+        [challengeId, email, this.digest(`${challengeId}:${email}:${otp}:${this.policy.policyRevision}`)]
+      );
     });
     try { await this.delivery.sendMail({ from: this.from, to: email, subject: "Talde Hemendik! — Código de acceso", text: `Tu código de acceso es ${otp}. Caduca en 5 minutos. Si no lo has solicitado, ignora este mensaje.` }); }
     catch {
@@ -100,7 +121,7 @@ export class ProductionAuthAdapter implements AuthAdapter {
       const row = result.rows[0];
       if (!row || row.email !== email || row.consumed_at || !row.unexpired || row.attempts >= 5) return false;
       const expected = Buffer.from(row.otp_hash, "hex");
-      const actual = Buffer.from(this.digest(`${challengeId}:${email}:${otp}`), "hex");
+      const actual = Buffer.from(this.digest(`${challengeId}:${email}:${otp}:${this.policy.policyRevision}`), "hex");
       const matches = /^\d{6}$/.test(otp) && expected.length === actual.length && timingSafeEqual(expected, actual);
       await db.query("UPDATE auth_challenges SET attempts=attempts+1, consumed_at=CASE WHEN $2 OR attempts+1>=5 THEN now() ELSE consumed_at END WHERE id=$1", [challengeId, matches]);
       return matches;
@@ -111,23 +132,17 @@ export class ProductionAuthAdapter implements AuthAdapter {
   issueAccessToken(userId: string, email?: string) {
     if (!uuid.test(userId)) throw invalid();
     const iat = Math.floor(this.now() / 1000);
+    const resolvedEmail = (email ?? `user-${userId}@talde.internal`).trim().toLowerCase();
     const claims: Record<string, unknown> = {
       sub: userId,
       iss: this.issuer,
       aud: this.audience,
       iat,
-      exp: iat + 3600
+      exp: iat + 3600,
+      email: resolvedEmail,
+      policyRevision: this.policy.policyRevision,
+      pol: this.policy.policyRevision
     };
-    if (email) {
-      claims.email = email.trim().toLowerCase();
-    }
-    if (this.policy.policyRevision) {
-      claims.policyRevision = this.policy.policyRevision;
-      claims.pol = this.policy.policyRevision;
-      if (!claims.email) {
-        claims.email = `user-${userId}@talde.internal`;
-      }
-    }
     const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
     return `${payload}.${createHmac("sha256", this.secret).update(payload).digest("base64url")}`;
   }

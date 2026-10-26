@@ -23,6 +23,8 @@ const authAdapter = new ProductionAuthAdapter({
   pool: authPool,
   delivery,
   secret,
+  allowedEmails: ["@example.test"],
+  policyRevision: "e2e-auth-v1",
   from: "auth@taldehemendik.test"
 });
 

@@ -111,21 +111,6 @@
 
 <body class="bg-surface text-on-surface min-h-screen flex flex-col items-center select-none overflow-x-hidden p-0">
 
-  <!-- Botón discreto flotante para herramientas demo (Visible únicamente en ?demo=1) -->
-  <div id="demo-tools-wrapper" class="hidden fixed top-2.5 right-2.5 sm:top-4 sm:right-4 z-50">
-    <button id="btn-toggle-demo-tools" onclick="teamApp.toggleDemoTools()" class="px-3 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-xl backdrop-blur-sm cursor-pointer transition-all active:scale-95" title="Abrir / ocultar panel de herramientas demo (Reset BD, simulaciones y roles)">
-      <span class="material-symbols-outlined text-[15px] text-amber-400">handyman</span>
-      <span class="hidden xs:inline">Herramientas demo</span>
-    </button>
-  </div>
-
-  <!-- Badge discreto de Modo Demo (Visible solo cuando se navega en modo DEMO) -->
-  <div id="demo-mode-badge" class="hidden fixed top-2.5 left-2.5 sm:top-4 sm:left-4 z-40">
-    <div class="px-2.5 py-1 rounded-full bg-blue-950/95 text-blue-300 border border-blue-700/60 text-xs font-bold flex items-center gap-1.5 shadow-xl backdrop-blur-sm">
-      <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-      <span>Modo Demo · S. D. Indautxu</span>
-    </div>
-  </div>
 
   <!-- Modal de confirmación destructiva para Reiniciar entorno beta -->
   <div id="reset-beta-modal" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
@@ -472,116 +457,6 @@
     </div>
   </div>
 
-  <!-- ======================================================== -->
-  <!-- DEMO TOOLBAR & GUIDED TOUR (Ocultos por defecto, visibles con ?demo=1 o botón) -->
-  <!-- ======================================================== -->
-  <aside id="demo-toolbar" class="hidden w-full max-w-xl mx-auto bg-slate-900 border-b sm:border border-slate-800 sm:rounded-2xl p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-lg z-40 shrink-0">
-    <!-- Brand & Role Switcher -->
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="flex items-center gap-1.5 font-black text-sm tracking-tight text-blue-400">
-        <span class="material-symbols-outlined text-[20px]">sports_soccer</span>
-        <span class="hidden xs:inline">Talde Hemendik!</span>
-      </div>
-
-      <!-- Multi-team / Multi-role switcher: USUARIO -> EQUIPO -> ROL -->
-      <div class="bg-slate-950 p-0.5 rounded-xl border border-slate-800 flex flex-wrap items-center gap-0.5">
-        <button id="role-btn-onboard" onclick="teamApp.switchMembership('onboard')" class="px-2 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all cursor-pointer">
-          Acceso
-        </button>
-        <button id="role-btn-coach" onclick="teamApp.switchMembership('indautxu_inf_a')" class="px-2 py-1 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-xs transition-all cursor-pointer" title="Mikel Zubeldia · Entrenador S. D. Indautxu Infantil A">
-          Infantil A (Míster)
-        </button>
-        <button id="role-btn-parent" onclick="teamApp.switchMembership('indautxu_ale_b')" class="px-2 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all cursor-pointer" title="Elena Gómez · Madre de Ibai #9">
-          Familia (Elena)
-        </button>
-      </div>
-    </div>
-
-    <!-- Tour Navigation -->
-    <div class="flex flex-wrap items-center gap-1.5">
-      <button onclick="teamApp.prevStep()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-0.5 transition-colors cursor-pointer" title="Paso anterior">
-        <span class="material-symbols-outlined text-[14px]">arrow_back</span>
-        <span class="hidden sm:inline">Ant.</span>
-      </button>
-
-      <button onclick="teamApp.nextStep()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-0.5 transition-colors cursor-pointer shadow-xs" title="Siguiente paso">
-        <span>Sig.</span>
-        <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
-      </button>
-
-      <!-- Screen Dropdown Direct Jump -->
-      <select id="demo-screen-select" onchange="teamApp.goToScreen(this.value)" class="max-w-[130px] sm:max-w-[170px] bg-slate-950 text-slate-200 border border-slate-800 rounded-xl px-2 py-1 text-[11px] sm:text-xs focus:ring-1 focus:ring-blue-500 cursor-pointer text-ellipsis overflow-hidden">
-        <option value="v2_00_onboarding_welcome">0. Acceso Inicial</option>
-        <option value="v2_00_coach_create_team">0a. Crear Equipo & INDA16</option>
-        <option value="v2_00_parent_join_team">0b. Familia: Solicitud Vinculación</option>
-        <option value="v2_01_coach_home">1. Inicio (La mesa del míster)</option>
-        <option value="v2_02_coach_agenda">2. Agenda Semanal</option>
-        <option value="v2_05_event_hub_normal">3. Hub: Disponibilidad Activa</option>
-        <option value="v2_06_event_hub_injury">4. Hub: Asistencia & Suplentes Neutros</option>
-        <option value="v2_03_coach_roster">5. Plantilla (18 jug.)</option>
-        <option value="v2_04_player_detail">6. Ficha de Campo: Ibai (#9)</option>
-        <option value="v2_07_parent_home">7. Familia: Inicio</option>
-        <option value="v2_08_parent_rsvp">8. Familia: RSVP 3 Segundos</option>
-        <option value="screen_c_create_event">Aux: Crear Evento</option>
-        <option value="screen_e_create_squad">Aux: Convocatoria</option>
-        <option value="screen_k_notices">Aux: Tablón Avisos</option>
-      </select>
-
-      <button onclick="toggleTourInfo()" class="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg cursor-pointer shrink-0" title="Ocultar/Mostrar guía">
-        <span id="tour-info-icon" class="material-symbols-outlined text-[18px]">expand_less</span>
-      </button>
-
-      <!-- PostgreSQL Backend Reset Button -->
-      <button onclick="teamApp.resetBackendDataset()" class="px-2 py-1 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-800/80 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs" title="Resetear datos en PostgreSQL a estado inicial VS02 (14/2/0/2)">
-        <span class="material-symbols-outlined text-[14px]">database</span>
-        <span class="hidden sm:inline">Reset BD</span>
-      </button>
-
-      <!-- Test Conflict Buttons -->
-      <button onclick="teamApp.triggerTestConflictVersion()" class="px-2 py-1 bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-800/60 rounded-lg text-[10px] sm:text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors" title="Simular CALLUP_VERSION_CONFLICT">
-        <span class="material-symbols-outlined text-[13px]">sync_problem</span>
-        <span class="hidden lg:inline">Conflicto Versión</span>
-      </button>
-
-      <button onclick="teamApp.triggerTestConflictSubstitute()" class="px-2 py-1 bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-800/60 rounded-lg text-[10px] sm:text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors" title="Simular SUBSTITUTE_NO_LONGER_ELIGIBLE">
-        <span class="material-symbols-outlined text-[13px]">person_off</span>
-        <span class="hidden lg:inline">Suplente Ineligible</span>
-      </button>
-
-      <button onclick="teamApp.resetDemo()" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg cursor-pointer shrink-0" title="Reiniciar toda la demo">
-        <span class="material-symbols-outlined text-[18px]">restart_alt</span>
-      </button>
-
-      <!-- Exit Demo Button -->
-      <button onclick="teamApp.exitDemo()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[10px] sm:text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs" title="Salir de Demo y volver a Producción">
-        <span class="material-symbols-outlined text-[13px]">logout</span>
-        <span class="hidden sm:inline">Salir Demo</span>
-      </button>
-    </div>
-  </aside>
-
-  <!-- Barra informativa de la etapa guiada (Oculta por defecto) -->
-  <div id="demo-step-card" class="hidden w-full max-w-xl mx-auto px-2 sm:px-4 mt-1 sm:mt-1.5 transition-all duration-200">
-    <div class="bg-slate-900/95 border border-slate-800 rounded-xl p-2.5 sm:p-3 shadow-md">
-      <div class="flex items-center justify-between gap-2 mb-1">
-        <h2 id="demo-step-title" class="text-xs font-bold text-blue-400">1. Acceso Inicial: ¿Cómo vas a utilizar la app?</h2>
-        <span class="text-[10px] text-slate-400 font-mono">11 pasos guiados</span>
-      </div>
-      <p id="demo-step-desc" class="text-[11px] sm:text-xs text-slate-300 leading-snug">
-        Pantalla única de bienvenida para todo el club. El usuario elige su función: 'Soy entrenador / staff' o 'Soy padre, madre o tutor'. Sin apps separadas.
-      </p>
-      <div class="mt-1.5 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] sm:text-[11px]">
-        <div class="text-amber-400 font-medium flex items-center gap-1">
-          <span class="material-symbols-outlined text-[13px] sm:text-[14px]">touch_app</span>
-          <span id="demo-step-action">Pulsa 'Soy entrenador / staff' para iniciar la creación del equipo.</span>
-        </div>
-      </div>
-      <!-- Barra de progreso lineal -->
-      <div class="w-full bg-slate-800 h-1 rounded-full mt-1.5 overflow-hidden">
-        <div id="demo-step-progress" class="bg-blue-500 h-full rounded-full transition-all duration-300" style="width: 9%"></div>
-      </div>
-    </div>
-  </div>
 
   <!-- ======================================================== -->
   <!-- MAIN APPLICATION ROOT CONTAINER (Responsive Mobile-First) -->
@@ -640,26 +515,6 @@
                   </p>
                 </button>
 
-                <!-- Opción 2: Probar con datos de ejemplo -->
-                <button type="button" onclick="teamApp.startDemoMode()" class="group relative bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/70 hover:border-secondary shadow-sm active:scale-[0.98] transition-all duration-150 flex flex-col text-left cursor-pointer gap-2">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="flex items-center gap-3">
-                      <div class="w-11 h-11 rounded-xl bg-secondary text-on-secondary flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-                        <span class="material-symbols-outlined text-[22px]">sports</span>
-                      </div>
-                      <div>
-                        <h2 class="font-headline-sm text-headline-sm text-on-surface group-hover:text-secondary transition-colors font-bold">
-                          Probar con datos de ejemplo
-                        </h2>
-                        <span class="text-xs font-semibold text-secondary">Escenario S. D. Indautxu</span>
-                      </div>
-                    </div>
-                    <span class="material-symbols-outlined text-on-surface-variant group-hover:text-secondary text-[20px] transition-colors mt-1">arrow_forward</span>
-                  </div>
-                  <p class="font-body-sm text-body-sm text-on-surface-variant leading-snug pl-[56px]">
-                    Cargar un equipo ficticio para explorar la aplicación.
-                  </p>
-                </button>
 
                 <!-- Opción 3: Reiniciar entorno beta -->
                 <button type="button" onclick="teamApp.confirmResetBeta()" class="group relative bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60 hover:border-red-400 shadow-sm active:scale-[0.98] transition-all duration-150 flex flex-col text-left cursor-pointer gap-2">
@@ -4679,16 +4534,6 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
   <!-- Scripts -->
   <script type="module" src="app.js"></script>
   <script>
-    function toggleTourInfo() {
-      const card = document.getElementById("demo-step-card");
-      const icon = document.getElementById("tour-info-icon");
-      if (card) {
-        card.classList.toggle("hidden");
-        if (icon) {
-          icon.textContent = card.classList.contains("hidden") ? "expand_more" : "expand_less";
-        }
-      }
-    }
 
     function selectPlayer(id) {
       const cards = document.querySelectorAll('.player-card');

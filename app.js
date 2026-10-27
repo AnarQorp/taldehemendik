@@ -585,54 +585,23 @@ export class TeamAppState {
     const params = new URLSearchParams(window.location.search);
     const screenParam = params.get("screen") || window.location.hash.replace("#", "");
     const roleParam = params.get("role");
-    const isDemoRequested = params.get("demo") === "1" || params.get("demo") === "true";
     const inviteToken = params.get("inviteToken");
     const joinCode = params.get("join");
+
+    const isDemoFile = typeof window !== "undefined" && window.location.pathname.endsWith("demo.html");
 
     const demoToolsWrapper = document.getElementById("demo-tools-wrapper");
     const demoToolbar = document.getElementById("demo-toolbar");
     const demoStepCard = document.getElementById("demo-step-card");
     const demoBadge = document.getElementById("demo-mode-badge");
 
-    if (isDemoRequested) {
+    if (isDemoFile) {
       this.appMode = "DEMO";
       try { localStorage.setItem("talde_app_mode", "DEMO"); } catch {}
       if (demoToolsWrapper) demoToolsWrapper.classList.remove("hidden");
       if (demoToolbar) demoToolbar.classList.remove("hidden");
       if (demoStepCard) demoStepCard.classList.remove("hidden");
       if (demoBadge) demoBadge.classList.remove("hidden");
-    } else {
-      // Normal production access: always start in BETA_NORMAL regardless of stale demo preference
-      this.appMode = "BETA_NORMAL";
-      try { localStorage.setItem("talde_app_mode", "BETA_NORMAL"); } catch {}
-      if (demoToolsWrapper) demoToolsWrapper.classList.add("hidden");
-      if (demoToolbar) demoToolbar.classList.add("hidden");
-      if (demoStepCard) demoStepCard.classList.add("hidden");
-      if (demoBadge) demoBadge.classList.add("hidden");
-      this.applyCleanUI();
-    }
-
-    if (api && api.client) {
-      api.client.setAppMode(this.appMode);
-    }
-
-    if (this.appMode === "DEMO") {
-      // Stash real production session in safe storage key to prevent DEMO usage without destroying it
-      const realToken = localStorage.getItem("talde_session_token");
-      if (realToken) {
-        try { localStorage.setItem("talde_saved_session_token", realToken); } catch {}
-        try { localStorage.removeItem("talde_session_token"); } catch {}
-      }
-      const realCoach = localStorage.getItem("talde_token_coach");
-      if (realCoach) {
-        try { localStorage.setItem("talde_saved_token_coach", realCoach); } catch {}
-        try { localStorage.removeItem("talde_token_coach"); } catch {}
-      }
-      const realParent = localStorage.getItem("talde_token_parent");
-      if (realParent) {
-        try { localStorage.setItem("talde_saved_token_parent", realParent); } catch {}
-        try { localStorage.removeItem("talde_token_parent"); } catch {}
-      }
 
       this.tokens = { coach: null, parent: null };
       if (api && api.client) {
@@ -646,30 +615,29 @@ export class TeamAppState {
         this.sessionManager.setSession(this.currentSessionId, null, "DEMO");
       }
     } else {
-      // BETA_NORMAL mode: restore stashed production session if exiting DEMO
-      const savedToken = localStorage.getItem("talde_saved_session_token") || localStorage.getItem("talde_session_token");
-      if (savedToken) {
-        try { localStorage.setItem("talde_session_token", savedToken); } catch {}
-        try { localStorage.removeItem("talde_saved_session_token"); } catch {}
-      }
-      const savedCoach = localStorage.getItem("talde_saved_token_coach") || localStorage.getItem("talde_token_coach");
-      if (savedCoach) {
-        try { localStorage.setItem("talde_token_coach", savedCoach); } catch {}
-        try { localStorage.removeItem("talde_saved_token_coach"); } catch {}
-      }
-      const savedParent = localStorage.getItem("talde_saved_token_parent") || localStorage.getItem("talde_token_parent");
-      if (savedParent) {
-        try { localStorage.setItem("talde_token_parent", savedParent); } catch {}
-        try { localStorage.removeItem("talde_saved_token_parent"); } catch {}
-      }
+      // Production (index.html): always start in BETA_NORMAL regardless of ?demo=1 or stale values
+      this.appMode = "BETA_NORMAL";
+      try { localStorage.setItem("talde_app_mode", "BETA_NORMAL"); } catch {}
+      if (demoToolsWrapper) demoToolsWrapper.classList.add("hidden");
+      if (demoToolbar) demoToolbar.classList.add("hidden");
+      if (demoStepCard) demoStepCard.classList.add("hidden");
+      if (demoBadge) demoBadge.classList.add("hidden");
+      this.applyCleanUI();
 
-      // Unified session token priority
+      // Eliminate legacy talde_saved_* keys so stashed sessions never overwrite valid sessions
+      try {
+        localStorage.removeItem("talde_saved_session_token");
+        localStorage.removeItem("talde_saved_token_coach");
+        localStorage.removeItem("talde_saved_token_parent");
+      } catch {}
+
+      // Preserve legitimate active session directly from storage
       const unifiedToken = localStorage.getItem("talde_session_token");
       if (unifiedToken) {
         this.currentSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
         this.tokens.coach = unifiedToken;
         this.tokens.parent = unifiedToken;
-        api.client.setToken(unifiedToken);
+        if (api && api.client) api.client.setToken(unifiedToken);
         if (this.contextCoordinator) {
           this.contextCoordinator.initContext(this.currentSessionId, this.appMode);
         }
@@ -683,10 +651,21 @@ export class TeamAppState {
         if (localStorage.getItem("talde_token_parent")) {
           this.tokens.parent = localStorage.getItem("talde_token_parent");
         }
+        this.currentSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        if (this.contextCoordinator) {
+          this.contextCoordinator.initContext(this.currentSessionId, this.appMode);
+        }
+        if (this.sessionManager) {
+          this.sessionManager.setSession(this.currentSessionId, null, this.appMode);
+        }
       }
       if (localStorage.getItem("talde_team_season_id")) {
         this.beta.teamSeasonId = localStorage.getItem("talde_team_season_id");
       }
+    }
+
+    if (api && api.client) {
+      api.client.setAppMode(this.appMode);
     }
 
     // Listeners for OTP modal
@@ -726,20 +705,16 @@ export class TeamAppState {
       this.applyCleanUI();
     } else if (roleParam === "parent" || (!roleParam && savedRole === "parent")) {
       this.currentRole = "parent";
-      if (isDemoRequested) this.appMode = "DEMO";
-      else this.appMode = "BETA_NORMAL";
+      if (!isDemoFile) this.appMode = "BETA_NORMAL";
     } else if (roleParam === "coach" || (!roleParam && savedRole === "coach")) {
       this.currentRole = "coach";
-      if (isDemoRequested) this.appMode = "DEMO";
-      else this.appMode = "BETA_NORMAL";
+      if (!isDemoFile) this.appMode = "BETA_NORMAL";
     } else if (screenParam?.startsWith("v2_07_") || screenParam?.startsWith("v2_08_")) {
       this.currentRole = "parent";
-      if (isDemoRequested) this.appMode = "DEMO";
-      else this.appMode = "BETA_NORMAL";
+      if (!isDemoFile) this.appMode = "BETA_NORMAL";
     } else if (screenParam?.startsWith("v2_01_") || screenParam?.startsWith("v2_02_") || screenParam?.startsWith("v2_05_") || screenParam?.startsWith("v2_06_")) {
       this.currentRole = "coach";
-      if (isDemoRequested) this.appMode = "DEMO";
-      else this.appMode = "BETA_NORMAL";
+      if (!isDemoFile) this.appMode = "BETA_NORMAL";
     } else {
       this.currentRole = "onboard";
     }
@@ -1325,6 +1300,11 @@ export class TeamAppState {
   }
 
   setAppMode(newMode) {
+    try {
+      localStorage.removeItem("talde_saved_session_token");
+      localStorage.removeItem("talde_saved_token_coach");
+      localStorage.removeItem("talde_saved_token_parent");
+    } catch {}
     if (this.appMode === newMode) return;
     this.abortAllInFlight();
     this.clearAllManagedTimers();
@@ -1381,25 +1361,16 @@ export class TeamAppState {
     this.purgePrivateFormsAndDom();
 
     if (newMode === "DEMO") {
-      // Stash real production session in safe storage key to prevent DEMO usage without destroying it
-      const realToken = localStorage.getItem("talde_session_token");
-      if (realToken) {
-        try { localStorage.setItem("talde_saved_session_token", realToken); } catch {}
-        try { localStorage.removeItem("talde_session_token"); } catch {}
-      }
-      const realCoach = localStorage.getItem("talde_token_coach");
-      if (realCoach) {
-        try { localStorage.setItem("talde_saved_token_coach", realCoach); } catch {}
-        try { localStorage.removeItem("talde_token_coach"); } catch {}
-      }
-      const realParent = localStorage.getItem("talde_token_parent");
-      if (realParent) {
-        try { localStorage.setItem("talde_saved_token_parent", realParent); } catch {}
-        try { localStorage.removeItem("talde_token_parent"); } catch {}
-      }
-
-      localStorage.removeItem("talde_team_season_id");
-      localStorage.removeItem("talde_active_role");
+      try {
+        localStorage.removeItem("talde_session_token");
+        localStorage.removeItem("talde_token_coach");
+        localStorage.removeItem("talde_token_parent");
+        localStorage.removeItem("talde_team_season_id");
+        localStorage.removeItem("talde_active_role");
+        localStorage.removeItem("talde_saved_session_token");
+        localStorage.removeItem("talde_saved_token_coach");
+        localStorage.removeItem("talde_saved_token_parent");
+      } catch {}
       this.appMode = "DEMO";
       try { localStorage.setItem("talde_app_mode", "DEMO"); } catch {}
       const demoToolbar = document.getElementById("demo-toolbar");
@@ -1407,26 +1378,26 @@ export class TeamAppState {
       if (demoToolbar) demoToolbar.classList.remove("hidden");
       if (demoStepCard) demoStepCard.classList.remove("hidden");
       document.getElementById("demo-mode-badge")?.classList.remove("hidden");
+      this.currentSessionId = "demo_sess_" + Date.now();
+      if (this.contextCoordinator) {
+        this.contextCoordinator.initContext(this.currentSessionId, "DEMO");
+      }
+      if (this.sessionManager) {
+        this.sessionManager.setSession(this.currentSessionId, null, "DEMO");
+      }
     } else {
-      // BETA_NORMAL mode: restore stashed production session if exiting DEMO
-      const savedToken = localStorage.getItem("talde_saved_session_token") || localStorage.getItem("talde_session_token");
-      if (savedToken) {
-        try { localStorage.setItem("talde_session_token", savedToken); } catch {}
-        try { localStorage.removeItem("talde_saved_session_token"); } catch {}
-      }
-      const savedCoach = localStorage.getItem("talde_saved_token_coach") || localStorage.getItem("talde_token_coach");
-      if (savedCoach) {
-        try { localStorage.setItem("talde_token_coach", savedCoach); } catch {}
-        try { localStorage.removeItem("talde_saved_token_coach"); } catch {}
-      }
-      const savedParent = localStorage.getItem("talde_saved_token_parent") || localStorage.getItem("talde_token_parent");
-      if (savedParent) {
-        try { localStorage.setItem("talde_token_parent", savedParent); } catch {}
-        try { localStorage.removeItem("talde_saved_token_parent"); } catch {}
-      }
-
       this.appMode = "BETA_NORMAL";
       try { localStorage.setItem("talde_app_mode", "BETA_NORMAL"); } catch {}
+      try {
+        localStorage.removeItem("talde_saved_session_token");
+        localStorage.removeItem("talde_saved_token_coach");
+        localStorage.removeItem("talde_saved_token_parent");
+      } catch {}
+
+      const demoToolbar = document.getElementById("demo-toolbar");
+      const demoStepCard = document.getElementById("demo-step-card");
+      if (demoToolbar) demoToolbar.classList.add("hidden");
+      if (demoStepCard) demoStepCard.classList.add("hidden");
       document.getElementById("demo-mode-badge")?.classList.add("hidden");
       this.applyCleanUI();
 
@@ -1448,6 +1419,13 @@ export class TeamAppState {
         }
         if (localStorage.getItem("talde_token_parent")) {
           this.tokens.parent = localStorage.getItem("talde_token_parent");
+        }
+        this.currentSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        if (this.contextCoordinator) {
+          this.contextCoordinator.initContext(this.currentSessionId, this.appMode);
+        }
+        if (this.sessionManager) {
+          this.sessionManager.setSession(this.currentSessionId, null, this.appMode);
         }
       }
     }
@@ -2468,9 +2446,12 @@ export class TeamAppState {
       else if (tab === "agenda") this.goToScreen("v2_02_coach_agenda", "agenda");
       else if (tab === "equipo" || tab === "hijos") this.goToScreen("v2_04_player_detail", "hijos");
       else if (tab === "avisos") this.goToScreen("screen_k_notices", "avisos");
-    } else {
-      this.switchMembership("indautxu_inf_a");
-      this.goToTab(tab);
+    } else if (this.appMode === "DEMO") {
+      this.switchMembership("indautxu_inf_a").then(() => {
+        if (this.currentRole === "coach") {
+          this.goToTab(tab);
+        }
+      });
     }
   }
 
@@ -2625,7 +2606,7 @@ export class TeamAppState {
     if (titleEl) titleEl.textContent = step.title;
     if (descEl) descEl.textContent = step.desc;
     if (actionEl) actionEl.textContent = step.actionHint;
-    if (progressEl) {
+    if (progressEl && progressEl.style) {
       const pct = Math.round(((this.currentStepIndex + 1) / GUIDED_STEPS.length) * 100);
       progressEl.style.width = `${pct}%`;
     }

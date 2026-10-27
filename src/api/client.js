@@ -1,6 +1,12 @@
 import { DomainError } from "./errors.js";
 import { API_BASE_URL } from "./config.js";
 
+function findHeaderKey(headers, target) {
+  if (!headers || typeof headers !== "object") return null;
+  const targetLower = target.toLowerCase();
+  return Object.keys(headers).find(k => k.toLowerCase() === targetLower) || null;
+}
+
 export class ApiClient {
   constructor(baseUrl = API_BASE_URL) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
@@ -11,9 +17,6 @@ export class ApiClient {
 
   setAppMode(mode) {
     this.appMode = mode || "BETA_NORMAL";
-    if (this.appMode === "DEMO") {
-      this.token = null;
-    }
   }
 
   getAppMode() {
@@ -21,10 +24,6 @@ export class ApiClient {
   }
 
   setToken(token) {
-    if (this.appMode === "DEMO") {
-      this.token = null;
-      return;
-    }
     this.token = token;
   }
 
@@ -41,57 +40,34 @@ export class ApiClient {
   }
 
   async request(path, options = {}) {
-    const isDemo = this.appMode === "DEMO" || options.scope?.mode === "DEMO" || options.appMode === "DEMO";
-
-    // Strict DEMO mode isolation:
-    if (isDemo) {
-      if (options.headers) {
-        delete options.headers["Authorization"];
-      }
-
-      // Check simulation operations: local deterministic simulation without backend requests
-      let parsedBody = null;
-      if (options.body) {
-        try {
-          parsedBody = typeof options.body === "string" ? JSON.parse(options.body) : options.body;
-        } catch {}
-      }
-
-      if (path.includes("/publish") && (parsedBody?.expectedVersion === 999 || options.expectedVersion === 999)) {
-        throw new DomainError("CALLUP_VERSION_CONFLICT", "La convocatoria fue modificada por otro usuario o proceso. Actualiza para ver el estado más reciente.", 409);
-      }
-      if (path.includes("/replace")) {
-        throw new DomainError("SUBSTITUTE_NO_LONGER_ELIGIBLE", "El deportista suplente ya no se encuentra disponible para esta convocatoria.", 422);
-      }
-
-      const isPublicAuth = path.includes("/auth/otp/request") || path.includes("/auth/otp/verify") || path.includes("/auth/dev/login");
-      if (!isPublicAuth) {
-        throw new DomainError("DEMO_MODE_BLOCKED", "Petición bloqueada: el modo DEMO no puede realizar peticiones autenticadas o mutaciones contra el backend productivo.", 403);
-      }
-    }
-
     const url = `${this.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
     const headers = {
       ...(options.headers || {})
     };
 
-    if (isDemo) {
-      delete headers["Authorization"];
-    } else if (this.token && !headers["Authorization"]) {
+    const existingAuthKey = findHeaderKey(headers, "authorization");
+    if (this.token && !existingAuthKey) {
       headers["Authorization"] = `Bearer ${this.token}`;
     }
 
-    if (options.body && !headers["Content-Type"]) {
+    const existingContentType = findHeaderKey(headers, "content-type");
+    if (options.body && !existingContentType) {
       headers["Content-Type"] = "application/json";
     }
 
-    if (options.idempotencyKey) {
+    const existingIdempotency = findHeaderKey(headers, "idempotency-key");
+    if (options.idempotencyKey && !existingIdempotency) {
       headers["Idempotency-Key"] = options.idempotencyKey;
     }
 
+    const activeAuthKey = findHeaderKey(headers, "authorization");
+    const dispatchToken = activeAuthKey ? headers[activeAuthKey].replace(/^Bearer\s+/i, "") : (this.token || null);
     const dispatchSessionId = options.scope?.sessionId || options.sessionId || options.sessionContext?.sessionId || this.sessionContext?.sessionId || null;
     const dispatchCredentialEpoch = options.scope?.credentialEpoch ?? options.credentialEpoch ?? options.sessionContext?.credentialEpoch ?? this.sessionContext?.credentialEpoch ?? null;
-    const dispatchToken = headers["Authorization"] ? headers["Authorization"].replace(/^Bearer\s+/i, "") : (this.token || null);
+
+    const cleanPath = (path.split("?")[0] || "").replace(/\/+$/, "");
+    const publicAuthPaths = new Set(["/auth/otp/request", "/auth/otp/verify"]);
+    const isPublicAuth = publicAuthPaths.has(cleanPath);
 
     const fetchOptions = {
       method: options.method || "GET",
@@ -135,8 +111,7 @@ export class ApiClient {
       const message = errPayload.message || (typeof data === "string" ? data : response.statusText);
       const details = errPayload.issues || data;
       const err = new DomainError(code, message, response.status, details);
-      const isOtpAuthEndpoint = path.includes("/auth/otp/verify") || path.includes("/auth/otp/request") || path.includes("/auth/dev/login");
-      err.wasAuthenticated = !isOtpAuthEndpoint && Boolean(headers["Authorization"]);
+      err.wasAuthenticated = !isPublicAuth && Boolean(activeAuthKey && headers[activeAuthKey]);
       err.path = path;
       err.requestToken = dispatchToken;
       err.requestSessionId = dispatchSessionId;

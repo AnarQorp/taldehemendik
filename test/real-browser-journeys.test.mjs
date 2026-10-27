@@ -70,7 +70,9 @@ test("Real Browser Verification: Complete Coach and Family Journeys on Chrome 15
       contentType = "text/html; charset=utf-8";
     } else {
       filePath = path.join(projectRoot, url.pathname.replace(/^\//, ""));
-      if (url.pathname.endsWith(".js") || url.pathname.endsWith(".mjs")) {
+      if (url.pathname.endsWith(".html")) {
+        contentType = "text/html; charset=utf-8";
+      } else if (url.pathname.endsWith(".js") || url.pathname.endsWith(".mjs")) {
         contentType = "application/javascript; charset=utf-8";
       } else if (url.pathname.endsWith(".css")) {
         contentType = "text/css; charset=utf-8";
@@ -100,7 +102,7 @@ test("Real Browser Verification: Complete Coach and Family Journeys on Chrome 15
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const serverPort = server.address().port;
-  const baseUrl = `http://127.0.0.1:${serverPort}/?demo=1&role=coach`;
+  const baseUrl = `http://127.0.0.1:${serverPort}/demo.html?demo=1&role=coach`;
 
   // 2. Launch Google Chrome headless with CDP enabled
   const chromePort = 9224;

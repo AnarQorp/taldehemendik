@@ -70,7 +70,9 @@ test("Responsive Viewports & Simulation Decoupling on Chrome CDP (360px, 390px, 
       contentType = "text/html; charset=utf-8";
     } else {
       filePath = path.join(projectRoot, url.pathname.replace(/^\//, ""));
-      if (url.pathname.endsWith(".js") || url.pathname.endsWith(".mjs")) {
+      if (url.pathname.endsWith(".html")) {
+        contentType = "text/html; charset=utf-8";
+      } else if (url.pathname.endsWith(".js") || url.pathname.endsWith(".mjs")) {
         contentType = "application/javascript; charset=utf-8";
       } else if (url.pathname.endsWith(".css")) {
         contentType = "text/css; charset=utf-8";
@@ -154,11 +156,11 @@ test("Responsive Viewports & Simulation Decoupling on Chrome CDP (360px, 390px, 
     const appMode = await cdp.eval("window.teamApp.appMode");
     assert.equal(appMode, "BETA_NORMAL", "Production entry must default strictly to BETA_NORMAL mode");
 
-    const demoToolsHidden = await cdp.eval("document.getElementById('demo-tools-wrapper')?.classList.contains('hidden')");
-    assert.equal(demoToolsHidden, true, "#demo-tools-wrapper must be hidden in production normal access");
+    const demoToolsAbsentOrHidden = await cdp.eval("!document.getElementById('demo-tools-wrapper') || document.getElementById('demo-tools-wrapper').classList.contains('hidden')");
+    assert.equal(demoToolsAbsentOrHidden, true, "#demo-tools-wrapper must be absent or hidden in production normal access");
 
-    const demoToolbarHidden = await cdp.eval("document.getElementById('demo-toolbar')?.classList.contains('hidden')");
-    assert.equal(demoToolbarHidden, true, "#demo-toolbar must be hidden in production normal access");
+    const demoToolbarAbsentOrHidden = await cdp.eval("!document.getElementById('demo-toolbar') || document.getElementById('demo-toolbar').classList.contains('hidden')");
+    assert.equal(demoToolbarAbsentOrHidden, true, "#demo-toolbar must be absent or hidden in production normal access");
 
     const hasPhoneMockupWrapper = await cdp.eval("Boolean(document.querySelector('.mockup-wrapper'))");
     assert.equal(hasPhoneMockupWrapper, false, "Phone simulator wrapper .mockup-wrapper must be completely removed");
@@ -178,7 +180,7 @@ test("Responsive Viewports & Simulation Decoupling on Chrome CDP (360px, 390px, 
       { name: "desktop_1920", width: 1920, height: 1080, isMobile: false }
     ];
 
-    const demoCoachUrl = `http://127.0.0.1:${serverPort}/?demo=1&role=coach`;
+    const demoCoachUrl = `http://127.0.0.1:${serverPort}/demo.html?demo=1&role=coach`;
     await cdp.send("Page.navigate", { url: demoCoachUrl });
     await new Promise((resolve) => {
       const interval = setInterval(() => {

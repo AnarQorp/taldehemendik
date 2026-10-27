@@ -226,9 +226,69 @@ test('6. ApiClient strict route validation: query parameters cannot bypass authe
 
 test('7. Deployable packaging verification: demo.html and dev artifacts are excluded from production tarball list', () => {
   const prodFrontendFiles = ['index.html', 'app.js', 'src'];
-  const excludedFiles = ['demo.html', 'test', 'node_modules', 'package.json', '.git'];
+  const excludedFiles = ['demo.html', 'demo.js', 'test', 'node_modules', 'package.json', '.git'];
 
   for (const excluded of excludedFiles) {
     assert.equal(prodFrontendFiles.includes(excluded), false, `${excluded} must be strictly excluded from production bundle`);
   }
 });
+
+test('8. RC9 Blocker Check: api.dev is completely eliminated and src/api/dev.js does NOT exist', async () => {
+  const { api, createApi } = await import('../src/api/index.js');
+  const freshApi = createApi();
+
+  assert.equal(api.dev, undefined, 'api.dev must be strictly undefined in production api');
+  assert.equal(freshApi.dev, undefined, 'createApi().dev must be strictly undefined in production createApi');
+  assert.equal(fs.existsSync(path.join(rootDir, 'src/api/dev.js')), false, 'src/api/dev.js must not exist in filesystem');
+});
+
+test('9. RC9 Blocker Check: index.html contains ZERO trace of reset modal, reset beta card, or dev endpoints', () => {
+  const indexHtml = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf-8');
+
+  assert.equal(indexHtml.includes('id="reset-beta-modal"'), false, 'index.html must not contain reset-beta-modal');
+  assert.equal(indexHtml.includes('confirmResetBeta()'), false, 'index.html must not contain confirmResetBeta()');
+  assert.equal(indexHtml.includes('executeResetBeta()'), false, 'index.html must not contain executeResetBeta()');
+  assert.equal(indexHtml.includes('cancelResetBeta()'), false, 'index.html must not contain cancelResetBeta()');
+  assert.equal(indexHtml.includes('Reiniciar entorno beta'), false, 'index.html must not contain "Reiniciar entorno beta" card');
+  assert.equal(indexHtml.includes('/v1/dev/empty'), false, 'index.html must not reference /v1/dev/empty');
+  assert.equal(indexHtml.includes('/v1/dev/reset'), false, 'index.html must not reference /v1/dev/reset');
+});
+
+test('10. RC9 Blocker Check: app.js contains ZERO simulation or dev reset methods on TeamAppState prototype', async () => {
+  const { TeamAppState } = await import('../app.js');
+  const proto = TeamAppState.prototype;
+
+  assert.equal(typeof proto.executeResetBeta, 'undefined', 'executeResetBeta must not exist on TeamAppState');
+  assert.equal(typeof proto.confirmResetBeta, 'undefined', 'confirmResetBeta must not exist on TeamAppState');
+  assert.equal(typeof proto.cancelResetBeta, 'undefined', 'cancelResetBeta must not exist on TeamAppState');
+  assert.equal(typeof proto.resetBackendDataset, 'undefined', 'resetBackendDataset must not exist on TeamAppState');
+  assert.equal(typeof proto.triggerTestConflictVersion, 'undefined', 'triggerTestConflictVersion must not exist on TeamAppState');
+  assert.equal(typeof proto.triggerTestConflictSubstitute, 'undefined', 'triggerTestConflictSubstitute must not exist on TeamAppState');
+  assert.equal(typeof proto.toggleDemoTools, 'undefined', 'toggleDemoTools must not exist on TeamAppState');
+  assert.equal(typeof proto.startDemoMode, 'undefined', 'startDemoMode must not exist on TeamAppState');
+  assert.equal(typeof proto.exitDemo, 'undefined', 'exitDemo must not exist on TeamAppState');
+  assert.equal(typeof proto.applyDemoUI, 'undefined', 'applyDemoUI must not exist on TeamAppState');
+  assert.equal(typeof proto.resetDemo, 'undefined', 'resetDemo must not exist on TeamAppState');
+
+  // Verify app.js content has zero occurrences of /v1/dev/ or api.dev
+  const appJs = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf-8');
+  assert.equal(appJs.includes('api.dev'), false, 'app.js must not reference api.dev');
+  assert.equal(appJs.includes('/dev/empty'), false, 'app.js must not call /dev/empty');
+  assert.equal(appJs.includes('/dev/reset'), false, 'app.js must not call /dev/reset');
+  assert.equal(appJs.includes('emptyDatabase'), false, 'app.js must not reference emptyDatabase');
+});
+
+test('11. RC9 Dev Support: demo.js cleanly equips dev simulation methods for local testing in demo.html', async () => {
+  assert.equal(fs.existsSync(path.join(rootDir, 'demo.js')), true, 'demo.js must exist for local developer testing');
+  const { attachDemoTools } = await import('../demo.js');
+
+  class TestApp {}
+  attachDemoTools(TestApp);
+
+  assert.equal(typeof TestApp.prototype.startDemoMode, 'function', 'demo.js attaches startDemoMode');
+  assert.equal(typeof TestApp.prototype.triggerTestConflictVersion, 'function', 'demo.js attaches triggerTestConflictVersion');
+  assert.equal(typeof TestApp.prototype.triggerTestConflictSubstitute, 'function', 'demo.js attaches triggerTestConflictSubstitute');
+  assert.equal(typeof TestApp.prototype.toggleDemoTools, 'function', 'demo.js attaches toggleDemoTools');
+  assert.equal(typeof TestApp.prototype.executeResetBeta, 'function', 'demo.js attaches executeResetBeta');
+});
+

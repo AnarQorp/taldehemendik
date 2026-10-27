@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createApi, DEMO_CONFIG, API_BASE_URL } from "../src/api/index.js";
+import { DevService } from "./helpers/dev-service.js";
 
 const api = createApi(API_BASE_URL);
+const devService = new DevService(api.client);
 
 test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replacement", async () => {
   // 1. Reset database to clean initial state
-  const resetRes = await api.dev.resetDataset();
+  const resetRes = await devService.resetDataset();
   assert.equal(resetRes.mode, "DEMO");
   assert.equal(resetRes.joinCode, "INDA16");
 
@@ -157,7 +159,7 @@ test("Complete Operational Flow E2E: Mikel + Elena + Torneo Indautxu + Replaceme
 
 test("Guardian Security Policy: GUARDIAN cannot create, edit, cancel, or complete events", async () => {
   // Ensure Indautxu demo dataset
-  await api.dev.resetDataset();
+  await devService.resetDataset();
 
   // Elena logs in as GUARDIAN
   const guardianAuth = await api.auth.loginDev(DEMO_CONFIG.GUARDIAN_EMAIL, "Elena Gómez");

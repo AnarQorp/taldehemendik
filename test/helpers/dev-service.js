@@ -1,3 +1,7 @@
+/**
+ * DevService - Helper for local development, E2E fixtures, and simulation.
+ * STRICTLY EXCLUDED FROM PRODUCTION ARTIFACTS.
+ */
 export class DevService {
   constructor(client) {
     this.client = client;

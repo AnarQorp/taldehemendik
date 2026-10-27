@@ -108,6 +108,7 @@ globalThis.setInterval = fn => {
 globalThis.clearInterval = id => timers.delete(id);
 
 const { TeamAppState } = await import(path.join(projectRoot, 'app.js'));
+await import(path.join(projectRoot, 'demo.js'));
 const { api } = await import(path.join(projectRoot, 'src/api/index.js'));
 const { DomainError } = await import(path.join(projectRoot, 'src/api/errors.js'));
 

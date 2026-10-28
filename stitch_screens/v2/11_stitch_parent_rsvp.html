@@ -200,7 +200,7 @@
 </div>
 </div>
 <!-- Baja Comunicada Status Pill -->
-<div class="inline-flex items-center gap-1.5 bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-container/30 px-2.5 py-1 rounded-full shrink-0">
+<div id="parent-status-badge" class="inline-flex items-center gap-1.5 bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-container/30 px-2.5 py-1 rounded-full shrink-0">
 <span class="w-2 h-2 rounded-full bg-tertiary-container"></span>
 <span class="text-label-sm font-label-sm font-bold tracking-tight">Baja Comunicada</span>
 </div>
@@ -288,22 +288,25 @@
 <!-- 3 Large Ergonomic Touch Targets (52px minimum height) -->
 <div aria-label="Disponibilidad de Ibai" class="space-y-2 pt-1" id="rsvp-options" role="radiogroup">
 <!-- Option 1: SÍ, ASISTIRÁ -->
-<button aria-checked="false" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-outline-variant/50 hover:border-secondary flex items-center justify-between bg-surface-container-lowest active:translate-y-px transition-all duration-100 ease-out group text-left" role="radio" type="button">
+<button id="rsvp-opt-yes" onclick="selectOption('yes')" aria-checked="false" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-outline-variant/50 hover:border-secondary flex items-center justify-between bg-surface-container-lowest active:translate-y-px transition-all duration-100 ease-out group text-left cursor-pointer" role="radio" type="button">
 <div class="flex items-center gap-3">
 <div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-secondary group-hover:bg-secondary-fixed transition-colors">
 <span class="material-symbols-outlined text-[20px]">check_circle</span>
 </div>
 <div>
+<div class="flex items-center gap-2">
 <span class="text-label-lg font-label-lg font-bold text-on-surface block tracking-wide">SÍ, ASISTIRÁ</span>
+<span class="selected-pill hidden text-label-sm font-label-sm bg-secondary text-white px-1.5 py-0.2 rounded font-bold">Seleccionado</span>
+</div>
 <span class="text-label-sm font-label-sm text-on-surface-variant font-normal">Puntual a las 08:45 h en vestuarios</span>
 </div>
 </div>
-<div class="w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center">
+<div class="radio-indicator w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center">
 <span class="w-2.5 h-2.5 rounded-full bg-transparent"></span>
 </div>
 </button>
 <!-- Option 2 (ACTIVE / HIGHLIGHTED): NO PUEDE ASISTIR (Indautxu Crimson) -->
-<button aria-checked="true" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-tertiary-container bg-tertiary-fixed/30 flex items-center justify-between active:translate-y-px transition-all duration-100 ease-out text-left shadow-sm ring-1 ring-tertiary-container/30" role="radio" type="button">
+<button id="rsvp-opt-no" onclick="selectOption('no')" aria-checked="true" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-tertiary-container bg-tertiary-fixed/30 flex items-center justify-between active:translate-y-px transition-all duration-100 ease-out text-left shadow-sm ring-1 ring-tertiary-container/30 cursor-pointer" role="radio" type="button">
 <div class="flex items-center gap-3">
 <div class="w-8 h-8 rounded-lg bg-tertiary-container text-on-tertiary flex items-center justify-center shadow-sm">
 <span class="material-symbols-outlined text-[20px] fill-icon">cancel</span>
@@ -311,27 +314,30 @@
 <div>
 <div class="flex items-center gap-2">
 <span class="text-label-lg font-label-lg font-extrabold text-tertiary-container block tracking-wide">NO PUEDE ASISTIR</span>
-<span class="text-label-sm font-label-sm bg-tertiary-container text-on-tertiary px-1.5 py-0.2 rounded font-bold">Seleccionado</span>
+<span class="selected-pill text-label-sm font-label-sm bg-tertiary-container text-on-tertiary px-1.5 py-0.2 rounded font-bold">Seleccionado</span>
 </div>
 <span class="text-label-sm font-label-sm text-on-tertiary-fixed-variant font-medium">Baja médica / Indisposición comunicada</span>
 </div>
 </div>
-<div class="w-5 h-5 rounded-full border-2 border-tertiary-container bg-tertiary-container flex items-center justify-center text-on-tertiary">
+<div class="radio-indicator w-5 h-5 rounded-full border-2 border-tertiary-container bg-tertiary-container flex items-center justify-center text-on-tertiary">
 <span class="material-symbols-outlined text-[14px] font-bold">check</span>
 </div>
 </button>
 <!-- Option 3: TODAVÍA NO LO SÉ -->
-<button aria-checked="false" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-outline-variant/50 hover:border-outline flex items-center justify-between bg-surface-container-lowest active:translate-y-px transition-all duration-100 ease-out group text-left" role="radio" type="button">
+<button id="rsvp-opt-maybe" onclick="selectOption('maybe')" aria-checked="false" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-outline-variant/50 hover:border-outline flex items-center justify-between bg-surface-container-lowest active:translate-y-px transition-all duration-100 ease-out group text-left cursor-pointer" role="radio" type="button">
 <div class="flex items-center gap-3">
 <div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant group-hover:bg-surface-container-high transition-colors">
 <span class="material-symbols-outlined text-[20px]">help</span>
 </div>
 <div>
+<div class="flex items-center gap-2">
 <span class="text-label-lg font-label-lg font-bold text-on-surface block tracking-wide">TODAVÍA NO LO SÉ</span>
+<span class="selected-pill hidden text-label-sm font-label-sm bg-amber-600 text-white px-1.5 py-0.2 rounded font-bold">Seleccionado</span>
+</div>
 <span class="text-label-sm font-label-sm text-on-surface-variant font-normal">Avisaré antes del viernes a las 20:00 h</span>
 </div>
 </div>
-<div class="w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center">
+<div class="radio-indicator w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center">
 <span class="w-2.5 h-2.5 rounded-full bg-transparent"></span>
 </div>
 </button>
@@ -359,12 +365,12 @@
 </section>
 <!-- 6. Instant Action Button & Sync Feedback -->
 <section class="pt-1 pb-4 space-y-2">
-<button class="w-full min-h-[52px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg font-bold rounded-xl shadow-md flex items-center justify-center gap-2 active:translate-y-px transition-all duration-100 ease-out" type="button">
+<button id="save-btn" onclick="saveRsvp()" class="w-full min-h-[52px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg font-bold rounded-xl shadow-md flex items-center justify-center gap-2 active:scale-[0.98] transition-all duration-100 ease-out cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[22px] fill-icon">save</span>
 <span>Guardar Disponibilidad</span>
 </button>
 <!-- Status Feedback Pill -->
-<div class="flex items-center justify-center gap-1.5 text-center text-secondary py-1">
+<div id="sync-feedback" class="flex items-center justify-center gap-1.5 text-center text-secondary py-1">
 <span class="material-symbols-outlined text-[16px] fill-icon">sync_saved_locally</span>
 <span class="text-label-sm font-label-sm font-bold tracking-tight">
             Respuesta sincronizada en tiempo real con el entrenador
@@ -374,7 +380,7 @@
 </main>
 <!-- 7. Bottom Navigation Bar (Simplified family tabs) -->
 <!-- Compliant with Shared Components JSON (style_bg_color, style_shell_layout, style_active_navigation) -->
-<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-gutter-mobile py-space-xs min-h-[56px] max-w-lg mx-auto bg-surface-container-lowest shadow-md">
+<nav class="fixed bottom-0 left-0 right-0 w-full z-50 flex justify-around items-center px-gutter-mobile py-space-xs min-h-[56px] max-w-lg mx-auto bg-surface-container-lowest shadow-md">
 <!-- Tab 1: Mi Hijo (ACTIVE) -->
 <a aria-current="page" class="flex flex-col items-center justify-center bg-primary-fixed text-on-primary-fixed rounded-xl px-space-md py-space-xs active:translate-y-px transition-transform duration-100 ease-out" href="#mi-hijo">
 <span class="material-symbols-outlined text-[22px] fill-icon">sports_soccer</span>
@@ -395,4 +401,102 @@
 </a>
 </nav>
 </div>
+<script>
+  let currentSelection = 'no';
+
+  function selectOption(type) {
+    currentSelection = type;
+    const btnYes = document.getElementById('rsvp-opt-yes');
+    const btnNo = document.getElementById('rsvp-opt-no');
+    const btnMaybe = document.getElementById('rsvp-opt-maybe');
+    const statusBadge = document.getElementById('parent-status-badge');
+
+    [btnYes, btnNo, btnMaybe].forEach(btn => {
+      if (!btn) return;
+      btn.setAttribute('aria-checked', 'false');
+      btn.className = "w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-outline-variant/50 hover:border-outline flex items-center justify-between bg-surface-container-lowest active:translate-y-px transition-all duration-100 ease-out group text-left cursor-pointer";
+      const radio = btn.querySelector('.radio-indicator');
+      if (radio) {
+        radio.className = "radio-indicator w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center";
+        radio.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-transparent"></span>`;
+      }
+      const selBadge = btn.querySelector('.selected-pill');
+      if (selBadge) selBadge.classList.add('hidden');
+    });
+
+    if (type === 'yes') {
+      if (btnYes) {
+        btnYes.setAttribute('aria-checked', 'true');
+        btnYes.className = "w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-secondary bg-secondary-fixed/30 flex items-center justify-between active:translate-y-px transition-all duration-100 ease-out text-left shadow-sm ring-1 ring-secondary/30 cursor-pointer";
+        const radio = btnYes.querySelector('.radio-indicator');
+        if (radio) {
+          radio.className = "radio-indicator w-5 h-5 rounded-full border-2 border-secondary bg-secondary flex items-center justify-center text-white";
+          radio.innerHTML = `<span class="material-symbols-outlined text-[14px] font-bold">check</span>`;
+        }
+        const selBadge = btnYes.querySelector('.selected-pill');
+        if (selBadge) selBadge.classList.remove('hidden');
+      }
+      if (statusBadge) {
+        statusBadge.className = "inline-flex items-center gap-1.5 bg-secondary-fixed text-on-secondary-fixed border border-secondary/30 px-2.5 py-1 rounded-full shrink-0";
+        statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-secondary"></span><span class="text-label-sm font-label-sm font-bold tracking-tight">Asistencia Confirmada</span>`;
+      }
+      if (window.teamApp && window.teamApp.selectRsvpOption) window.teamApp.selectRsvpOption('SI');
+    } else if (type === 'no') {
+      if (btnNo) {
+        btnNo.setAttribute('aria-checked', 'true');
+        btnNo.className = "w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-tertiary-container bg-tertiary-fixed/30 flex items-center justify-between active:translate-y-px transition-all duration-100 ease-out text-left shadow-sm ring-1 ring-tertiary-container/30 cursor-pointer";
+        const radio = btnNo.querySelector('.radio-indicator');
+        if (radio) {
+          radio.className = "radio-indicator w-5 h-5 rounded-full border-2 border-tertiary-container bg-tertiary-container flex items-center justify-center text-on-tertiary";
+          radio.innerHTML = `<span class="material-symbols-outlined text-[14px] font-bold">check</span>`;
+        }
+        const selBadge = btnNo.querySelector('.selected-pill');
+        if (selBadge) selBadge.classList.remove('hidden');
+      }
+      if (statusBadge) {
+        statusBadge.className = "inline-flex items-center gap-1.5 bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-container/30 px-2.5 py-1 rounded-full shrink-0";
+        statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-tertiary-container"></span><span class="text-label-sm font-label-sm font-bold tracking-tight">Baja Comunicada</span>`;
+      }
+      if (window.teamApp && window.teamApp.selectRsvpOption) window.teamApp.selectRsvpOption('NO');
+    } else if (type === 'maybe') {
+      if (btnMaybe) {
+        btnMaybe.setAttribute('aria-checked', 'true');
+        btnMaybe.className = "w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-amber-500 bg-amber-50 flex items-center justify-between active:translate-y-px transition-all duration-100 ease-out text-left shadow-sm ring-1 ring-amber-500/30 cursor-pointer";
+        const radio = btnMaybe.querySelector('.radio-indicator');
+        if (radio) {
+          radio.className = "radio-indicator w-5 h-5 rounded-full border-2 border-amber-500 bg-amber-500 flex items-center justify-center text-white";
+          radio.innerHTML = `<span class="material-symbols-outlined text-[14px] font-bold">check</span>`;
+        }
+        const selBadge = btnMaybe.querySelector('.selected-pill');
+        if (selBadge) selBadge.classList.remove('hidden');
+      }
+      if (statusBadge) {
+        statusBadge.className = "inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-full shrink-0";
+        statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-label-sm font-label-sm font-bold tracking-tight">Pendiente Confirmar</span>`;
+      }
+      if (window.teamApp && window.teamApp.selectRsvpOption) window.teamApp.selectRsvpOption('DUDA');
+    }
+  }
+
+  function saveRsvp() {
+    const btn = document.getElementById('save-btn');
+    const feedback = document.getElementById('sync-feedback');
+    if (!btn) return;
+    const originalText = btn.innerHTML;
+    btn.classList.remove('bg-primary-container');
+    btn.classList.add('bg-secondary');
+    btn.innerHTML = `<span class="material-symbols-outlined text-[22px] fill-icon">done_all</span><span>¡Disponibilidad Guardada!</span>`;
+    if (feedback) {
+      feedback.innerHTML = `<span class="material-symbols-outlined text-[16px] text-secondary">check_circle</span><span class="text-label-sm font-label-sm font-bold text-secondary">Guardado y sincronizado con éxito</span>`;
+    }
+    if (window.teamApp && window.teamApp.saveParentRsvp) {
+      window.teamApp.saveParentRsvp();
+    }
+    setTimeout(() => {
+      btn.classList.remove('bg-secondary');
+      btn.classList.add('bg-primary-container');
+      btn.innerHTML = originalText;
+    }, 2000);
+  }
+</script>
 </body></html>

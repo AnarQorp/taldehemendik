@@ -4924,6 +4924,24 @@ export class TeamAppState {
         const rec = this.resourceStore.reconcileAvailability(key, incomingEntity);
         const stored = this.resourceStore.getAvailability(key);
         this.live.parentAvailability = stored || null;
+        if (stored?.status) {
+          const typeMap = {
+            "CAN_ATTEND": "yes",
+            "CANNOT_ATTEND": "no",
+            "UNSURE": "maybe"
+          };
+          const choiceMap = {
+            "CAN_ATTEND": "SI",
+            "CANNOT_ATTEND": "NO",
+            "UNSURE": "DUDA"
+          };
+          if (choiceMap[stored.status]) {
+            this.parentRsvpChoice = choiceMap[stored.status];
+          }
+          if (typeof window !== "undefined" && typeof window.updateRsvpSelection === "function" && typeMap[stored.status]) {
+            window.updateRsvpSelection(typeMap[stored.status]);
+          }
+        }
       } else {
         this.live.parentAvailability = null;
       }

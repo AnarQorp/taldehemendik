@@ -326,7 +326,7 @@
 </div>
 </div>
 <!-- Incident Confirm Button (Secondary Tonal CTA) -->
-<button class="mt-4 w-full h-[46px] bg-primary-fixed hover:bg-primary-fixed-dim text-on-primary-fixed border border-primary/30 active:translate-y-px transition-all rounded-xl font-label-md font-bold flex items-center justify-center gap-2 shadow-xs cursor-pointer" type="button">
+<button id="btn-confirm-substitution" onclick="confirmSub()" class="mt-4 w-full h-[46px] bg-primary-fixed hover:bg-primary-fixed-dim text-on-primary-fixed border border-primary/30 active:translate-y-px transition-all rounded-xl font-label-md font-bold flex items-center justify-center gap-2 shadow-xs cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[18px]">check_circle</span>
 <span>Confirmar sustitución de Ane Mintegi (#16)</span>
 </button>
@@ -559,14 +559,14 @@
 <div class="fixed bottom-0 left-0 right-0 z-50 bg-surface-container-lowest/95 backdrop-blur-md shadow-2xl py-3 px-margin-mobile border-t border-outline-variant/20">
 <div class="max-w-lg mx-auto flex flex-col items-center">
 <!-- 52px Touch-Ergonomic Primary Action Button -->
-<button class="w-full h-[52px] bg-primary-container hover:bg-primary active:translate-y-px transition-all rounded-2xl text-on-primary flex items-center justify-center gap-2.5 shadow-md" type="button">
+<button id="btn-notify-callup" onclick="notifyCallup()" class="w-full h-[52px] bg-primary-container hover:bg-primary active:translate-y-px transition-all rounded-2xl text-on-primary flex items-center justify-center gap-2.5 shadow-md cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[22px]">send</span>
 <span class="font-label-lg text-label-lg font-extrabold tracking-wide">
             Notificar Convocatoria Definitiva a Familias
           </span>
 </button>
 <!-- Operational Subtext -->
-<p class="font-label-sm text-label-sm text-on-surface-variant font-medium text-center mt-2 flex items-center justify-center gap-1.5">
+<p id="notify-callup-subtext" class="font-label-sm text-label-sm text-on-surface-variant font-medium text-center mt-2 flex items-center justify-center gap-1.5">
 <span class="material-symbols-outlined text-[14px] text-secondary">check_circle</span>
 <span>Se enviará notificación push y WhatsApp a las 12 familias</span>
 </p>
@@ -589,5 +589,32 @@
         });
       });
     });
+
+    function confirmSub() {
+      const btn = document.getElementById('btn-confirm-substitution');
+      if (btn) {
+        btn.innerHTML = `<span class="material-symbols-outlined text-[18px]">verified</span><span>¡Sustitución confirmada de Ane Mintegi!</span>`;
+        btn.className = "mt-4 w-full h-[46px] bg-secondary hover:bg-emerald-700 text-white border border-secondary active:translate-y-px transition-all rounded-xl font-label-md font-bold flex items-center justify-center gap-2 shadow-xs cursor-pointer";
+      }
+      if (window.teamApp && window.teamApp.confirmSubstitution) {
+        window.teamApp.confirmSubstitution();
+      }
+    }
+
+    function notifyCallup() {
+      const btn = document.getElementById('btn-notify-callup');
+      const subtext = document.getElementById('notify-callup-subtext');
+      if (btn) {
+        btn.innerHTML = `<span class="material-symbols-outlined text-[20px]">done_all</span><span>¡Convocatoria Notificada con Éxito!</span>`;
+        btn.classList.remove('bg-primary-container');
+        btn.classList.add('bg-secondary');
+      }
+      if (subtext) {
+        subtext.innerHTML = `<span class="material-symbols-outlined text-[14px] text-secondary">verified</span><span class="text-secondary font-bold">12 notificaciones entregadas correctamente</span>`;
+      }
+      if (window.teamApp && window.teamApp.prepareAndPublishCallup) {
+        window.teamApp.prepareAndPublishCallup();
+      }
+    }
   </script>
 </body></html>

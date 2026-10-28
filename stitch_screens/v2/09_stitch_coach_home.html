@@ -222,7 +222,7 @@
 </div>
 </div>
 <div class="flex justify-end">
-<button class="h-11 px-4 bg-surface-container text-on-surface hover:bg-surface-container-high rounded-xl text-label-md font-label-md font-bold flex items-center gap-2 border border-outline-variant/60 shadow-xs tactile-active cursor-pointer" type="button">
+<button onclick="if(window.teamApp){teamApp.goToScreen('v2_06_event_hub_injury','agenda');}else{location.href='10_stitch_squad_incident.html';}" class="h-11 px-4 bg-surface-container text-on-surface hover:bg-surface-container-high rounded-xl text-label-md font-label-md font-bold flex items-center gap-2 border border-outline-variant/60 shadow-xs tactile-active cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[18px]" data-icon="person_search">person_search</span>
             Buscar sustituto
           </button>
@@ -329,11 +329,11 @@
 </div>
 <!-- Tactical Dual CTAs (52px ergonomic height) -->
 <div class="mt-space-md grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
-<button class="h-[52px] bg-primary-container text-on-primary rounded-xl font-label-lg font-bold flex items-center justify-center gap-2 shadow-sm tactile-active hover:bg-primary transition-colors" type="button">
+<button onclick="if(window.teamApp){teamApp.goToScreen('v2_06_event_hub_injury','agenda');}else{location.href='10_stitch_squad_incident.html';}" class="h-[52px] bg-primary-container text-on-primary rounded-xl font-label-lg font-bold flex items-center justify-center gap-2 shadow-sm tactile-active hover:bg-primary transition-colors cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="fact_check">fact_check</span>
 <span>Gestionar Convocatoria</span>
 </button>
-<button class="h-[52px] bg-surface-container-lowest text-primary border-2 border-primary/20 hover:border-primary/40 rounded-xl font-label-lg font-bold flex items-center justify-center gap-2 tactile-active transition-colors" type="button">
+<button onclick="if(window.teamApp){teamApp.goToScreen('v2_08_parent_rsvp','agenda');}else{location.href='11_stitch_parent_rsvp.html';}" class="h-[52px] bg-surface-container-lowest text-primary border-2 border-primary/20 hover:border-primary/40 rounded-xl font-label-lg font-bold flex items-center justify-center gap-2 tactile-active transition-colors cursor-pointer" type="button">
 <span class="material-symbols-outlined text-[20px]" data-icon="mail">mail</span>
 <span>Ver Respuestas RSVP</span>
 </button>
@@ -349,7 +349,7 @@
 </div>
 <div class="grid grid-cols-3 gap-space-xs">
 <!-- Action 1: Pasar Lista -->
-<button class="h-28 bg-surface-container-lowest border-2 border-secondary/30 rounded-2xl p-space-sm flex flex-col items-center justify-center text-center gap-2 shadow-sm tactile-active hover:bg-secondary-container/20 group" type="button">
+<button onclick="if(window.teamApp){teamApp.showToast('✓ Lista de asistencia guardada: 16 de 18 jugadores presentes hoy.');}else{alert('✓ Asistencia guardada: 16 de 18 presentes.');}" class="h-28 bg-surface-container-lowest border-2 border-secondary/30 rounded-2xl p-space-sm flex flex-col items-center justify-center text-center gap-2 shadow-sm tactile-active hover:bg-secondary-container/20 group cursor-pointer" type="button">
 <div class="w-12 h-12 rounded-xl bg-secondary text-on-secondary flex items-center justify-center shadow-sm">
 <span class="material-symbols-outlined text-[26px]" data-icon="checklist">checklist</span>
 </div>
@@ -358,7 +358,7 @@
           </span>
 </button>
 <!-- Action 2: Nuevo Evento -->
-<button class="h-28 bg-surface-container-lowest border border-outline-variant/40 rounded-2xl p-space-sm flex flex-col items-center justify-center text-center gap-2 shadow-sm tactile-active hover:bg-surface-container group" type="button">
+<button onclick="if(window.teamApp){teamApp.goToScreen('screen_c_create_event','agenda');}else{alert('Abriendo crear evento...');}" class="h-28 bg-surface-container-lowest border border-outline-variant/40 rounded-2xl p-space-sm flex flex-col items-center justify-center text-center gap-2 shadow-sm tactile-active hover:bg-surface-container group cursor-pointer" type="button">
 <div class="w-12 h-12 rounded-xl bg-primary-fixed text-on-primary-fixed flex items-center justify-center">
 <span class="material-symbols-outlined text-[26px]" data-icon="edit_calendar">edit_calendar</span>
 </div>
@@ -367,7 +367,7 @@
           </span>
 </button>
 <!-- Action 3: Aviso Familias -->
-<button class="h-28 bg-surface-container-lowest border border-outline-variant/40 rounded-2xl p-space-sm flex flex-col items-center justify-center text-center gap-2 shadow-sm tactile-active hover:bg-surface-container group" type="button">
+<button onclick="if(window.teamApp){teamApp.goToScreen('screen_k_notices','avisos');}else{alert('Abriendo avisos a familias...');}" class="h-28 bg-surface-container-lowest border border-outline-variant/40 rounded-2xl p-space-sm flex flex-col items-center justify-center text-center gap-2 shadow-sm tactile-active hover:bg-surface-container group cursor-pointer" type="button">
 <div class="w-12 h-12 rounded-xl bg-surface-container-high text-primary flex items-center justify-center">
 <span class="material-symbols-outlined text-[26px]" data-icon="campaign">campaign</span>
 </div>
@@ -451,7 +451,7 @@
 </main>
 <!-- ================= BOTTOM NAVIGATION BAR (Shared Component Anchor) ================= -->
 <!-- Executing Shared Component: BottomNavBar with exact classes, tokens and destination mapping -->
-<nav aria-label="Navegación principal" class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-gutter-mobile py-space-xs min-h-[56px] max-w-lg mx-auto bg-surface-container-lowest dark:bg-inverse-surface border-t border-outline-variant/30 dark:border-outline/20 shadow-md dark:shadow-none">
+<nav aria-label="Navegación principal" class="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center px-gutter-mobile py-space-xs min-h-[56px] max-w-lg mx-auto bg-surface-container-lowest dark:bg-inverse-surface border-t border-outline-variant/30 dark:border-outline/20 shadow-md dark:shadow-none">
 <!-- Destino 1: Partidos (ACTIVE TAB for Matchday & Operations Dashboard) -->
 <a aria-current="page" class="flex flex-col items-center justify-center bg-primary-fixed dark:bg-primary-container text-on-primary-fixed dark:text-on-primary-container rounded-xl px-space-md py-space-xs active:translate-y-px transition-transform duration-100 ease-out" href="#">
 <span class="material-symbols-outlined text-[22px] fill-icon" data-icon="sports_soccer" data-weight="fill">sports_soccer</span>

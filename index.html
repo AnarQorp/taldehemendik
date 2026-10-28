@@ -1228,12 +1228,14 @@
 <header class="sticky top-0 z-40 flex items-center justify-between px-margin-mobile py-space-sm w-full bg-surface-container-lowest border-b border-outline-variant/60 shadow-sm">
 <div class="flex items-center gap-3">
 <!-- S. D. Indautxu Crest Badge -->
-<div class="w-10 h-10 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-headline-sm text-headline-sm font-extrabold shadow-sm ring-2 ring-primary-fixed">
-<span class="material-symbols-outlined text-[22px]" data-icon="sports_soccer" style="font-variation-settings: 'FILL' 1;">sports_soccer</span>
+<div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary flex items-center justify-center font-display-lg text-[13px] tracking-tighter shadow-sm border border-primary/20 relative overflow-hidden shrink-0" title="Club Crest of SD Indautxu">
+  <div class="absolute inset-0 bg-gradient-to-br from-primary-container via-primary to-tertiary-container opacity-90"></div>
+  <span class="relative z-10 font-black text-on-primary tracking-wider">SDI</span>
+  <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-secondary rounded-full border-2 border-surface"></div>
 </div>
 <div>
 <span id="coach-home-team-title" class="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight block">S. D. Indautxu · Infantil A</span>
-<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+<span id="coach-home-season-label" class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
 <span class="inline-block w-2 h-2 rounded-full bg-secondary"></span>
           Temporada 2026/27
         </span>
@@ -1351,6 +1353,129 @@
     </button>
     <button onclick="teamApp.dismissOnboardingBanner()" class="h-10 px-3 bg-surface-container-high hover:bg-surface-container text-on-surface-variant rounded-xl text-xs font-semibold cursor-pointer" title="Ocultar puesta en marcha (Equipo rodado)">
       Ocultar
+    </button>
+  </div>
+</section>
+
+<!-- NEXT MATCH HERO CARD ('Próximo Partido' - Pitchside Direct) -->
+<section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm relative overflow-hidden">
+  <!-- Top Badges / Chips -->
+  <div class="flex items-center justify-between pb-2 border-b border-outline-variant/20 mb-3">
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <span class="px-2.5 py-1 rounded-lg bg-primary-fixed text-on-primary-fixed font-bold text-label-sm font-label-sm flex items-center gap-1">
+        <span class="material-symbols-outlined text-[14px]">calendar_month</span>
+        Sábado 19 Sep · 09:30 h
+      </span>
+      <span class="px-2 py-1 rounded-lg bg-surface-container text-on-surface-variant font-semibold text-label-sm font-label-sm">
+        Fútbol 11
+      </span>
+    </div>
+    <span class="text-label-sm font-label-sm font-bold text-secondary flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+      Jornada 1
+    </span>
+  </div>
+  <!-- Match Clash Presentation (No Truncation 3-Column Grid) -->
+  <div class="py-2 flex items-center justify-between border-y border-outline-variant/20 my-1">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary flex items-center justify-center font-black text-sm shrink-0">
+        SDI
+      </div>
+      <div class="min-w-0">
+        <span class="text-label-sm font-label-sm text-outline uppercase tracking-wider block">Local</span>
+        <span class="text-body-md font-bold text-on-surface truncate">Indautxu A</span>
+      </div>
+    </div>
+    <div class="flex flex-col items-center justify-center px-2 shrink-0">
+      <span class="text-headline-sm font-display-lg text-outline-variant font-extrabold italic">VS</span>
+      <span class="text-[11px] font-label-sm text-primary font-bold bg-primary-fixed/60 px-2 py-0.5 rounded-full">Oficial</span>
+    </div>
+    <div class="flex items-center gap-2.5 text-right flex-row-reverse min-w-0">
+      <div class="w-10 h-10 rounded-xl bg-surface-container-high border border-outline-variant/50 flex items-center justify-center font-black text-on-surface-variant text-sm shrink-0">
+        DBK
+      </div>
+      <div class="min-w-0">
+        <span class="text-label-sm font-label-sm text-outline uppercase tracking-wider block">Visitante</span>
+        <span class="text-body-md font-bold text-on-surface truncate">Danok Bat</span>
+      </div>
+    </div>
+  </div>
+  <!-- Match Venue (2-Line unclipped) -->
+  <div class="flex items-center gap-1.5 py-1.5 text-on-surface-variant text-body-sm">
+    <span class="material-symbols-outlined text-[18px] text-primary shrink-0">location_on</span>
+    <span class="truncate">Polideportivo Municipal Indautxu (Campo 1 · Hierba Artificial)</span>
+  </div>
+  <!-- Live Availability Radar / Multi-segment Bar with direct numbers -->
+  <div class="mt-2 pt-2 border-t border-outline-variant/20 space-y-2">
+    <div class="flex justify-between items-center text-label-sm font-label-sm">
+      <span class="text-secondary font-bold flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full bg-secondary"></span>
+        14 Convocados
+      </span>
+      <span class="text-tertiary-container font-bold flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full bg-tertiary-container"></span>
+        2 Bajas
+      </span>
+      <span class="text-outline font-medium flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+        2 Sin responder
+      </span>
+    </div>
+    <!-- Multi-segment visual bar with direct numbers -->
+    <div class="w-full h-4 bg-surface-container-high rounded-full overflow-hidden flex p-0.5 gap-0.5 text-[10px] font-black text-white text-center leading-4 shadow-inner">
+      <div class="bg-secondary h-full rounded-full transition-all flex items-center justify-center" style="width: 77.7%;" title="14 Convocados">14</div>
+      <div class="bg-tertiary-container h-full rounded-full transition-all flex items-center justify-center" style="width: 11.1%;" title="2 Bajas">2</div>
+      <div class="bg-outline-variant h-full rounded-full transition-all flex items-center justify-center text-on-surface-variant text-[9px]" style="width: 11.2%;" title="2 Pendientes">2</div>
+    </div>
+  </div>
+  <!-- Tactical Dual CTAs (52px ergonomic height) -->
+  <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <button onclick="teamApp.goToScreen('v2_06_event_hub_injury', 'agenda')" class="h-[52px] bg-primary-container text-on-primary rounded-xl font-label-lg font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] hover:bg-primary transition-colors cursor-pointer" type="button">
+      <span class="material-symbols-outlined text-[20px]">fact_check</span>
+      <span>Gestionar Convocatoria</span>
+    </button>
+    <button onclick="teamApp.goToScreen('v2_08_parent_rsvp', 'agenda')" class="h-[52px] bg-surface-container-lowest text-primary border-2 border-primary/20 hover:border-primary/40 rounded-xl font-label-lg font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-colors cursor-pointer" type="button">
+      <span class="material-symbols-outlined text-[20px]">mail</span>
+      <span>Ver Respuestas RSVP</span>
+    </button>
+  </div>
+</section>
+
+<!-- QUICK ACTION GRID (PITCH-SIDE LARGE TOUCH TARGETS) -->
+<section class="space-y-2">
+  <div class="flex items-center justify-between px-1">
+    <h2 class="text-headline-sm font-headline-sm text-on-surface font-bold">
+      Acciones de Banquillo
+    </h2>
+    <span class="text-label-sm font-label-sm text-primary font-bold">Acceso Directo</span>
+  </div>
+  <div class="grid grid-cols-3 gap-2">
+    <!-- Action 1: Pasar Lista -->
+    <button onclick="teamApp.showToast('✓ Lista de asistencia guardada: 16 de 18 jugadores presentes hoy.')" class="h-28 bg-surface-container-lowest border-2 border-secondary/30 rounded-2xl p-2.5 flex flex-col items-center justify-center text-center gap-2 shadow-sm active:scale-[0.98] hover:bg-secondary-container/20 group cursor-pointer" type="button">
+      <div class="w-12 h-12 rounded-xl bg-secondary text-on-secondary flex items-center justify-center shadow-sm">
+        <span class="material-symbols-outlined text-[26px]">checklist</span>
+      </div>
+      <span class="text-label-md font-label-md text-on-surface font-bold leading-tight group-hover:text-secondary">
+        Pasar Lista
+      </span>
+    </button>
+    <!-- Action 2: Nuevo Evento -->
+    <button onclick="teamApp.goToScreen('screen_c_create_event', 'agenda')" class="h-28 bg-surface-container-lowest border border-outline-variant/40 rounded-2xl p-2.5 flex flex-col items-center justify-center text-center gap-2 shadow-sm active:scale-[0.98] hover:bg-surface-container group cursor-pointer" type="button">
+      <div class="w-12 h-12 rounded-xl bg-primary-fixed text-on-primary-fixed flex items-center justify-center">
+        <span class="material-symbols-outlined text-[26px]">edit_calendar</span>
+      </div>
+      <span class="text-label-md font-label-md text-on-surface font-bold leading-tight group-hover:text-primary">
+        Nuevo Evento
+      </span>
+    </button>
+    <!-- Action 3: Aviso Familias -->
+    <button onclick="teamApp.goToScreen('screen_k_notices', 'avisos')" class="h-28 bg-surface-container-lowest border border-outline-variant/40 rounded-2xl p-2.5 flex flex-col items-center justify-center text-center gap-2 shadow-sm active:scale-[0.98] hover:bg-surface-container group cursor-pointer" type="button">
+      <div class="w-12 h-12 rounded-xl bg-surface-container-high text-primary flex items-center justify-center">
+        <span class="material-symbols-outlined text-[26px]">campaign</span>
+      </div>
+      <span class="text-label-md font-label-md text-on-surface font-bold leading-tight group-hover:text-primary">
+        Aviso Familias
+      </span>
     </button>
   </div>
 </section>
@@ -2728,46 +2853,94 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </header>
 <!-- MAIN SCROLLABLE CONTENT CANVAS -->
 <main class="flex-1 px-margin-mobile pt-3.5 space-y-4">
-<!-- EVENT SUMMARY / STATUS RIBBON & CONVOCATORIA -->
-<section class="bg-surface-container-lowest rounded-xl p-3.5 border border-outline-variant shadow-sm">
-<div class="flex items-center justify-between gap-2 mb-2">
-<div class="flex items-center gap-1.5 flex-wrap">
-<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container-high text-primary font-label-sm text-label-sm border border-primary/20">
-              Torneo Oficial
-            </span>
-<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm border border-error/20 animate-pulse">
-<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
-              Incidencia urgente
-            </span>
-</div>
-<span class="font-label-sm text-label-sm text-on-surface-variant font-bold">F-8 Alevín/Inf.</span>
-</div>
-<div class="flex items-start justify-between gap-2 border-t border-surface-container-high pt-2.5">
-<div class="flex items-start gap-2">
-<span class="material-symbols-outlined text-primary text-[20px] mt-0.5" data-icon="stadium">stadium</span>
-<div>
-<p class="font-headline-sm text-[14px] leading-tight text-on-surface font-bold">Polideportivo Municipal Indautxu</p>
-<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Sábado 19 Sep · 09:30 - 14:00 h</p>
-</div>
-</div>
-</div>
-<!-- Convocatoria Callout Bar -->
-<div class="mt-3 p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
-<div class="flex items-center gap-2">
-<div class="w-8 h-8 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
-<span class="material-symbols-outlined text-[18px]" data-icon="group_remove">group_remove</span>
-</div>
-<div>
-<p class="font-label-sm text-label-sm text-on-surface-variant uppercase">Convocatoria del partido</p>
-<p class="font-label-lg text-label-lg text-on-surface">11 / 12 convocados</p>
-</div>
-</div>
-<div class="text-right">
-<span class="inline-block px-2 py-1 rounded bg-tertiary-container text-on-tertiary font-label-sm text-label-sm font-bold shadow-sm">
-              -1 plaza requerida
-            </span>
-</div>
-</div>
+<!-- EVENT SUMMARY / STATUS RIBBON & CONVOCATORIA (Pitchside Direct Refined) -->
+<section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm space-y-3">
+  <!-- Tournament and Match Timing Header -->
+  <div class="flex items-center justify-between gap-2 flex-wrap pb-1 border-b border-outline-variant/20">
+    <div class="inline-flex items-center gap-1.5 bg-primary-fixed/60 text-on-primary-fixed rounded-full px-2.5 py-1">
+      <span class="material-symbols-outlined text-[15px]">emoji_events</span>
+      <span class="font-label-sm text-label-sm font-bold">Torneo Indautxu</span>
+    </div>
+    <div class="inline-flex items-center gap-1 text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-full font-label-sm text-label-sm font-semibold">
+      <span class="material-symbols-outlined text-[15px]">calendar_today</span>
+      <span>Sábado 19 Sep · 09:30 h</span>
+    </div>
+  </div>
+  <!-- Clash Details: S. D. Indautxu A vs Danok Bat (No Truncation Grid) -->
+  <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-1 px-1">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="w-9 h-9 rounded-xl bg-primary-container text-on-primary flex items-center justify-center font-headline-sm text-headline-sm font-extrabold shadow-sm shrink-0">SDI</div>
+      <div class="min-w-0">
+        <span class="block text-body-md font-bold text-on-surface leading-tight">Indautxu A</span>
+        <span class="text-label-sm font-bold text-secondary uppercase tracking-wider text-[11px]">Local</span>
+      </div>
+    </div>
+    <div class="px-2 text-center shrink-0">
+      <span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-label-md font-bold">VS</span>
+    </div>
+    <div class="flex items-center gap-2 min-w-0 justify-end text-right">
+      <div class="min-w-0">
+        <span class="block text-body-md font-bold text-on-surface leading-tight">Danok Bat</span>
+        <span class="text-label-sm font-semibold text-on-surface-variant uppercase tracking-wider text-[11px]">Visitante</span>
+      </div>
+      <div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-headline-sm text-headline-sm font-extrabold shrink-0 border border-outline-variant/40">DBK</div>
+    </div>
+  </div>
+  <!-- Venue Pill -->
+  <div class="flex items-center gap-2 text-on-surface-variant bg-surface-container-low px-3 py-2 rounded-xl text-body-sm">
+    <span class="material-symbols-outlined text-[18px] text-primary shrink-0">stadium</span>
+    <span class="font-semibold text-on-surface">Polideportivo Municipal Indautxu</span>
+    <span class="text-on-surface-variant/70">· Campo 1</span>
+  </div>
+  <!-- Availability KPI Pills -->
+  <div class="pt-1">
+    <div class="grid grid-cols-3 gap-2 text-center">
+      <div class="flex flex-col items-center justify-center bg-secondary/10 border border-secondary/20 rounded-xl py-2 px-1">
+        <div class="flex items-center gap-1 text-secondary">
+          <span class="w-2 h-2 rounded-full bg-secondary inline-block"></span>
+          <span class="font-stat-xl text-[20px] leading-none font-bold">14</span>
+        </div>
+        <span class="font-label-sm text-label-sm text-secondary font-bold mt-1">Convocados</span>
+      </div>
+      <div class="flex flex-col items-center justify-center bg-tertiary-container/10 border border-tertiary-container/30 rounded-xl py-2 px-1">
+        <div class="flex items-center gap-1 text-tertiary-container">
+          <span class="w-2 h-2 rounded-full bg-tertiary-container inline-block"></span>
+          <span class="font-stat-xl text-[20px] leading-none font-bold">2</span>
+        </div>
+        <span class="font-label-sm text-label-sm text-tertiary-container font-bold mt-1">Bajas</span>
+      </div>
+      <div class="flex flex-col items-center justify-center bg-surface-container-high border border-outline-variant/40 rounded-xl py-2 px-1">
+        <div class="flex items-center gap-1 text-on-surface-variant">
+          <span class="w-2 h-2 rounded-full bg-outline inline-block"></span>
+          <span class="font-stat-xl text-[20px] leading-none font-bold">2</span>
+        </div>
+        <span class="font-label-sm text-label-sm text-on-surface-variant font-bold mt-1">Pendientes</span>
+      </div>
+    </div>
+    <!-- Multi-segment visual progress breakdown with direct numbers -->
+    <div class="mt-2.5 w-full h-4 rounded-full bg-surface-container-highest overflow-hidden flex text-[10px] font-black text-white text-center leading-4 shadow-inner">
+      <div class="bg-secondary h-full flex items-center justify-center" style="width: 77.7%" title="14 Convocados">14</div>
+      <div class="bg-tertiary-container h-full flex items-center justify-center" style="width: 11.1%" title="2 Bajas">2</div>
+      <div class="bg-outline h-full flex items-center justify-center text-on-surface-variant text-[9px]" style="width: 11.2%" title="2 Pendientes">2</div>
+    </div>
+  </div>
+  <!-- Convocatoria Callout Bar -->
+  <div class="mt-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
+        <span class="material-symbols-outlined text-[18px]" data-icon="group_remove">group_remove</span>
+      </div>
+      <div>
+        <p class="font-label-sm text-label-sm text-on-surface-variant uppercase font-semibold">Convocatoria del partido</p>
+        <p class="font-label-lg text-label-lg text-on-surface font-bold">11 / 12 convocados</p>
+      </div>
+    </div>
+    <div class="text-right">
+      <span class="inline-block px-2.5 py-1 rounded-lg bg-tertiary-container text-on-tertiary font-label-sm text-label-sm font-bold shadow-sm">
+        -1 plaza requerida
+      </span>
+    </div>
+  </div>
 </section>
 <!-- SECTION 1: ALERTA DE INCIDENCIA ACTIVA (HIGH VISIBILITY EMERGENCY CARD) -->
 <section aria-label="Alerta de Incidencia Activa" class="bg-surface-container-lowest rounded-xl border-2 border-error/40 shadow-sm overflow-hidden">
@@ -3399,228 +3572,235 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </main>
         </section>
 
-        <!-- SCREEN 8: V2 RESPONDER DISPONIBILIDAD EN 3s -->
+        <!-- SCREEN 8: V2 RESPONDER DISPONIBILIDAD EN 3s (Pitchside Direct Refined) -->
         <section id="v2_08_parent_rsvp" class="app-screen-view w-full hidden">
-          <!-- Mobile Viewport Container (~390px width) -->
-<div class="w-full max-w-2xl mx-auto bg-background min-h-screen flex flex-col relative shadow-sm border-x border-outline-variant/20">
-<!-- Sub-page Focused Header (Navigation Shell Suppressed as per Task-Focused Flow) -->
-<header class="sticky top-0 z-30 bg-surface-container-lowest/95 backdrop-blur-md px-4 sm:px-6 py-space-sm flex items-center justify-between shadow-sm">
-<div class="flex items-center gap-2">
-<button aria-label="Volver atrás" onclick="teamApp.goToScreen('v2_07_parent_home', 'inicio')" class="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer" type="button">
-<span class="material-symbols-outlined text-[20px]" data-icon="arrow_back">arrow_back</span>
-</button>
-<div>
-<h1 class="font-headline-sm text-headline-sm text-on-surface leading-tight">Confirmar disponibilidad</h1>
-<p class="font-label-sm text-label-sm text-on-surface-variant">Torneo Indautxu</p>
-</div>
-</div>
-<div class="px-2.5 py-1 rounded-full bg-surface-container-high border border-outline-variant flex items-center gap-1.5">
-<span class="w-2 h-2 rounded-full bg-primary-container"></span>
-<span class="font-label-sm text-label-sm text-on-surface font-bold">Infantil A</span>
-</div>
-</header>
-<!-- Main Content Flow -->
-<main class="flex-1 px-4 sm:px-6 pt-3 space-y-4">
-<!-- Hero Event Summary Card -->
-<section class="bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-[0_1px_3px_rgba(15,23,42,0.06)] overflow-hidden">
-<!-- Player Identity Bar -->
-<div class="px-space-md pt-space-md pb-3 flex items-center justify-between border-b border-surface-container-low bg-surface-bright">
-<div class="flex items-center gap-3">
-<div class="relative w-10 h-10 rounded-full bg-primary-container text-white flex items-center justify-center font-headline-sm text-headline-sm shadow-sm font-extrabold ring-2 ring-white">
-              #9
-            </div>
-<div>
-<div class="flex items-center gap-2">
-<span class="font-headline-sm text-headline-sm text-on-surface font-bold">Ibai Aranguren</span>
+          <div class="w-full max-w-2xl mx-auto bg-background min-h-screen flex flex-col relative pb-20 shadow-sm border-x border-outline-variant/20">
+            <!-- 1. Top App Bar & Header -->
+            <header class="bg-surface-container-lowest shadow-sm sticky top-0 z-40 border-b border-outline-variant/30">
+              <div class="flex justify-between items-center w-full px-4 sm:px-6 py-3">
+                <div class="flex items-center gap-2.5">
+                  <button aria-label="Volver atrás" onclick="teamApp.goToScreen('v2_07_parent_home', 'inicio')" class="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer -ml-1" type="button">
+                    <span class="material-symbols-outlined text-[20px]" data-icon="arrow_back">arrow_back</span>
+                  </button>
+                  <div class="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center text-on-primary shadow-sm ring-2 ring-primary/20 shrink-0 font-bold">
+                    SDI
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-headline-sm font-headline-sm font-bold text-primary tracking-tight leading-tight">Talde Hemendik!</span>
+                    <span class="text-label-sm font-label-sm text-on-surface-variant font-semibold">S. D. Indautxu · Infantil A</span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-primary-fixed text-on-primary-fixed font-bold tracking-wider uppercase">Familia</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-surface-container-high text-on-surface-variant font-bold border border-outline-variant/40">Cód: INDA16</span>
+                </div>
+              </div>
+              <!-- User Profile Context Pill (Elena Gómez) -->
+              <div class="px-4 sm:px-6 pb-2.5 pt-0">
+                <div class="flex items-center justify-between bg-surface-container-low px-3 py-1.5 rounded-xl border border-outline-variant/30">
+                  <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                      <span class="material-symbols-outlined text-[18px]">person</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-body-sm font-body-sm font-bold text-on-surface">Elena Gómez</span>
+                      <span class="text-label-sm font-label-sm text-on-surface-variant">(Tutor)</span>
+                      <span class="text-outline-variant text-[12px]">•</span>
+                      <span class="text-label-sm font-label-sm text-primary font-bold">Ibai (#9)</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center text-secondary gap-1">
+                    <span class="material-symbols-outlined text-[16px]">verified_user</span>
+                    <span class="text-label-sm font-label-sm font-bold">Activo</span>
+                  </div>
+                </div>
+              </div>
+            </header>
 
-</div>
-<span class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]" data-icon="shield">shield</span>
-                Delantero Centro · Dorsal 9
-              </span>
-</div>
-</div>
-<span class="material-symbols-outlined text-outline text-[20px]" data-icon="verified_user">verified_user</span>
-</div>
-<!-- Event Core Content -->
-<div class="p-space-md space-y-3">
-<div class="flex items-start justify-between gap-2">
-<div>
-<span class="font-label-sm text-label-sm text-primary-container font-extrabold uppercase tracking-wide">Jornada Oficial</span>
-<h2 class="font-headline-md text-headline-md text-on-surface leading-snug">Torneo Indautxu</h2>
-</div>
-<div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary-container shrink-0 font-bold text-xs border border-outline-variant/40">
-              CDI
-            </div>
-</div>
-<!-- Match Logistics List with Crisp Contrast -->
-<div class="space-y-2.5 pt-1">
-<!-- Date & Hours -->
-<div class="flex items-start gap-2.5">
-<span class="material-symbols-outlined text-primary-container text-[20px] mt-0.5 shrink-0" data-icon="calendar_today">calendar_today</span>
-<div>
-<p class="font-label-md text-label-md text-on-surface font-bold">Sábado 19 Sep · 09:30 - 14:00 h</p>
-<p class="font-body-sm text-body-sm text-on-surface-variant">Fase de grupos &amp; eliminatorias</p>
-</div>
-</div>
-<!-- Citación Mandatory -->
-<div class="flex items-start gap-2.5 bg-surface-container-low p-2.5 rounded-xl border border-outline-variant/50">
-<span class="material-symbols-outlined text-tertiary text-[20px] mt-0.5 shrink-0" data-icon="schedule">schedule</span>
-<div>
-<p class="font-label-md text-label-md text-tertiary font-extrabold">Citación: 08:45 h en vestuarios</p>
-<p class="font-body-sm text-body-sm text-on-surface-variant">Obligatorio presentarse 45 min antes del inicio con equipación completa.</p>
-</div>
-</div>
-<!-- Pitch Location -->
-<div class="flex items-start gap-2.5">
-<span class="material-symbols-outlined text-primary-container text-[20px] mt-0.5 shrink-0" data-icon="location_on">location_on</span>
-<div class="flex-1">
-<p class="font-label-md text-label-md text-on-surface font-bold">Polideportivo Municipal Indautxu</p>
-<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1">
-                  Pista Central Cubierta · Acceso Puerta 2
-                  <span class="material-symbols-outlined text-[14px] text-primary-container" data-icon="open_in_new">open_in_new</span>
-</p>
-</div>
-</div>
-</div>
-<!-- Deadline Urgent Banner Pill -->
-<div class="mt-2 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl px-3 py-2 flex items-center gap-2">
-<span class="material-symbols-outlined text-[#92400E] text-[18px] animate-pulse" data-icon="hourglass_top">hourglass_top</span>
-<span class="font-label-sm text-label-sm text-[#92400E] font-extrabold leading-tight">
-              Cierra hoy a las 20:00 h · Quedan 8 horas
-            </span>
-</div>
-</div>
-</section>
-<!-- Protagonist Selector: 3 Big Touch-Friendly RSVP Options -->
-<section class="space-y-2.5">
-<div class="flex items-center justify-between px-1">
-<h3 class="font-label-lg text-label-lg text-on-surface font-bold tracking-tight">
-            Indica la respuesta para Ibai
-          </h3>
-<span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
-            1 toque rápido
-          </span>
-</div>
-<div aria-label="Opciones de disponibilidad" class="space-y-2.5" role="radiogroup">
-<!-- Option 1: YES (ACTIVE SELECTED STATE) -->
-<label class="relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border-2 border-emerald-500 bg-emerald-50/70 shadow-sm transition-all duration-150 active:scale-[0.98]" id="rsvp-yes-label">
-<input checked="" class="sr-only" name="rsvp_selection" onchange="updateRsvpSelection('yes')" type="radio" value="yes"/>
-<!-- Left Big Icon -->
-<div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
-<span class="material-symbols-outlined text-[24px]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-</div>
-<!-- Text Content -->
-<div class="flex-1 pr-2">
-<div class="flex items-center gap-2">
-<span class="font-headline-sm text-headline-sm text-emerald-900 font-extrabold tracking-tight">SÍ, PUEDE ASISTIR</span>
-</div>
-<p class="font-body-sm text-body-sm text-emerald-800 font-medium mt-0.5 leading-snug">
-                Confirmar que Ibai estará en el polideportivo a las 08:45 h.
-              </p>
-</div>
-<!-- Radio Indicator -->
-<div class="w-6 h-6 rounded-full border-2 border-emerald-600 bg-emerald-600 text-white flex items-center justify-center shrink-0 self-center">
-<span class="material-symbols-outlined text-[16px] font-bold" data-icon="check">check</span>
-</div>
-</label>
-<!-- Option 2: NO -->
-<label class="relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border border-[#FECACA] bg-surface-container-lowest hover:bg-rose-50/30 transition-all duration-150 active:scale-[0.98]" id="rsvp-no-label">
-<input class="sr-only" name="rsvp_selection" onchange="updateRsvpSelection('no')" type="radio" value="no"/>
-<!-- Left Icon -->
-<div class="w-10 h-10 rounded-full bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA] flex items-center justify-center shrink-0 mt-0.5">
-<span class="material-symbols-outlined text-[24px]" data-icon="cancel">cancel</span>
-</div>
-<!-- Text Content -->
-<div class="flex-1 pr-2">
-<div class="flex items-center gap-2">
-<span class="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">NO PUEDE ASISTIR</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant font-normal mt-0.5 leading-snug">
-                No estará disponible. Se avisará al míster para liberar su plaza en la convocatoria.
-              </p>
-</div>
-<!-- Radio Indicator -->
-<div class="w-6 h-6 rounded-full border-2 border-outline-variant bg-white flex items-center justify-center shrink-0 self-center"></div>
-</label>
-<!-- Option 3: MAYBE / UNKNOWN -->
-<label class="relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border border-[#FDE68A] bg-surface-container-lowest hover:bg-amber-50/30 transition-all duration-150 active:scale-[0.98]" id="rsvp-maybe-label">
-<input class="sr-only" name="rsvp_selection" onchange="updateRsvpSelection('maybe')" type="radio" value="maybe"/>
-<!-- Left Icon -->
-<div class="w-10 h-10 rounded-full bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] flex items-center justify-center shrink-0 mt-0.5">
-<span class="material-symbols-outlined text-[24px]" data-icon="hourglass_empty">hourglass_empty</span>
-</div>
-<!-- Text Content -->
-<div class="flex-1 pr-2">
-<div class="flex items-center gap-2">
-<span class="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">TODAVÍA NO LO SÉ</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant font-normal mt-0.5 leading-snug">
-                Pendiente de conciliar. Responderé antes del cierre (20:00 h).
-              </p>
-</div>
-<!-- Radio Indicator -->
-<div class="w-6 h-6 rounded-full border-2 border-outline-variant bg-white flex items-center justify-center shrink-0 self-center"></div>
-</label>
-</div>
-</section>
-<!-- Section: Motivo u observación (Opcional) -->
-<section class="bg-surface-container-lowest p-space-md rounded-2xl border border-outline-variant/60 shadow-[0_1px_3px_rgba(15,23,42,0.06)] space-y-3">
-<div class="flex items-center justify-between">
-<label class="font-label-lg text-label-lg text-on-surface font-bold flex items-center gap-1.5" for="coach-notes">
-<span class="material-symbols-outlined text-[18px] text-primary-container" data-icon="chat">chat</span>
-            Observación para el cuerpo técnico
-          </label>
-<span class="font-label-sm text-label-sm text-outline font-medium">(Opcional)</span>
-</div>
+            <!-- Main Content Canvas -->
+            <main class="flex-1 px-4 sm:px-6 pt-3.5 space-y-4">
+              <!-- 2. Child Profile Card -->
+              <section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm relative overflow-hidden">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-primary text-on-primary flex flex-col items-center justify-center shadow-inner shrink-0 ring-2 ring-primary-fixed">
+                      <span class="text-label-sm font-label-sm leading-none font-bold text-primary-fixed-dim text-[10px]">KIT</span>
+                      <span class="text-headline-md font-headline-md font-extrabold leading-none mt-0.5">#9</span>
+                    </div>
+                    <div>
+                      <h2 class="text-headline-sm font-headline-sm font-bold text-on-surface">Ibai Aranguren</h2>
+                      <p class="text-body-sm font-body-sm text-on-surface-variant font-medium">Delantero Centro · Infantil A</p>
+                    </div>
+                  </div>
+                  <!-- Status Pill -->
+                  <div id="parent-rsvp-status-badge" class="inline-flex items-center gap-1.5 bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-container/30 px-2.5 py-1 rounded-full shrink-0">
+                    <span class="w-2 h-2 rounded-full bg-tertiary-container"></span>
+                    <span class="text-label-sm font-label-sm font-bold tracking-tight">Baja Comunicada</span>
+                  </div>
+                </div>
+                <!-- Privacy Assurance Banner -->
+                <div class="mt-3 pt-2.5 border-t border-outline-variant/30 flex items-center gap-2 text-on-surface-variant">
+                  <span class="material-symbols-outlined text-[16px] text-primary">lock</span>
+                  <p class="text-label-sm font-label-sm font-medium leading-tight">
+                    <strong class="font-bold text-on-surface">Modo Privacidad Activo:</strong> Solo ves la información correspondiente a tu hijo.
+                  </p>
+                </div>
+              </section>
 
-<!-- Textarea input -->
-<div class="relative">
-<textarea class="w-full rounded-xl border-1.5 border-outline-variant bg-surface p-3 text-on-surface font-body-md text-body-md placeholder:text-outline focus:border-primary-container focus:ring-0 focus:outline-none resize-none transition-all" id="coach-notes" placeholder="Escribe aquí cualquier nota para el entrenador Mikel (transporte, llegada tarde, etc.)..." rows="3"></textarea>
-<div class="flex justify-end mt-1">
-<span class="font-label-sm text-label-sm text-outline">Visible solo para entrenadores</span>
-</div>
-</div>
-</section>
-<!-- Coach Squad Status Mini Summary -->
-<div class="p-3 bg-surface-container-low rounded-xl border border-outline-variant/40 flex items-center justify-between">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-[20px] text-on-surface-variant" data-icon="group">group</span>
-<span class="font-label-md text-label-md text-on-surface font-bold">Estado actual convocatoria</span>
-</div>
-<div class="flex items-center gap-2 font-label-sm text-label-sm">
-<span class="text-secondary font-extrabold flex items-center gap-0.5">
-<span class="w-2 h-2 rounded-full bg-secondary"></span> 11 SÍ
-          </span>
-<span class="text-tertiary font-extrabold flex items-center gap-0.5">
-<span class="w-2 h-2 rounded-full bg-tertiary"></span> 1 NO
-          </span>
-<span class="text-amber-700 font-extrabold flex items-center gap-0.5">
-<span class="w-2 h-2 rounded-full bg-amber-500"></span> 2 Duda
-          </span>
-</div>
-</div>
-</main>
-<!-- Bottom Sticky Action Container (Thumb Zone Anchor) -->
-<aside class="sticky bottom-0 z-40 bg-surface-container-lowest/98 backdrop-blur-md px-margin-mobile pt-3 pb-5 border-t border-outline-variant/60 shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
-<!-- Dominant CTA -->
-<button class="w-full h-[52px] rounded-xl bg-primary-container hover:bg-[#1e40af] active:bg-[#173cb0] active:scale-[0.98] text-white font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(29,78,216,0.25)] transition-all duration-150" id="save-btn" onclick="triggerSaveFeedback()" type="button">
-<span class="material-symbols-outlined text-[22px]" data-icon="check_circle">check_circle</span>
-<span>Guardar respuesta</span>
-</button>
-<!-- Reassurance Microcopy & Peace of Mind Pill -->
-<div class="mt-2.5 flex flex-col items-center gap-1.5">
-<p class="font-body-sm text-body-sm text-on-surface-variant text-center font-medium">
-          Podrás modificar tu respuesta en cualquier momento hasta hoy a las 20:00 h.
-        </p>
-<div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container border border-outline-variant/60">
-<span class="material-symbols-outlined text-[13px] text-secondary" data-icon="lock">lock</span>
-<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold">Notificación instantánea a cuerpo técnico S. D. Indautxu</span>
-</div>
-</div>
-</aside>
-</div>
-<!-- Inline Micro-interactions for Sideline Polish -->
+              <!-- 3. Upcoming Match Card -->
+              <section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-primary text-[18px]">sports_soccer</span>
+                    <span class="text-label-md font-label-md uppercase tracking-wider text-primary font-bold">Torneo Indautxu · Jornada 1</span>
+                  </div>
+                  <span class="text-label-sm font-label-sm bg-surface-container px-2 py-0.5 rounded-md font-semibold text-on-surface-variant">Oficial</span>
+                </div>
+                <!-- 3-Column Team Matchup Grid without truncation -->
+                <div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/30">
+                  <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <div class="w-8 h-8 rounded-lg bg-primary-container text-on-primary font-bold flex items-center justify-center text-label-md shrink-0">SDI</div>
+                      <span class="text-body-md font-bold text-on-surface truncate">S. D. Indautxu</span>
+                    </div>
+                    <span class="text-label-sm font-label-sm font-bold text-on-surface-variant px-2.5 py-0.5 bg-surface-container-highest rounded-full">VS</span>
+                    <div class="flex items-center gap-2.5 min-w-0 justify-end text-right">
+                      <span class="text-body-md font-bold text-on-surface truncate">Danok Bat</span>
+                      <div class="w-8 h-8 rounded-lg bg-surface-container-high text-on-surface font-bold flex items-center justify-center text-label-md border border-outline-variant/40 shrink-0">DBK</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Schedule & Locker Room Grid -->
+                <div class="grid grid-cols-2 gap-2 text-body-sm">
+                  <div class="bg-surface-container-low/60 rounded-xl p-2.5 border border-outline-variant/20 flex items-start gap-2">
+                    <span class="material-symbols-outlined text-primary text-[20px] shrink-0 mt-0.5">calendar_clock</span>
+                    <div>
+                      <span class="text-label-sm font-label-sm text-on-surface-variant block font-semibold">Inicio Partido</span>
+                      <span class="text-body-sm font-body-sm font-bold text-on-surface">Sábado 19 Sep</span>
+                      <span class="text-headline-sm font-headline-sm font-extrabold text-primary block leading-none mt-0.5">09:30 h</span>
+                    </div>
+                  </div>
+                  <div class="bg-surface-container-low/60 rounded-xl p-2.5 border border-outline-variant/20 flex items-start gap-2">
+                    <span class="material-symbols-outlined text-primary text-[20px] shrink-0 mt-0.5">meeting_room</span>
+                    <div>
+                      <span class="text-label-sm font-label-sm text-on-surface-variant block font-semibold">Convocatoria</span>
+                      <span class="text-body-sm font-body-sm font-bold text-on-surface">En vestuarios</span>
+                      <span class="text-headline-sm font-headline-sm font-extrabold text-on-surface block leading-none mt-0.5">08:45 h</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- 2-Line Location Bar without truncation -->
+                <div class="space-y-1.5 pt-1 border-t border-outline-variant/20">
+                  <div class="flex items-center gap-1.5 text-on-surface">
+                    <span class="material-symbols-outlined text-[18px] text-primary shrink-0">stadium</span>
+                    <span class="text-body-sm font-semibold">Polideportivo Municipal Indautxu</span>
+                  </div>
+                  <div class="flex items-center justify-between pl-6 text-on-surface-variant">
+                    <span class="text-label-md font-medium text-on-surface-variant/80">Campo 1 · Hierba Artificial</span>
+                    <button type="button" onclick="teamApp.showToast('Polideportivo Municipal Indautxu · Campo 1')" class="flex items-center gap-1 text-primary hover:text-primary-container font-label-sm font-bold bg-primary-fixed/50 px-2.5 py-1 rounded-lg active:scale-[0.98] transition-all cursor-pointer">
+                      <span>Ver mapa</span>
+                      <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- 4. RSVP in 3 Seconds -->
+              <section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="material-symbols-outlined text-primary text-[20px]">how_to_reg</span>
+                      <h3 class="text-headline-sm font-headline-sm font-bold text-on-surface">Confirmar Disponibilidad</h3>
+                    </div>
+                    <p class="text-body-sm font-body-sm text-on-surface-variant font-medium">¿Asistirá Ibai al partido?</p>
+                  </div>
+                  <span class="text-label-sm font-label-sm font-bold text-primary bg-primary-fixed/50 px-2 py-0.5 rounded-full">RSVP 3 seg</span>
+                </div>
+                <!-- 3 Large Ergonomic Touch Targets (52px minimum height) -->
+                <div aria-label="Disponibilidad de Ibai" class="space-y-2 pt-1" id="rsvp-options" role="radiogroup">
+                  <!-- Option 1: SÍ, ASISTIRÁ -->
+                  <div id="rsvp-yes-label" onclick="updateRsvpSelection('yes')" class="relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border border-outline-variant/60 bg-surface-container-lowest hover:bg-surface-container-low/50 transition-all duration-150 active:scale-[0.98]">
+                    <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 mt-0.5">
+                      <span class="material-symbols-outlined text-[22px]">check_circle</span>
+                    </div>
+                    <div class="flex-1 pr-2">
+                      <div class="flex items-center gap-2">
+                        <span class="text-label-lg font-label-lg font-bold text-on-surface block tracking-wide">SÍ, ASISTIRÁ</span>
+                        <span class="selected-pill hidden text-label-sm font-label-sm bg-secondary text-white px-1.5 py-0.2 rounded font-bold">Seleccionado</span>
+                      </div>
+                      <p class="text-label-sm font-label-sm text-on-surface-variant font-normal mt-0.5 leading-snug">Puntual a las 08:45 h en vestuarios</p>
+                    </div>
+                    <div class="radio-indicator w-6 h-6 rounded-full border-2 border-outline-variant bg-white flex items-center justify-center shrink-0 self-center"></div>
+                  </div>
+
+                  <!-- Option 2: NO PUEDE ASISTIR -->
+                  <div id="rsvp-no-label" onclick="updateRsvpSelection('no')" class="relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border-2 border-tertiary-container bg-tertiary-fixed/30 shadow-sm transition-all duration-150 active:scale-[0.98]">
+                    <div class="w-10 h-10 rounded-full bg-tertiary-container text-on-tertiary flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                      <span class="material-symbols-outlined text-[22px]">cancel</span>
+                    </div>
+                    <div class="flex-1 pr-2">
+                      <div class="flex items-center gap-2">
+                        <span class="text-label-lg font-label-lg font-extrabold text-tertiary-container block tracking-wide">NO PUEDE ASISTIR</span>
+                        <span class="selected-pill text-label-sm font-label-sm bg-tertiary-container text-on-tertiary px-1.5 py-0.2 rounded font-bold">Seleccionado</span>
+                      </div>
+                      <p class="text-label-sm font-label-sm text-on-tertiary-fixed-variant font-medium mt-0.5 leading-snug">Baja médica / Indisposición comunicada</p>
+                    </div>
+                    <div class="radio-indicator w-6 h-6 rounded-full border-2 border-tertiary-container bg-tertiary-container text-on-tertiary flex items-center justify-center shrink-0 self-center">
+                      <span class="material-symbols-outlined text-[16px] font-bold">check</span>
+                    </div>
+                  </div>
+
+                  <!-- Option 3: TODAVÍA NO LO SÉ -->
+                  <div id="rsvp-maybe-label" onclick="updateRsvpSelection('maybe')" class="relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border border-outline-variant/60 bg-surface-container-lowest hover:bg-surface-container-low/50 transition-all duration-150 active:scale-[0.98]">
+                    <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+                      <span class="material-symbols-outlined text-[22px]">hourglass_empty</span>
+                    </div>
+                    <div class="flex-1 pr-2">
+                      <div class="flex items-center gap-2">
+                        <span class="text-label-lg font-label-lg font-bold text-on-surface block tracking-wide">TODAVÍA NO LO SÉ</span>
+                        <span class="selected-pill hidden text-label-sm font-label-sm bg-amber-600 text-white px-1.5 py-0.2 rounded font-bold">Seleccionado</span>
+                      </div>
+                      <p class="text-label-sm font-label-sm text-on-surface-variant font-normal mt-0.5 leading-snug">Avisaré antes del viernes a las 20:00 h</p>
+                    </div>
+                    <div class="radio-indicator w-6 h-6 rounded-full border-2 border-outline-variant bg-white flex items-center justify-center shrink-0 self-center"></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- 5. Private Note for the Coach -->
+              <section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <label class="text-label-lg font-label-lg font-bold text-on-surface flex items-center gap-1.5" for="coach-notes">
+                    <span class="material-symbols-outlined text-primary text-[18px]">edit_note</span>
+                    Nota para el cuerpo técnico <span class="text-label-sm font-label-sm text-on-surface-variant font-normal">(opcional)</span>
+                  </label>
+                  <span class="text-label-sm font-label-sm text-on-surface-variant">Médico / Familia</span>
+                </div>
+                <div class="relative">
+                  <textarea class="w-full rounded-xl border-1.5 border-outline-variant bg-surface-container-low/50 text-on-surface p-3 text-body-md font-body-md focus:border-primary-container focus:ring-1 focus:ring-primary-container focus:outline-none transition-colors" id="coach-notes" placeholder="Indica motivo o mensaje para el entrenador..." rows="3">Está con fiebre e indisposición desde anoche, el pediatra le ha mandado reposo.</textarea>
+                </div>
+                <div class="flex items-center gap-2 bg-surface-container-high/40 p-2 rounded-lg">
+                  <span class="material-symbols-outlined text-[16px] text-primary shrink-0">lock</span>
+                  <p class="text-label-sm font-label-sm text-on-surface-variant font-medium leading-tight">
+                    Esta nota solo la verá el cuerpo técnico de Indautxu.
+                  </p>
+                </div>
+              </section>
+            </main>
+
+            <!-- 6. Bottom Sticky Action Container (Thumb Zone Anchor) -->
+            <aside class="sticky bottom-0 z-40 bg-surface-container-lowest/98 backdrop-blur-md px-4 sm:px-6 pt-3 pb-5 border-t border-outline-variant/60 shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
+              <button id="save-btn" onclick="triggerSaveFeedback(); teamApp.saveParentRsvp();" class="w-full h-[52px] rounded-xl bg-primary-container hover:bg-[#1e40af] active:bg-[#173cb0] active:scale-[0.98] text-white font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(29,78,216,0.25)] transition-all duration-150 cursor-pointer" type="button">
+                <span class="material-symbols-outlined text-[22px]" data-icon="save">save</span>
+                <span>Guardar Disponibilidad</span>
+              </button>
+              <div id="sync-feedback" class="mt-2 flex items-center justify-center gap-1.5 text-center text-secondary py-1 text-xs font-semibold">
+                <span class="material-symbols-outlined text-[16px]">sync_saved_locally</span>
+                <span>Respuesta sincronizada en tiempo real con el entrenador</span>
+              </div>
+            </aside>
+          </div>
         </section>
 
         <!-- AUXILIARY SCREEN: CREAR EVENTO RÁPIDO -->
@@ -3766,7 +3946,7 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
 </section>
 </main>
 <!-- STICKY BOTTOM ACTION BAR (Engineered for One-Handed Sideline Operation) -->
-<footer class="fixed bottom-0 left-0 w-full z-50 bg-surface-container-lowest border-t border-outline-variant px-margin-mobile pt-3 pb-6 shadow-[0_-4px_16px_rgba(15,23,42,0.08)]">
+<footer class="fixed bottom-0 left-0 right-0 z-50 bg-surface-container-lowest border-t border-outline-variant px-margin-mobile pt-3 pb-6 shadow-[0_-4px_16px_rgba(15,23,42,0.08)]">
 <div class="w-full max-w-xl mx-auto space-y-2">
 <!-- Primary Action CTA -->
 <button id="btn-submit-create-event" onclick="teamApp.submitCreateEvent()" class="w-full h-[52px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm cursor-pointer" type="button">
@@ -4518,44 +4698,70 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
     }
 
     function updateRsvpSelection(type) {
+      const norm = (type === 'yes' || type === 'SI') ? 'yes' : ((type === 'no' || type === 'NO') ? 'no' : 'maybe');
       if (window.teamApp && window.teamApp.selectRsvpOption) {
-        window.teamApp.selectRsvpOption(type.toUpperCase());
+        window.teamApp.selectRsvpOption(norm === 'yes' ? 'SI' : (norm === 'no' ? 'NO' : 'DUDA'));
       }
-      const yesCard = document.getElementById('rsvp-yes-label');
-      const noCard = document.getElementById('rsvp-no-label');
-      const maybeCard = document.getElementById('rsvp-maybe-label');
+      const yesCard = document.getElementById('rsvp-yes-label') || document.getElementById('rsvp-opt-yes');
+      const noCard = document.getElementById('rsvp-no-label') || document.getElementById('rsvp-opt-no');
+      const maybeCard = document.getElementById('rsvp-maybe-label') || document.getElementById('rsvp-opt-maybe');
+      const statusBadge = document.getElementById('parent-rsvp-status-badge') || document.getElementById('parent-status-badge');
 
       if (!yesCard || !noCard || !maybeCard) return;
 
       [yesCard, noCard, maybeCard].forEach(card => {
+        card.setAttribute('aria-checked', 'false');
         card.className = "relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border border-outline-variant/60 bg-surface-container-lowest hover:bg-surface-container-low/50 transition-all duration-150 active:scale-[0.98]";
-        const radioIndicator = card.querySelector('div:last-child');
-        if (radioIndicator) {
-          radioIndicator.className = "w-6 h-6 rounded-full border-2 border-outline-variant bg-white flex items-center justify-center shrink-0 self-center";
-          radioIndicator.innerHTML = "";
+        const ind = card.querySelector('.radio-indicator') || card.querySelector('div:last-child');
+        if (ind) {
+          ind.className = "radio-indicator w-6 h-6 rounded-full border-2 border-outline-variant bg-white flex items-center justify-center shrink-0 self-center";
+          ind.innerHTML = "";
         }
+        const selBadge = card.querySelector('.selected-pill');
+        if (selBadge) selBadge.classList.add('hidden');
       });
 
-      if (type === 'yes') {
+      if (norm === 'yes') {
+        yesCard.setAttribute('aria-checked', 'true');
         yesCard.className = "relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border-2 border-emerald-500 bg-emerald-50/70 shadow-sm transition-all duration-150 active:scale-[0.98]";
-        const ind = yesCard.querySelector('div:last-child');
+        const ind = yesCard.querySelector('.radio-indicator') || yesCard.querySelector('div:last-child');
         if (ind) {
-          ind.className = "w-6 h-6 rounded-full border-2 border-emerald-600 bg-emerald-600 text-white flex items-center justify-center shrink-0 self-center";
-          ind.innerHTML = `<span class="material-symbols-outlined text-[16px] font-bold" data-icon="check">check</span>`;
+          ind.className = "radio-indicator w-6 h-6 rounded-full border-2 border-emerald-600 bg-emerald-600 text-white flex items-center justify-center shrink-0 self-center";
+          ind.innerHTML = `<span class="material-symbols-outlined text-[16px] font-bold">check</span>`;
         }
-      } else if (type === 'no') {
-        noCard.className = "relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border-2 border-rose-500 bg-rose-50/80 shadow-sm transition-all duration-150 active:scale-[0.98]";
-        const ind = noCard.querySelector('div:last-child');
+        const selBadge = yesCard.querySelector('.selected-pill');
+        if (selBadge) selBadge.classList.remove('hidden');
+        if (statusBadge) {
+          statusBadge.className = "inline-flex items-center gap-1.5 bg-secondary-fixed text-on-secondary-fixed border border-secondary/30 px-2.5 py-1 rounded-full shrink-0";
+          statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-secondary"></span><span class="text-label-sm font-label-sm font-bold tracking-tight">Asistencia Confirmada</span>`;
+        }
+      } else if (norm === 'no') {
+        noCard.setAttribute('aria-checked', 'true');
+        noCard.className = "relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border-2 border-tertiary-container bg-tertiary-fixed/30 shadow-sm transition-all duration-150 active:scale-[0.98]";
+        const ind = noCard.querySelector('.radio-indicator') || noCard.querySelector('div:last-child');
         if (ind) {
-          ind.className = "w-6 h-6 rounded-full border-2 border-rose-600 bg-rose-600 text-white flex items-center justify-center shrink-0 self-center";
-          ind.innerHTML = `<span class="material-symbols-outlined text-[16px] font-bold" data-icon="close">close</span>`;
+          ind.className = "radio-indicator w-6 h-6 rounded-full border-2 border-tertiary-container bg-tertiary-container flex items-center justify-center text-on-tertiary shrink-0 self-center";
+          ind.innerHTML = `<span class="material-symbols-outlined text-[16px] font-bold">check</span>`;
         }
-      } else if (type === 'maybe') {
+        const selBadge = noCard.querySelector('.selected-pill');
+        if (selBadge) selBadge.classList.remove('hidden');
+        if (statusBadge) {
+          statusBadge.className = "inline-flex items-center gap-1.5 bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-container/30 px-2.5 py-1 rounded-full shrink-0";
+          statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-tertiary-container"></span><span class="text-label-sm font-label-sm font-bold tracking-tight">Baja Comunicada</span>`;
+        }
+      } else if (norm === 'maybe') {
+        maybeCard.setAttribute('aria-checked', 'true');
         maybeCard.className = "relative flex items-start gap-3.5 p-3.5 rounded-2xl cursor-pointer border-2 border-amber-500 bg-amber-50/80 shadow-sm transition-all duration-150 active:scale-[0.98]";
-        const ind = maybeCard.querySelector('div:last-child');
+        const ind = maybeCard.querySelector('.radio-indicator') || maybeCard.querySelector('div:last-child');
         if (ind) {
-          ind.className = "w-6 h-6 rounded-full border-2 border-amber-600 bg-amber-600 text-white flex items-center justify-center shrink-0 self-center";
-          ind.innerHTML = `<span class="material-symbols-outlined text-[16px] font-bold" data-icon="hourglass_top">hourglass_top</span>`;
+          ind.className = "radio-indicator w-6 h-6 rounded-full border-2 border-amber-600 bg-amber-600 text-white flex items-center justify-center shrink-0 self-center";
+          ind.innerHTML = `<span class="material-symbols-outlined text-[16px] font-bold">hourglass_top</span>`;
+        }
+        const selBadge = maybeCard.querySelector('.selected-pill');
+        if (selBadge) selBadge.classList.remove('hidden');
+        if (statusBadge) {
+          statusBadge.className = "inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-full shrink-0";
+          statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-label-sm font-label-sm font-bold tracking-tight">Pendiente Confirmar</span>`;
         }
       }
     }
@@ -4573,10 +4779,24 @@ Elena Gómez (Madre · Principal) y Mikel Aranguren (Padre). Notificaciones acti
     }
 
     function triggerSaveFeedback() {
+      const btn = document.getElementById('save-btn');
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.classList.remove('bg-primary-container');
+        btn.classList.add('bg-secondary');
+        btn.innerHTML = `<span class="material-symbols-outlined text-[22px]">done_all</span><span>¡Disponibilidad Guardada!</span>`;
+        setTimeout(() => {
+          btn.classList.remove('bg-secondary');
+          btn.classList.add('bg-primary-container');
+          btn.innerHTML = orig;
+        }, 2000);
+      }
       if (window.teamApp && window.teamApp.saveParentRsvp) {
         window.teamApp.saveParentRsvp();
       }
     }
+    window.updateRsvpSelection = updateRsvpSelection;
+    window.triggerSaveFeedback = triggerSaveFeedback;
   </script>
 </body>
 </html>

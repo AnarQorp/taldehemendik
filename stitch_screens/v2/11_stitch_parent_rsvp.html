@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Talde Hemendik! - Confirmar Disponibilidad</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-container-highest": "#e0e3e6",
+            "on-tertiary-fixed": "#410002",
+            "background": "#f7f9fd",
+            "tertiary": "#650005",
+            "inverse-primary": "#b7c4ff",
+            "surface-bright": "#f7f9fd",
+            "surface-variant": "#e0e3e6",
+            "tertiary-container": "#8f000b",
+            "secondary-fixed": "#9df4c9",
+            "surface-container-lowest": "#ffffff",
+            "on-secondary": "#ffffff",
+            "on-surface-variant": "#444654",
+            "surface-tint": "#2f54cb",
+            "secondary-container": "#9af1c6",
+            "primary-fixed": "#dce1ff",
+            "error": "#ba1a1a",
+            "inverse-surface": "#2d3134",
+            "surface-container-high": "#e6e8ec",
+            "secondary": "#006c4a",
+            "on-background": "#181c1f",
+            "on-surface": "#181c1f",
+            "on-primary": "#ffffff",
+            "tertiary-fixed-dim": "#ffb4ab",
+            "error-container": "#ffdad6",
+            "on-secondary-fixed-variant": "#005237",
+            "primary-fixed-dim": "#b7c4ff",
+            "on-primary-fixed-variant": "#063ab2",
+            "inverse-on-surface": "#eff1f5",
+            "on-primary-container": "#9baeff",
+            "on-error-container": "#93000a",
+            "secondary-fixed-dim": "#81d8ae",
+            "on-primary-fixed": "#001551",
+            "surface-dim": "#d8dade",
+            "primary": "#00247d",
+            "surface-container": "#eceef2",
+            "outline": "#747685",
+            "on-tertiary-fixed-variant": "#92030d",
+            "primary-container": "#0037b0",
+            "surface": "#f7f9fd",
+            "tertiary-fixed": "#ffdad6",
+            "outline-variant": "#c4c5d6",
+            "on-tertiary-container": "#ff958a",
+            "on-tertiary": "#ffffff",
+            "on-secondary-container": "#0b714e",
+            "on-error": "#ffffff",
+            "surface-container-low": "#f2f4f8",
+            "on-secondary-fixed": "#002114"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "2xl": "1rem",
+            "3xl": "1.25rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-md": "0.75rem",
+            "margin": "1.25rem",
+            "space-sm": "0.5rem",
+            "space-xs": "0.25rem",
+            "margin-mobile": "1rem",
+            "gutter-mobile": "0.75rem",
+            "space-xl": "1.5rem",
+            "gutter": "1rem",
+            "space-lg": "1rem"
+          },
+          "fontFamily": {
+            "label-md": ["Plus Jakarta Sans"],
+            "headline-md": ["Plus Jakarta Sans"],
+            "body-lg": ["Plus Jakarta Sans"],
+            "display-lg": ["Plus Jakarta Sans"],
+            "headline-lg": ["Plus Jakarta Sans"],
+            "stat-xl": ["Plus Jakarta Sans"],
+            "label-sm": ["Plus Jakarta Sans"],
+            "body-md": ["Plus Jakarta Sans"],
+            "body-sm": ["Plus Jakarta Sans"],
+            "headline-sm": ["Plus Jakarta Sans"],
+            "label-lg": ["Plus Jakarta Sans"]
+          },
+          "fontSize": {
+            "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "700"}],
+            "headline-md": ["22px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+            "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "500"}],
+            "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.03em", "fontWeight": "800"}],
+            "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+            "stat-xl": ["32px", {"lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+            "label-sm": ["11px", {"lineHeight": "14px", "letterSpacing": "0.06em", "fontWeight": "700"}],
+            "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+            "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+            "headline-sm": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+            "label-lg": ["14px", {"lineHeight": "18px", "letterSpacing": "0.02em", "fontWeight": "700"}]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .material-symbols-outlined.fill-icon {
+      font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-full flex justify-center selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- Mobile Viewport Shell (Max-w-lg for athletic handheld ergonomics) -->
+<div class="w-full max-w-lg min-h-screen bg-background flex flex-col relative pb-28">
+<!-- 1. Top App Bar & Header (Shared Components JSON Anchor compliant) -->
+<header class="bg-surface shadow-sm sticky top-0 z-40">
+<div class="flex justify-between items-center w-full px-margin-mobile py-space-sm max-w-lg mx-auto">
+<!-- Leading: SDI Club Badge & Club Title -->
+<div class="flex items-center gap-2.5">
+<div class="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center text-on-primary shadow-sm ring-2 ring-primary/20 shrink-0">
+<span class="font-headline-sm text-headline-sm font-bold tracking-tight">SDI</span>
+</div>
+<div class="flex flex-col">
+<span class="text-headline-sm font-headline-sm font-bold text-primary tracking-tight leading-tight">Talde Hemendik!</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant font-semibold">S. D. Indautxu · Infantil A</span>
+</div>
+</div>
+<!-- Trailing Badges: Familia + Team Code -->
+<div class="flex items-center gap-1.5 shrink-0">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-primary-fixed text-on-primary-fixed font-bold tracking-wider uppercase">
+            Familia
+          </span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-surface-container-high text-on-surface-variant font-bold border border-outline-variant/40">
+            Cód: INDA16
+          </span>
+</div>
+</div>
+<!-- User Profile Context Pill (Elena Gómez) -->
+<div class="px-margin-mobile pb-space-sm pt-0">
+<div class="flex items-center justify-between bg-surface-container-low px-3 py-1.5 rounded-xl border border-outline-variant/30">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">person</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="text-body-sm font-body-sm font-bold text-on-surface">Elena Gómez</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">(Tutor)</span>
+<span class="text-outline-variant text-[12px]">•</span>
+<span class="text-label-sm font-label-sm text-primary font-bold">Ibai (#9)</span>
+</div>
+</div>
+<div class="flex items-center text-secondary gap-1">
+<span class="material-symbols-outlined text-[16px] fill-icon">verified_user</span>
+<span class="text-label-sm font-label-sm font-bold">Activo</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 px-margin-mobile pt-3 space-y-3.5">
+<!-- 2. Child Profile Card ("Tu Jugador") -->
+<section class="bg-surface-container-lowest rounded-2xl p-3.5 border border-outline-variant/40 shadow-sm relative overflow-hidden">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-center gap-3">
+<!-- Kit Number Athletic Box -->
+<div class="w-12 h-12 rounded-xl bg-primary text-on-primary flex flex-col items-center justify-center shadow-inner shrink-0 ring-2 ring-primary-fixed">
+<span class="text-label-sm font-label-sm leading-none font-bold text-primary-fixed-dim">KIT</span>
+<span class="text-headline-md font-headline-md font-extrabold leading-none mt-0.5">#9</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h2 class="text-headline-sm font-headline-sm font-bold text-on-surface">Ibai Aranguren</h2>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant font-medium">Delantero Centro · Infantil A</p>
+</div>
+</div>
+<!-- Baja Comunicada Status Pill -->
+<div class="inline-flex items-center gap-1.5 bg-tertiary-fixed text-on-tertiary-fixed border border-tertiary-container/30 px-2.5 py-1 rounded-full shrink-0">
+<span class="w-2 h-2 rounded-full bg-tertiary-container"></span>
+<span class="text-label-sm font-label-sm font-bold tracking-tight">Baja Comunicada</span>
+</div>
+</div>
+<!-- Privacy Assurance Banner -->
+<div class="mt-3 pt-2.5 border-t border-outline-variant/30 flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px] text-primary">lock</span>
+<p class="text-label-sm font-label-sm font-medium leading-tight">
+<strong class="font-bold text-on-surface">Modo Privacidad Activo:</strong> Solo ves la información correspondiente a tu hijo.
+          </p>
+</div>
+</section>
+<!-- 3. Upcoming Match Card ("Próximo Partido") -->
+<section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm space-y-3">
+<!-- Tournament Badge -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px] fill-icon">sports_soccer</span>
+<span class="text-label-md font-label-md uppercase tracking-wider text-primary font-bold">Torneo Indautxu · Jornada 1</span>
+</div>
+<span class="text-label-sm font-label-sm bg-surface-container px-2 py-0.5 rounded-md font-semibold text-on-surface-variant">Oficial</span>
+</div>
+<!-- Team Matchup Header with High Contrast Graphic Layout -->
+<div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/30">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-primary-container text-on-primary font-bold flex items-center justify-center text-label-md">SDI</div>
+<span class="text-body-lg font-body-lg font-bold text-on-surface">S. D. Indautxu</span>
+</div>
+<span class="text-label-sm font-label-sm font-bold text-on-surface-variant px-2 py-0.5 bg-surface-container-highest rounded-full">VS</span>
+<div class="flex items-center gap-2.5">
+<span class="text-body-lg font-body-lg font-bold text-on-surface">Danok Bat</span>
+<div class="w-8 h-8 rounded-lg bg-surface-container-high text-on-surface font-bold flex items-center justify-center text-label-md border border-outline-variant/40">DBK</div>
+</div>
+</div>
+</div>
+<!-- Schedule & Locker Room Call-up Grid -->
+<div class="grid grid-cols-2 gap-2 text-body-sm">
+<div class="bg-surface-container-low/60 rounded-xl p-2.5 border border-outline-variant/20 flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[20px] shrink-0 mt-0.5">calendar_clock</span>
+<div>
+<span class="text-label-sm font-label-sm text-on-surface-variant block font-semibold">Inicio Partido</span>
+<span class="text-body-sm font-body-sm font-bold text-on-surface">Sábado 19 Sep</span>
+<span class="text-headline-sm font-headline-sm font-extrabold text-primary block leading-none mt-0.5">09:30 h</span>
+</div>
+</div>
+<div class="bg-surface-container-low/60 rounded-xl p-2.5 border border-outline-variant/20 flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[20px] shrink-0 mt-0.5">meeting_room</span>
+<div>
+<span class="text-label-sm font-label-sm text-on-surface-variant block font-semibold">Convocatoria</span>
+<span class="text-body-sm font-body-sm font-bold text-on-surface">En vestuarios</span>
+<span class="text-headline-sm font-headline-sm font-extrabold text-on-surface block leading-none mt-0.5">08:45 h</span>
+</div>
+</div>
+</div>
+<!-- Location Bar with 2-line layout without truncation -->
+<div class="space-y-1.5 pt-1 border-t border-outline-variant/20">
+  <div class="flex items-center gap-1.5 text-on-surface">
+    <span class="material-symbols-outlined text-[18px] text-primary shrink-0">stadium</span>
+    <span class="text-body-sm font-semibold">Polideportivo Municipal Indautxu</span>
+  </div>
+  <div class="flex items-center justify-between pl-6 text-on-surface-variant">
+    <span class="text-label-md font-medium text-on-surface-variant/80">Campo 1 · Hierba Artificial</span>
+    <button class="flex items-center gap-1 text-primary hover:text-primary-container font-label-sm font-bold bg-primary-fixed/50 px-2.5 py-1 rounded-lg active:translate-y-px transition-all cursor-pointer">
+      <span>Ver mapa</span>
+      <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+    </button>
+  </div>
+</div>
+</section>
+<!-- 4. RSVP in 3 Seconds ("Confirmar Disponibilidad") -->
+<section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm space-y-3">
+<div class="flex items-center justify-between">
+<div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px]">how_to_reg</span>
+<h3 class="text-headline-sm font-headline-sm font-bold text-on-surface">Confirmar Disponibilidad</h3>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant font-medium">¿Asistirá Ibai al partido?</p>
+</div>
+<span class="text-label-sm font-label-sm font-bold text-primary bg-primary-fixed/50 px-2 py-0.5 rounded-full">
+            RSVP 3 seg
+          </span>
+</div>
+<!-- 3 Large Ergonomic Touch Targets (52px minimum height) -->
+<div aria-label="Disponibilidad de Ibai" class="space-y-2 pt-1" id="rsvp-options" role="radiogroup">
+<!-- Option 1: SÍ, ASISTIRÁ -->
+<button aria-checked="false" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-outline-variant/50 hover:border-secondary flex items-center justify-between bg-surface-container-lowest active:translate-y-px transition-all duration-100 ease-out group text-left" role="radio" type="button">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-secondary group-hover:bg-secondary-fixed transition-colors">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+</div>
+<div>
+<span class="text-label-lg font-label-lg font-bold text-on-surface block tracking-wide">SÍ, ASISTIRÁ</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant font-normal">Puntual a las 08:45 h en vestuarios</span>
+</div>
+</div>
+<div class="w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center">
+<span class="w-2.5 h-2.5 rounded-full bg-transparent"></span>
+</div>
+</button>
+<!-- Option 2 (ACTIVE / HIGHLIGHTED): NO PUEDE ASISTIR (Indautxu Crimson) -->
+<button aria-checked="true" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-tertiary-container bg-tertiary-fixed/30 flex items-center justify-between active:translate-y-px transition-all duration-100 ease-out text-left shadow-sm ring-1 ring-tertiary-container/30" role="radio" type="button">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-tertiary-container text-on-tertiary flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[20px] fill-icon">cancel</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="text-label-lg font-label-lg font-extrabold text-tertiary-container block tracking-wide">NO PUEDE ASISTIR</span>
+<span class="text-label-sm font-label-sm bg-tertiary-container text-on-tertiary px-1.5 py-0.2 rounded font-bold">Seleccionado</span>
+</div>
+<span class="text-label-sm font-label-sm text-on-tertiary-fixed-variant font-medium">Baja médica / Indisposición comunicada</span>
+</div>
+</div>
+<div class="w-5 h-5 rounded-full border-2 border-tertiary-container bg-tertiary-container flex items-center justify-center text-on-tertiary">
+<span class="material-symbols-outlined text-[14px] font-bold">check</span>
+</div>
+</button>
+<!-- Option 3: TODAVÍA NO LO SÉ -->
+<button aria-checked="false" class="w-full min-h-[52px] px-3.5 py-2.5 rounded-xl border-2 border-outline-variant/50 hover:border-outline flex items-center justify-between bg-surface-container-lowest active:translate-y-px transition-all duration-100 ease-out group text-left" role="radio" type="button">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant group-hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[20px]">help</span>
+</div>
+<div>
+<span class="text-label-lg font-label-lg font-bold text-on-surface block tracking-wide">TODAVÍA NO LO SÉ</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant font-normal">Avisaré antes del viernes a las 20:00 h</span>
+</div>
+</div>
+<div class="w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center">
+<span class="w-2.5 h-2.5 rounded-full bg-transparent"></span>
+</div>
+</button>
+</div>
+</section>
+<!-- 5. Private Note for the Coach ("Nota privada para el míster - opcional") -->
+<section class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/40 shadow-sm space-y-2.5">
+<div class="flex items-center justify-between">
+<label class="text-label-lg font-label-lg font-bold text-on-surface flex items-center gap-1.5" for="coach-notes">
+<span class="material-symbols-outlined text-primary text-[18px]">edit_note</span>
+            Nota para el cuerpo técnico <span class="text-label-sm font-label-sm text-on-surface-variant font-normal">(opcional)</span>
+</label>
+<span class="text-label-sm font-label-sm text-on-surface-variant">Médico / Familia</span>
+</div>
+<div class="relative">
+<textarea class="w-full rounded-xl border-1.5 border-outline-variant bg-surface-container-low/50 text-on-surface p-3 text-body-md font-body-md focus:border-primary-container focus:ring-1 focus:ring-primary-container focus:outline-none transition-colors" id="coach-notes" placeholder="Indica motivo o mensaje para el entrenador..." rows="3">Está con fiebre e indisposición desde anoche, el pediatra le ha mandado reposo.</textarea>
+</div>
+<!-- Privacy badge / caption -->
+<div class="flex items-center gap-2 bg-surface-container-high/40 p-2 rounded-lg">
+<span class="material-symbols-outlined text-[16px] text-primary shrink-0">lock</span>
+<p class="text-label-sm font-label-sm text-on-surface-variant font-medium leading-tight">
+            Esta nota solo la verá el cuerpo técnico de Indautxu.
+          </p>
+</div>
+</section>
+<!-- 6. Instant Action Button & Sync Feedback -->
+<section class="pt-1 pb-4 space-y-2">
+<button class="w-full min-h-[52px] bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg font-bold rounded-xl shadow-md flex items-center justify-center gap-2 active:translate-y-px transition-all duration-100 ease-out" type="button">
+<span class="material-symbols-outlined text-[22px] fill-icon">save</span>
+<span>Guardar Disponibilidad</span>
+</button>
+<!-- Status Feedback Pill -->
+<div class="flex items-center justify-center gap-1.5 text-center text-secondary py-1">
+<span class="material-symbols-outlined text-[16px] fill-icon">sync_saved_locally</span>
+<span class="text-label-sm font-label-sm font-bold tracking-tight">
+            Respuesta sincronizada en tiempo real con el entrenador
+          </span>
+</div>
+</section>
+</main>
+<!-- 7. Bottom Navigation Bar (Simplified family tabs) -->
+<!-- Compliant with Shared Components JSON (style_bg_color, style_shell_layout, style_active_navigation) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-gutter-mobile py-space-xs min-h-[56px] max-w-lg mx-auto bg-surface-container-lowest shadow-md">
+<!-- Tab 1: Mi Hijo (ACTIVE) -->
+<a aria-current="page" class="flex flex-col items-center justify-center bg-primary-fixed text-on-primary-fixed rounded-xl px-space-md py-space-xs active:translate-y-px transition-transform duration-100 ease-out" href="#mi-hijo">
+<span class="material-symbols-outlined text-[22px] fill-icon">sports_soccer</span>
+<span class="text-label-sm font-label-sm font-bold mt-0.5">Mi Hijo</span>
+</a>
+<!-- Tab 2: Calendario -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-space-md py-space-xs hover:bg-surface-container-high hover:text-on-surface rounded-xl active:translate-y-px transition-transform duration-100 ease-out" href="#calendario">
+<span class="material-symbols-outlined text-[22px]">calendar_month</span>
+<span class="text-label-sm font-label-sm font-bold mt-0.5">Calendario</span>
+</a>
+<!-- Tab 3: Avisos -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-space-md py-space-xs hover:bg-surface-container-high hover:text-on-surface rounded-xl active:translate-y-px transition-transform duration-100 ease-out relative" href="#avisos">
+<span class="relative">
+<span class="material-symbols-outlined text-[22px]">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 rounded-full bg-tertiary-container"></span>
+</span>
+<span class="text-label-sm font-label-sm font-bold mt-0.5">Avisos</span>
+</a>
+</nav>
+</div>
+</body></html>

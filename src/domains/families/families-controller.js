@@ -26,7 +26,7 @@ export class FamiliesDomainController {
     const expectedVersion = Number(this.app.live?.parentAvailability?.version ?? 0);
     const status = this.app.parentRsvpChoice === "NO" ? "CANNOT_ATTEND" : (this.app.parentRsvpChoice === "SI" ? "CAN_ATTEND" : "UNSURE");
 
-    if (!eventId || !playerId) return;
+    if (!eventId || !playerId) return false;
 
     const opContext = { eventId, playerId, teamSeasonId, expectedVersion, status };
     const viewScope = this.coordinator ? this.coordinator.createViewScope(this.app.currentScreen, { eventId }) : null;
@@ -38,18 +38,18 @@ export class FamiliesDomainController {
 
     await this.app.ensureAuth("parent");
 
-    if (this.app.currentRole !== preRole || this.app.currentRole !== "parent") return;
-    if (this.app.appMode !== preMode) return;
-    if (this.app.contextGeneration !== preGeneration) return;
-    if (this.app.beta?.teamSeasonId !== preTeam) return;
+    if (this.app.currentRole !== preRole || this.app.currentRole !== "parent") return false;
+    if (this.app.appMode !== preMode) return false;
+    if (this.app.contextGeneration !== preGeneration) return false;
+    if (this.app.beta?.teamSeasonId !== preTeam) return false;
     const currentSession = this.coordinator ? this.coordinator._getCurrentSessionId() : this.app.currentSessionId;
-    if (preSessionId && currentSession && preSessionId !== currentSession) return;
+    if (preSessionId && currentSession && preSessionId !== currentSession) return false;
 
     const dispatchScope = this.coordinator ? this.coordinator.createDispatchScope({ role: "parent", teamSeasonId, childId: playerId, eventId }) : null;
     const scope = this.app.createScope({ role: "parent", teamSeasonId, childId: playerId, eventId });
 
     if (this.app.beta.teamSeasonId !== opContext.teamSeasonId || (this.app.beta.guardianPlayer && (this.app.beta.guardianPlayer.id || this.app.beta.guardianPlayer.playerId) !== opContext.playerId)) {
-      return;
+      return false;
     }
 
     try {
@@ -111,7 +111,7 @@ export class FamiliesDomainController {
 
       // Si el almacén rechazó la entidad (por identidad o versión inválida), no proyectar al singleton activo (F02, F08)
       if (!reconcileResult.applied && reconcileResult.reason !== "idempotent" && reconcileResult.reason !== "stale_version" && this.store) {
-        return;
+        return false;
       }
 
       // Actualizar autoridad local parentAvailability sólo si el contexto activo coincide unívocamente (F02)
@@ -146,13 +146,16 @@ export class FamiliesDomainController {
           this.app.goToScreen("v2_07_parent_home", "inicio");
         }, 1000, scope);
       }
+
+      return { success: true, status: opContext.status, version: confirmedVersion };
     } catch (err) {
       if (err?.status === 401 && err.wasAuthenticated) {
         this.app.handleSessionExpired(err, scope);
-        return;
+        return false;
       }
-      if (!this.app.isScopeActive(scope)) return;
+      if (!this.app.isScopeActive(scope)) return false;
       this.app.showToast(`Error al guardar: ${mapDomainError(err)}`);
+      return false;
     }
   }
 }

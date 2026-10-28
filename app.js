@@ -146,6 +146,7 @@ export class TeamAppState {
     this.selectedSubstitute = "Ane Mintegi";
     this.selectedCandidateId = DEMO_CONFIG.ANE_PLAYER_ID;
     this.parentRsvpChoice = "NO";
+    this.parentRsvpUserModified = false;
     this.isElenaApproved = true;
     this.linkedFamiliesCount = 12;
     this.pendingFamiliesCount = 6;
@@ -2362,6 +2363,9 @@ export class TeamAppState {
     }
 
     this.currentScreen = screenId;
+    if (screenId === "v2_08_parent_rsvp") {
+      this.parentRsvpUserModified = false;
+    }
     if (this.contextCoordinator) this.contextCoordinator.advanceViewEpoch();
     if (tab) this.currentTab = tab;
     try { localStorage.setItem("talde_last_screen", screenId); } catch {}
@@ -4924,7 +4928,7 @@ export class TeamAppState {
         const rec = this.resourceStore.reconcileAvailability(key, incomingEntity);
         const stored = this.resourceStore.getAvailability(key);
         this.live.parentAvailability = stored || null;
-        if (stored?.status) {
+        if (stored?.status && !this.parentRsvpUserModified) {
           const typeMap = {
             "CAN_ATTEND": "yes",
             "CANNOT_ATTEND": "no",
@@ -4939,7 +4943,7 @@ export class TeamAppState {
             this.parentRsvpChoice = choiceMap[stored.status];
           }
           if (typeof window !== "undefined" && typeof window.updateRsvpSelection === "function" && typeMap[stored.status]) {
-            window.updateRsvpSelection(typeMap[stored.status]);
+            window.updateRsvpSelection(typeMap[stored.status], false);
           }
         }
       } else {
@@ -4954,12 +4958,18 @@ export class TeamAppState {
 
   selectRsvpOption(choice) {
     this.parentRsvpChoice = choice;
+    this.parentRsvpUserModified = true;
   }
 
   async saveParentRsvp() {
     if (this.familiesDomain) {
-      return this.familiesDomain.saveParentRsvp();
+      const res = await this.familiesDomain.saveParentRsvp();
+      if (res && (res.success || res === true)) {
+        this.parentRsvpUserModified = false;
+      }
+      return res;
     }
+    return false;
   }
 
   async syncEventHubInjury() {
